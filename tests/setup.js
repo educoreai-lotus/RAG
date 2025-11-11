@@ -34,7 +34,7 @@ const skipGlobalSetupEnv = process.env.SKIP_GLOBAL_TEST_SETUP;
 const skipGlobalSetup = skipGlobalSetupEnv === undefined || skipGlobalSetupEnv !== 'false';
 
 if (!skipGlobalSetup) {
-  beforeAll(async () => {
+beforeAll(async () => {
     await safeExecute(() => startMockServer(), 'Failed to start mock server');
 
     await safeExecute(async () => {
@@ -43,23 +43,23 @@ if (!skipGlobalSetup) {
     }, 'Failed to seed test database');
 
     await safeExecute(() => clearCache(), 'Failed to clear test cache');
-  });
+});
 
-  afterAll(async () => {
+afterAll(async () => {
     await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database after tests');
     await safeExecute(() => clearCache(), 'Failed to clear cache after tests');
     await safeExecute(() => stopMockServer(), 'Failed to stop mock server');
     await safeExecute(() => disconnectCache(), 'Failed to disconnect cache');
     await safeExecute(() => disconnectTestDatabase(), 'Failed to disconnect database');
-  });
+});
 
   beforeEach(async () => {
     await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database before test');
     await safeExecute(() => seedTestData(), 'Failed to seed database before test');
     await safeExecute(() => clearCache(), 'Failed to clear cache before test');
-  });
+});
 
   afterEach(async () => {
     await safeExecute(() => clearCache(), 'Failed to clear cache after test');
-  });
+});
 }

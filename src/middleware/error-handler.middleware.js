@@ -12,7 +12,7 @@ import { logger } from '../utils/logger.util.js';
  * @param {Response} res - Express response
  * @param {Function} next - Express next function
  */
-export function errorHandler(err, req, res, next) {
+export function errorHandler(err, req, res, _next) {
   logger.error('Error:', {
     message: err.message,
     stack: err.stack,
@@ -39,7 +39,7 @@ export function errorHandler(err, req, res, next) {
  * @param {Response} res - Express response
  * @param {Function} next - Express next function
  */
-export function notFoundHandler(req, res, next) {
+export function notFoundHandler(req, res, _next) {
   res.status(404).json({
     error: {
       message: 'Not Found',
