@@ -1,7 +1,10 @@
-module.exports = {
+export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.js', '**/*.test.jsx'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1.js',
+  },
   collectCoverageFrom: [
     'src/**/*.js',
     '!src/**/*.test.js',
@@ -19,6 +22,3 @@ module.exports = {
   testTimeout: 10000,
   maxWorkers: '50%',
 };
-
-
-

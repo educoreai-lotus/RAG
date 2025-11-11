@@ -1,46 +1,55 @@
-import { PrismaClient } from '@prisma/client';
-
 const testDatabaseUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 
-const prismaTestClient = new PrismaClient(
-  testDatabaseUrl
-    ? {
-        datasources: {
-          db: {
-            url: testDatabaseUrl,
-          },
+let prismaTestClient;
+
+async function getPrismaClient() {
+  if (!testDatabaseUrl) {
+    return null;
+  }
+
+  if (!prismaTestClient) {
+    const { PrismaClient } = await import('@prisma/client');
+    prismaTestClient = new PrismaClient({
+      datasources: {
+        db: {
+          url: testDatabaseUrl,
         },
-      }
-    : undefined
-);
+      },
+    });
+  }
+
+  return prismaTestClient;
+}
 
 async function cleanupDatabase() {
-  if (!testDatabaseUrl) {
+  const client = await getPrismaClient();
+  if (!client) {
     return;
   }
 
-  await prismaTestClient.$transaction([
-    prismaTestClient.queryRecommendation.deleteMany(),
-    prismaTestClient.querySource.deleteMany(),
-    prismaTestClient.query.deleteMany(),
-    prismaTestClient.vectorEmbedding.deleteMany(),
-    prismaTestClient.knowledgeGraphEdge.deleteMany(),
-    prismaTestClient.knowledgeGraphNode.deleteMany(),
-    prismaTestClient.accessControlRule.deleteMany(),
-    prismaTestClient.userProfile.deleteMany(),
-    prismaTestClient.auditLog.deleteMany(),
-    prismaTestClient.cacheEntry.deleteMany(),
+  await client.$transaction([
+    client.queryRecommendation.deleteMany(),
+    client.querySource.deleteMany(),
+    client.query.deleteMany(),
+    client.vectorEmbedding.deleteMany(),
+    client.knowledgeGraphEdge.deleteMany(),
+    client.knowledgeGraphNode.deleteMany(),
+    client.accessControlRule.deleteMany(),
+    client.userProfile.deleteMany(),
+    client.auditLog.deleteMany(),
+    client.cacheEntry.deleteMany(),
   ]);
 
-  await prismaTestClient.tenant.deleteMany();
+  await client.tenant.deleteMany();
 }
 
 async function seedTestData() {
-  if (!testDatabaseUrl) {
+  const client = await getPrismaClient();
+  if (!client) {
     return;
   }
 
-  const tenant = await prismaTestClient.tenant.upsert({
+  const tenant = await client.tenant.upsert({
     where: { domain: 'test.local' },
     update: {},
     create: {
@@ -54,7 +63,7 @@ async function seedTestData() {
     },
   });
 
-  await prismaTestClient.accessControlRule.createMany({
+  await client.accessControlRule.createMany({
     data: [
       {
         tenantId: tenant.id,
@@ -84,7 +93,7 @@ async function seedTestData() {
     skipDuplicates: true,
   });
 
-  await prismaTestClient.userProfile.createMany({
+  await client.userProfile.createMany({
     data: [
       {
         tenantId: tenant.id,
@@ -120,8 +129,14 @@ async function seedTestData() {
 }
 
 async function disconnectTestDatabase() {
-  await prismaTestClient.$disconnect();
+  const client = await getPrismaClient();
+  if (!client) {
+    return;
+  }
+
+  await client.$disconnect();
+  prismaTestClient = undefined;
 }
 
-export { prismaTestClient, cleanupDatabase, seedTestData, disconnectTestDatabase };
+export { getPrismaClient, cleanupDatabase, seedTestData, disconnectTestDatabase };
 

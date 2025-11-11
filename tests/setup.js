@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { startMockServer, stopMockServer } from './mocks/server.js';
-import { prismaTestClient, cleanupDatabase, seedTestData, disconnectTestDatabase } from './helpers/db-helper.js';
+import { cleanupDatabase, seedTestData, disconnectTestDatabase } from './helpers/db-helper.js';
 import { clearCache, disconnectCache } from './helpers/cache-helper.js';
 
 function loadTestEnvironment() {
@@ -30,31 +30,35 @@ async function safeExecute(callback, description) {
 
 loadTestEnvironment();
 
-beforeAll(async () => {
-  await safeExecute(() => startMockServer(), 'Failed to start mock server');
+const skipGlobalSetup = process.env.SKIP_GLOBAL_TEST_SETUP === 'true';
 
-  await safeExecute(async () => {
-    await cleanupDatabase();
-    await seedTestData();
-  }, 'Failed to seed test database');
+if (!skipGlobalSetup) {
+  beforeAll(async () => {
+    await safeExecute(() => startMockServer(), 'Failed to start mock server');
 
-  await safeExecute(() => clearCache(), 'Failed to clear test cache');
-});
+    await safeExecute(async () => {
+      await cleanupDatabase();
+      await seedTestData();
+    }, 'Failed to seed test database');
 
-afterAll(async () => {
-  await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database after tests');
-  await safeExecute(() => clearCache(), 'Failed to clear cache after tests');
-  await safeExecute(() => stopMockServer(), 'Failed to stop mock server');
-  await safeExecute(() => disconnectCache(), 'Failed to disconnect cache');
-  await safeExecute(() => disconnectTestDatabase(), 'Failed to disconnect database');
-});
+    await safeExecute(() => clearCache(), 'Failed to clear test cache');
+  });
 
-beforeEach(async () => {
-  await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database before test');
-  await safeExecute(() => seedTestData(), 'Failed to seed database before test');
-  await safeExecute(() => clearCache(), 'Failed to clear cache before test');
-});
+  afterAll(async () => {
+    await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database after tests');
+    await safeExecute(() => clearCache(), 'Failed to clear cache after tests');
+    await safeExecute(() => stopMockServer(), 'Failed to stop mock server');
+    await safeExecute(() => disconnectCache(), 'Failed to disconnect cache');
+    await safeExecute(() => disconnectTestDatabase(), 'Failed to disconnect database');
+  });
 
-afterEach(async () => {
-  await safeExecute(() => clearCache(), 'Failed to clear cache after test');
-});
+  beforeEach(async () => {
+    await safeExecute(() => cleanupDatabase(), 'Failed to cleanup database before test');
+    await safeExecute(() => seedTestData(), 'Failed to seed database before test');
+    await safeExecute(() => clearCache(), 'Failed to clear cache before test');
+  });
+
+  afterEach(async () => {
+    await safeExecute(() => clearCache(), 'Failed to clear cache after test');
+  });
+}

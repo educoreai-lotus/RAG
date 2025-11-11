@@ -2,25 +2,26 @@
  * Cache utility tests
  */
 
-import { get, set, del, exists } from '../../../src/utils/cache.util.js';
+import { jest } from '@jest/globals';
 
-// Mock Redis
-jest.mock('ioredis', () => {
-  const mockRedis = {
-    get: jest.fn(),
-    setex: jest.fn(),
-    del: jest.fn(),
-    exists: jest.fn(),
-    on: jest.fn(),
-  };
-  return jest.fn(() => mockRedis);
-});
+const mockRedisClient = {
+  get: jest.fn(),
+  setex: jest.fn(),
+  del: jest.fn(),
+  exists: jest.fn(),
+  on: jest.fn(),
+};
 
-import { redis } from '../../../src/config/redis.config.js';
+await jest.unstable_mockModule('../../../src/config/redis.config.js', () => ({
+  redis: mockRedisClient,
+}));
+
+const { get, set, del, exists } = await import('../../../src/utils/cache.util.js');
+const { redis } = await import('../../../src/config/redis.config.js');
 
 describe('Cache Utility', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    Object.values(mockRedisClient).forEach((fn) => fn.mockReset?.());
   });
 
   describe('get', () => {

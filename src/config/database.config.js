@@ -3,13 +3,33 @@
  * Prisma client setup
  */
 
-import { PrismaClient } from '@prisma/client';
+let prismaInstance = null;
 
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+async function createPrismaClient() {
+  if (process.env.SKIP_PRISMA === 'true') {
+    return {
+      accessControlRule: {
+        findMany: async () => [],
+      },
+      auditLog: {
+        create: async () => {},
+      },
+      $transaction: async () => {},
+    };
+  }
 
-export { prisma };
+  const { PrismaClient } = await import('@prisma/client');
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+}
 
+async function getPrismaClient() {
+  if (!prismaInstance) {
+    prismaInstance = await createPrismaClient();
+  }
 
+  return prismaInstance;
+}
 
+export { getPrismaClient };
