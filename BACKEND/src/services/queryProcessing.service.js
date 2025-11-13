@@ -5,7 +5,7 @@
 
 import { openai } from '../config/openai.config.js';
 import { logger } from '../utils/logger.util.js';
-import { redis } from '../config/redis.config.js';
+import { getRedis, isRedisAvailable } from '../config/redis.config.js';
 
 /**
  * Process a query using RAG (Retrieval-Augmented Generation)
@@ -26,19 +26,27 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   } = options;
 
   try {
-    // Check cache first
-    const cacheKey = `query:${tenant_id}:${user_id}:${Buffer.from(query).toString('base64')}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      logger.info('Query cache hit', { query, tenant_id, user_id });
-      const cachedResponse = JSON.parse(cached);
-      return {
-        ...cachedResponse,
-        metadata: {
-          ...cachedResponse.metadata,
-          cached: true,
-        },
-      };
+    // Check cache first (if Redis is available)
+    if (isRedisAvailable()) {
+      try {
+        const redis = getRedis();
+        const cacheKey = `query:${tenant_id}:${user_id}:${Buffer.from(query).toString('base64')}`;
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          logger.info('Query cache hit', { query, tenant_id, user_id });
+          const cachedResponse = JSON.parse(cached);
+          return {
+            ...cachedResponse,
+            metadata: {
+              ...cachedResponse.metadata,
+              cached: true,
+            },
+          };
+        }
+      } catch (cacheError) {
+        // Redis error - continue without cache
+        logger.debug('Redis cache check failed, continuing without cache:', cacheError.message);
+      }
     }
 
     // Generate embedding for the query
@@ -88,8 +96,17 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       },
     };
 
-    // Cache the response (TTL: 1 hour)
-    await redis.setex(cacheKey, 3600, JSON.stringify(response));
+    // Cache the response (TTL: 1 hour) - if Redis is available
+    if (isRedisAvailable()) {
+      try {
+        const redis = getRedis();
+        const cacheKey = `query:${tenant_id}:${user_id}:${Buffer.from(query).toString('base64')}`;
+        await redis.setex(cacheKey, 3600, JSON.stringify(response));
+      } catch (cacheError) {
+        // Redis error - continue without caching
+        logger.debug('Redis cache save failed, continuing without cache:', cacheError.message);
+      }
+    }
 
     logger.info('Query processed successfully', {
       query,

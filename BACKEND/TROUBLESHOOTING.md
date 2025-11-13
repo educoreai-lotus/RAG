@@ -103,9 +103,14 @@ curl -X POST http://localhost:3000/api/assessment/support \
 - **Check:** Internet connection
 
 #### Issue: Redis connection errors
-- **Note:** Redis is optional
-- **Solution:** If Redis not available, caching will be skipped
+- **Note:** Redis is **OPTIONAL** - service works perfectly without it
+- **What it does:** Redis is used for caching query responses (saves time and money)
+- **Solution Options:**
+  1. **Ignore it** (recommended) - Service works without Redis, just slower responses
+  2. **Disable Redis:** Set `REDIS_ENABLED=false` in `.env` to stop connection attempts
+  3. **Install Redis:** If you want caching, install Redis server
 - **No action needed** - service will work without Redis
+- **See:** `REDIS_EXPLANATION.md` for full details
 
 ### 6. Quick Fix Checklist
 

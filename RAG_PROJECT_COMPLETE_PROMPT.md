@@ -536,14 +536,26 @@ Microservice → Kafka Event → Graph Manager → Update Graph
 ### Completed ✅
 - Frontend Chatbot UI Widget (F-0016)
 - Chatbot Proxy Assistant Behavior (F-0017)
-- Backend Services: Access Control (F-0010, F-0011, F-0012, F-0013, F-0014, F-0015), Query Processing, AI Integration, Personalized Assistance (F-0009)
+- Backend REST API Endpoints:
+  - `/api/v1/query` - General Chat Mode with OpenAI GPT-3.5-turbo integration
+  - `/api/assessment/support` - Proxy endpoint for Assessment microservice
+  - `/api/devlab/support` - Proxy endpoint for DevLab microservice
+  - `/api/v1/personalized/recommendations/:userId` - Recommendations endpoint
+- Query Processing Service with OpenAI integration
+- Redis caching (optional - service works without it)
 - Database Schema Design
 - API Specifications
 - System Architecture
 
 ### In Progress 🔄
-- Backend Services Implementation (Vector Retrieval, Knowledge Graph Manager)
-- API Layer (gRPC services)
+- Backend Services Implementation:
+  - ✅ Query Processing Service (with OpenAI)
+  - ⏳ Vector Retrieval Service (pgvector)
+  - ⏳ Knowledge Graph Manager
+  - ⏳ Access Control Services (RBAC/ABAC)
+- API Layer:
+  - ✅ REST API endpoints
+  - ⏳ gRPC services
 - Integration with EDUCORE microservices
 
 ### Planned 📋
@@ -692,10 +704,16 @@ This prompt contains all the specifications, features, and implementation detail
 - `FRONTEND/src/utils/modeDetector.js` - Mode detection and routing logic
 - `FRONTEND/src/utils/recommendations.js` - Recommendation system
 - `FRONTEND/src/store/slices/chatMode.slice.js` - Chat mode state management
-- `BACKEND/src/services/` - Backend service implementations
-- `BACKEND/src/controllers/` - API controllers
+- `BACKEND/src/services/queryProcessing.service.js` - Query processing with OpenAI
+- `BACKEND/src/controllers/query.controller.js` - Query API controller
+- `BACKEND/src/controllers/microserviceSupport.controller.js` - Proxy controllers
+- `BACKEND/src/routes/` - API routes
+- `BACKEND/src/config/redis.config.js` - Redis configuration (optional)
+- `BACKEND/QUICK_START.md` - Backend setup guide
+- `BACKEND/REDIS_EXPLANATION.md` - Redis usage guide
+- `BACKEND/TROUBLESHOOTING.md` - Troubleshooting guide
 
 ---
 
-**Last Updated:** 2025-01-27 (Added F-0017: Chatbot Proxy Assistant Behavior)
+**Last Updated:** 2025-01-27 (Backend REST API endpoints implemented, Redis made optional)
 

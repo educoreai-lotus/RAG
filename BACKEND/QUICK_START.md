@@ -22,7 +22,7 @@ Create a `.env` file in the `BACKEND` directory:
 
 ```env
 # Server
-PORT=3000
+PORT=8080  # or 3000 (default: 3000)
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
 
@@ -30,8 +30,9 @@ FRONTEND_URL=http://localhost:5173
 OPENAI_API_KEY=your-openai-api-key-here
 OPENAI_API_URL=https://api.openai.com/v1
 
-# Redis (optional)
+# Redis (optional - for caching)
 REDIS_URL=redis://localhost:6379
+REDIS_ENABLED=true  # Set to 'false' to disable Redis completely
 
 # Database (optional - for future vector search)
 DATABASE_URL=postgresql://user:password@localhost:5432/rag_db
@@ -47,7 +48,7 @@ npm run dev
 npm start
 ```
 
-The server will start on `http://localhost:3000`
+The server will start on `http://localhost:3000` (or the port specified in `PORT` env var)
 
 ## API Endpoints
 
@@ -184,7 +185,12 @@ Response:
 - Personalized Assistance
 - gRPC services
 - Knowledge Graph integration
-- Assessment/DevLab Support endpoints
+
+### ℹ️ Optional Features
+- **Redis Caching:** Optional - service works without it
+  - If Redis is not available, queries go directly to OpenAI
+  - Set `REDIS_ENABLED=false` to disable Redis completely
+  - See `REDIS_EXPLANATION.md` for details
 
 ## Testing
 
@@ -205,8 +211,10 @@ curl -X POST http://localhost:3000/api/v1/query \
 ### Frontend Integration
 
 The frontend is configured to connect to `http://localhost:3000` by default. Make sure:
-1. Backend is running on port 3000
-2. `VITE_API_BASE_URL=http://localhost:3000` is set in frontend `.env` (or use default)
+1. Backend is running (check `PORT` env var - default: 3000, but may be 8080 in production)
+2. `VITE_API_BASE_URL` in frontend `.env` matches backend port:
+   - If backend on 3000: `VITE_API_BASE_URL=http://localhost:3000`
+   - If backend on 8080: `VITE_API_BASE_URL=http://localhost:8080`
 3. CORS is enabled (already configured)
 
 ## Troubleshooting
