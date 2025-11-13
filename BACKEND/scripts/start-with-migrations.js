@@ -1,6 +1,7 @@
 /**
- * Migration and Start Script
+ * Start Server with Migrations
  * Runs Prisma migrations before starting the server
+ * Used by Railway deployment
  */
 
 import { execSync } from 'child_process';
@@ -9,9 +10,10 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '..');
+const backendRoot = join(__dirname, '..');
+const projectRoot = join(backendRoot, '..');
 
-// Simple console logger (in case winston fails to load)
+// Simple console logger
 const log = {
   info: (msg, ...args) => console.log(`[INFO] ${msg}`, ...args),
   warn: (msg, ...args) => console.warn(`[WARN] ${msg}`, ...args),
@@ -24,8 +26,9 @@ async function runMigrations() {
     
     // Check if DATABASE_URL is set
     if (!process.env.DATABASE_URL) {
-      log.error('DATABASE_URL environment variable is not set!');
-      throw new Error('DATABASE_URL is required');
+      log.warn('DATABASE_URL environment variable is not set!');
+      log.warn('Migrations will be skipped. Make sure DATABASE_URL is configured.');
+      return;
     }
     
     const schemaPath = join(projectRoot, 'DATABASE', 'prisma', 'schema.prisma');
@@ -40,7 +43,7 @@ async function runMigrations() {
         cwd: projectRoot,
         shell: true,
       });
-      log.info('Migrations deployed successfully');
+      log.info('✅ Migrations deployed successfully');
       return;
     } catch (deployError) {
       // If no migrations exist, try db push (for initial setup)
@@ -53,31 +56,21 @@ async function runMigrations() {
         cwd: projectRoot,
         shell: true,
       });
-      log.info('Database schema pushed successfully');
+      log.info('✅ Database schema pushed successfully');
     }
   } catch (error) {
     log.error('Migration failed:', error.message);
     log.error('Stack:', error.stack);
     // Don't exit - let the server start anyway (migrations might already be applied)
-    log.warn('Continuing with server start despite migration error');
+    log.warn('⚠️  Continuing with server start despite migration error');
   }
 }
 
 async function startServer() {
   try {
     log.info('Starting server...');
-    
-    // Check if we're in BACKEND directory or root
-    const serverPath = join(projectRoot, 'BACKEND', 'src', 'index.js');
-    const rootServerPath = join(projectRoot, 'src', 'index.js');
-    
-    // Try BACKEND first, then root
-    try {
-      await import(serverPath);
-    } catch (backendError) {
-      log.info('BACKEND/src/index.js not found, trying root src/index.js...');
-      await import(rootServerPath);
-    }
+    const serverPath = join(backendRoot, 'src', 'index.js');
+    await import(serverPath);
   } catch (error) {
     log.error('Server start failed:', error.message);
     log.error('Stack:', error.stack);
