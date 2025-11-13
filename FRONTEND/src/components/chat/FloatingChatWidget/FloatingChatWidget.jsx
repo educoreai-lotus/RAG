@@ -19,7 +19,12 @@ import { proxyToMicroservice } from '../../../services/microserviceProxy.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 
-const FloatingChatWidget = () => {
+const FloatingChatWidget = ({ 
+  embedded = false, 
+  initialMode = null, 
+  userId = null, 
+  token = null 
+} = {}) => {
   const dispatch = useDispatch();
   const isOpen = useSelector((state) => state.ui.isWidgetOpen);
   const messages = useSelector((state) => state.chat.messages);
@@ -29,9 +34,24 @@ const FloatingChatWidget = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
 
-  // Show initial greeting when widget opens (only in General mode)
+  // Initialize mode if embedded with initialMode
   useEffect(() => {
-    if (isOpen && !hasShownGreeting && messages.length === 0 && currentMode === MODES.GENERAL) {
+    if (embedded && initialMode) {
+      if (initialMode === 'ASSESSMENT_SUPPORT') {
+        dispatch(setAssessmentSupportMode());
+      } else if (initialMode === 'DEVLAB_SUPPORT') {
+        dispatch(setDevLabSupportMode());
+      }
+      // Show support mode recommendations
+      setTimeout(() => {
+        setRecommendations(getModeSpecificRecommendations(initialMode, []));
+      }, 500);
+    }
+  }, [embedded, initialMode, dispatch]);
+
+  // Show initial greeting when widget opens (only in General mode, not in embedded support mode)
+  useEffect(() => {
+    if (isOpen && !hasShownGreeting && messages.length === 0 && currentMode === MODES.GENERAL && !embedded) {
       const greeting = {
         id: 'greeting-1',
         text: "Hello! I'm your AI assistant. How can I help you today?",
@@ -46,7 +66,7 @@ const FloatingChatWidget = () => {
         setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
       }, 500);
     }
-  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch]);
+  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded]);
 
   // Clear recommendations once conversation starts (user sends first message)
   // Recommendations will only show:
@@ -77,19 +97,32 @@ const FloatingChatWidget = () => {
   };
 
   const handleSendMessage = async (text) => {
-    // Detect mode change based on message
-    const newMode = detectModeChange(text, currentMode);
+    let newMode = null;
     
-    // Switch mode if detected
-    if (newMode) {
-      if (newMode === MODES.GENERAL) {
-        dispatch(setGeneralMode());
-      } else if (newMode === MODES.ASSESSMENT_SUPPORT) {
-        dispatch(setAssessmentSupportMode());
-      } else if (newMode === MODES.DEVLAB_SUPPORT) {
-        dispatch(setDevLabSupportMode());
+    // In embedded mode with support mode, don't allow mode changes (stay in support mode)
+    if (embedded && (currentMode === MODES.ASSESSMENT_SUPPORT || currentMode === MODES.DEVLAB_SUPPORT)) {
+      // Stay in support mode, don't detect mode changes
+      // Continue to proxy behavior below
+    } else {
+      // Detect mode change based on message (only in non-embedded or general mode)
+      newMode = detectModeChange(text, currentMode);
+      
+      // Switch mode if detected
+      if (newMode) {
+        if (newMode === MODES.GENERAL) {
+          dispatch(setGeneralMode());
+        } else if (newMode === MODES.ASSESSMENT_SUPPORT) {
+          dispatch(setAssessmentSupportMode());
+        } else if (newMode === MODES.DEVLAB_SUPPORT) {
+          dispatch(setDevLabSupportMode());
+        }
       }
     }
+    
+    // Get the mode to use (in embedded support mode, use currentMode)
+    const responseMode = embedded && (currentMode === MODES.ASSESSMENT_SUPPORT || currentMode === MODES.DEVLAB_SUPPORT)
+      ? currentMode
+      : (newMode || currentMode);
 
     // Add user message
     const userMessage = {
@@ -103,9 +136,6 @@ const FloatingChatWidget = () => {
     // Clear recommendations while loading
     setRecommendations([]);
     
-    // Get the mode to use for response (use newMode if changed, otherwise currentMode)
-    const responseMode = newMode || currentMode;
-    
     // Check if we're in Support Mode (proxy behavior)
     const isSupportMode = responseMode === MODES.ASSESSMENT_SUPPORT || responseMode === MODES.DEVLAB_SUPPORT;
     
@@ -114,8 +144,8 @@ const FloatingChatWidget = () => {
     try {
       let botMessages = [];
       
-      // If mode changed to Support Mode, add transition message
-      if (newMode && newMode !== MODES.GENERAL && currentMode === MODES.GENERAL) {
+      // If mode changed to Support Mode, add transition message (only if not embedded)
+      if (!embedded && newMode && newMode !== MODES.GENERAL && currentMode === MODES.GENERAL) {
         const modeName = newMode === MODES.ASSESSMENT_SUPPORT 
           ? 'Assessment Support' 
           : 'DevLab Support';

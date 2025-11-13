@@ -20,7 +20,7 @@ This is a production-ready RAG (Retrieval-Augmented Generation) microservice tha
 
 ---
 
-## Complete Feature List (F-0002 to F-0016)
+## Complete Feature List (F-0002 to F-0017)
 
 ### F-0002: Unified Knowledge Graph Integration 📋 Planned
 **Status:** Planned  
@@ -162,6 +162,20 @@ This is a production-ready RAG (Retrieval-Augmented Generation) microservice tha
 - Dynamic recommendation system
 - Responsive design
 - Ready for backend integration
+
+### F-0017: Chatbot Proxy Assistant Behavior ✅ Done
+**Status:** Complete  
+**Dependencies:** F-0016  
+**Description:** Proxy assistant behavior for Support Mode (Assessment/DevLab)
+- Multi-mode chatbot system: General Chat Mode and Support Mode (Assessment/DevLab)
+- Support Mode acts as transparent proxy: forwards messages verbatim to microservices
+- Returns microservice responses without modification or commentary
+- Includes metadata: timestamp, session_id, support_mode, user_id, tenant_id
+- General Mode uses intelligent chatbot responses
+- Support Mode restrictions: no general chat, no small talk, no intelligent responses
+- Stay in Support Mode until explicit exit command ("exit support", "finish", "stop support", etc.)
+- Custom recommendation system: Quick Action Buttons in General Mode, microservice support cards in Support Mode
+- No default Documentation/FAQ cards
 
 ---
 
@@ -493,10 +507,13 @@ Microservice → Kafka Event → Graph Manager → Update Graph
 - Dark Emerald theme (TailwindCSS)
 - Smooth animations (Framer Motion)
 - Responsive design (mobile + desktop)
-- Mock bot logic (ready for backend integration)
-- Dynamic recommendations
+- Multi-mode chatbot system (General Chat Mode, Assessment Support Mode, DevLab Support Mode)
+- Proxy assistant behavior in Support Mode (forwards messages verbatim to microservices)
+- Intelligent chatbot responses in General Mode
+- Dynamic recommendations (Quick Action Buttons in General Mode, microservice support cards in Support Mode)
 - Loading states
 - Error handling
+- Mode-specific visual indicators (color-coded headers, badges, warnings)
 
 **Tech Stack:**
 - React 18
@@ -504,6 +521,13 @@ Microservice → Kafka Event → Graph Manager → Update Graph
 - TailwindCSS (styling)
 - Framer Motion (animations)
 - React Icons (icons)
+- Axios (API client for microservice proxy)
+
+**Proxy Service:**
+- `microserviceProxy.js` - Transparent relay service for Support Mode
+- Forwards messages to Assessment/DevLab microservices with metadata
+- Returns microservice responses verbatim without modification
+- Session management (session_id tracking)
 
 ---
 
@@ -511,6 +535,7 @@ Microservice → Kafka Event → Graph Manager → Update Graph
 
 ### Completed ✅
 - Frontend Chatbot UI Widget (F-0016)
+- Chatbot Proxy Assistant Behavior (F-0017)
 - Backend Services: Access Control (F-0010, F-0011, F-0012, F-0013, F-0014, F-0015), Query Processing, AI Integration, Personalized Assistance (F-0009)
 - Database Schema Design
 - API Specifications
@@ -662,10 +687,15 @@ This prompt contains all the specifications, features, and implementation detail
 - `DATABASE/prisma/schema.prisma` - Database schema
 - `DATABASE/proto/rag/v1/*.proto` - gRPC API definitions
 - `FRONTEND/src/components/chatbot/` - Frontend components
+- `FRONTEND/src/components/chat/FloatingChatWidget/` - Main chatbot widget
+- `FRONTEND/src/services/microserviceProxy.js` - Proxy service for Support Mode
+- `FRONTEND/src/utils/modeDetector.js` - Mode detection and routing logic
+- `FRONTEND/src/utils/recommendations.js` - Recommendation system
+- `FRONTEND/src/store/slices/chatMode.slice.js` - Chat mode state management
 - `BACKEND/src/services/` - Backend service implementations
 - `BACKEND/src/controllers/` - API controllers
 
 ---
 
-**Last Updated:** 2025-01-27
+**Last Updated:** 2025-01-27 (Added F-0017: Chatbot Proxy Assistant Behavior)
 
