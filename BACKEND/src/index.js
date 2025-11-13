@@ -18,10 +18,37 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // CORS configuration
+// Support multiple origins (localhost for dev, Vercel for production)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5174',
+  process.env.FRONTEND_URL,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  process.env.FRONTEND_VERCEL_URL,
+].filter(Boolean); // Remove null/undefined values
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // Log for debugging
+      logger.warn('CORS blocked origin:', origin);
+      logger.info('Allowed origins:', allowedOrigins);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 
 // Middleware
@@ -51,6 +78,7 @@ app.listen(PORT, () => {
   logger.info(`Assessment support: http://localhost:${PORT}/api/assessment/support`);
   logger.info(`DevLab support: http://localhost:${PORT}/api/devlab/support`);
   logger.info(`Recommendations: http://localhost:${PORT}/api/v1/personalized/recommendations/:userId`);
+  logger.info(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
 });
 
 

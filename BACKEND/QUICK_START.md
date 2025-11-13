@@ -24,7 +24,10 @@ Create a `.env` file in the `BACKEND` directory:
 # Server
 PORT=8080  # or 3000 (default: 3000)
 NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5173  # Local development frontend URL
+
+# CORS (for production - Vercel)
+FRONTEND_VERCEL_URL=https://rag-microservice-psi.vercel.app  # Your Vercel frontend URL
 
 # OpenAI
 OPENAI_API_KEY=your-openai-api-key-here
