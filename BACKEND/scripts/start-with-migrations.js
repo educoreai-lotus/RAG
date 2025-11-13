@@ -49,6 +49,16 @@ async function runMigrations() {
         log.error('💡 Please add ?sslmode=require to your DATABASE_URL in Railway');
         log.error('💡 This is likely causing the connection timeout');
       }
+      
+      // Warn about connection pooling with migrations
+      if (dbUrl.includes(':6543')) {
+        log.warn('⚠️  Using Supabase connection pooler (port 6543)');
+        log.warn('💡 This can cause "prepared statement already exists" errors');
+        log.warn('💡 Consider using direct connection (port 5432) for migrations');
+        log.warn('💡 Change DATABASE_URL to use :5432 instead of :6543');
+      } else if (dbUrl.includes(':5432')) {
+        log.info('✅ Using Supabase direct connection (port 5432) - good for migrations');
+      }
     }
     
     // Skip migrations if SKIP_MIGRATIONS is set (for faster deployment)
@@ -95,20 +105,13 @@ async function runMigrations() {
           timeout: 60000, // 1 minute timeout
         });
         
-        // Try to enable pgvector extension first (required for vector type)
-        log.info('Ensuring pgvector extension is enabled...');
-        try {
-          const { PrismaClient } = await import('@prisma/client');
-          const tempPrisma = new PrismaClient();
-          await tempPrisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector;');
-          await tempPrisma.$disconnect();
-          log.info('✅ pgvector extension enabled');
-        } catch (extError) {
-          log.warn('Could not enable pgvector extension (may need superuser):', extError.message);
-          log.warn('💡 Make sure pgvector is enabled in Supabase SQL Editor: CREATE EXTENSION IF NOT EXISTS vector;');
-        }
+        // Note: pgvector extension should be enabled in Supabase SQL Editor
+        // Trying to enable it via Prisma causes "prepared statement already exists" error
+        // with Supabase connection pooling
+        log.info('Note: pgvector extension should be enabled in Supabase SQL Editor');
+        log.info('💡 If not enabled, run: CREATE EXTENSION IF NOT EXISTS vector;');
         
-        // Use migrate deploy instead of db push - more reliable for vector types
+        // Use migrate deploy - more reliable for vector types
         log.info('Deploying migrations...');
         log.info(`DATABASE_URL: ${process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET'}`);
         log.info('Using migrate deploy (more reliable for pgvector)');
