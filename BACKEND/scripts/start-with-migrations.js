@@ -75,86 +75,64 @@ async function runMigrations() {
           timeout: 60000, // 1 minute timeout
         });
         
-        // Use db push instead of migrate deploy - it's faster and more reliable
-        // db push syncs schema directly without migration history
-        log.info('Pushing database schema (faster than migrations)...');
+        // Try to enable pgvector extension first (required for vector type)
+        log.info('Ensuring pgvector extension is enabled...');
+        try {
+          const { PrismaClient } = await import('@prisma/client');
+          const tempPrisma = new PrismaClient();
+          await tempPrisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector;');
+          await tempPrisma.$disconnect();
+          log.info('✅ pgvector extension enabled');
+        } catch (extError) {
+          log.warn('Could not enable pgvector extension (may need superuser):', extError.message);
+          log.warn('💡 Make sure pgvector is enabled in Supabase SQL Editor: CREATE EXTENSION IF NOT EXISTS vector;');
+        }
+        
+        // Use migrate deploy instead of db push - more reliable for vector types
+        log.info('Deploying migrations...');
         log.info(`DATABASE_URL: ${process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET'}`);
+        log.info('Using migrate deploy (more reliable for pgvector)');
         
         try {
-          execSync(`npx prisma db push --schema=${schemaPath} --accept-data-loss --skip-generate`, {
+          execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
             stdio: 'inherit',
             env: { ...process.env },
             cwd: projectRoot,
             shell: true,
-            timeout: 300000, // 5 minute timeout for db push (should be enough)
+            timeout: 600000, // 10 minute timeout for migrations
           });
-          log.info('✅ Database schema pushed successfully');
+          log.info('✅ Migrations deployed successfully');
+          return;
+        } catch (migrateError) {
+          log.error('Migration deploy failed:', migrateError.message);
+          log.error('Exit code:', migrateError.status || migrateError.code);
           
-          // Mark migrations as applied to avoid re-running migrate deploy
-          log.info('Marking migrations as applied...');
-          try {
-            const fs = await import('fs');
-            const migrationDirs = fs.readdirSync(migrationsPath)
-              .filter(file => file !== '.gitkeep' && file !== 'template_pgvector.sql')
-              .filter(file => {
-                const fullPath = join(migrationsPath, file);
-                return fs.statSync(fullPath).isDirectory();
-              })
-              .sort();
-            
-            for (const migrationDir of migrationDirs) {
-              try {
-                execSync(`npx prisma migrate resolve --applied ${migrationDir} --schema=${schemaPath}`, {
-                  stdio: 'pipe', // Don't show output for each migration
-                  env: { ...process.env },
-                  cwd: projectRoot,
-                  shell: true,
-                  timeout: 30000,
-                });
-              } catch (resolveError) {
-                // Ignore errors - migrations might already be marked
-                log.debug(`Migration ${migrationDir} already applied or not found`);
-              }
-            }
-            log.info('✅ Migrations marked as applied');
-          } catch (markError) {
-            log.warn('Could not mark migrations as applied, but schema is synced');
+          // Check if it's a connection issue
+          if (migrateError.message && (
+            migrateError.message.includes('ECONNREFUSED') ||
+            migrateError.message.includes('timeout') ||
+            migrateError.message.includes('connection')
+          )) {
+            log.error('❌ Database connection failed!');
+            log.error('💡 Check DATABASE_URL in Railway environment variables');
+            log.error('💡 Make sure Supabase service is linked and DATABASE_URL is set');
           }
           
-          return;
-        } catch (pushError) {
-          log.error('Database push failed:', pushError.message);
-          log.error('Exit code:', pushError.status || pushError.code);
-          
-          // Fallback to migrate deploy only if db push fails
-          log.warn('⚠️  Attempting fallback: migrate deploy');
+          // Try fallback: db push (but may not work with vector type)
+          log.warn('⚠️  Attempting fallback: db push');
           try {
-            log.info('Starting migration deploy (this may take a few minutes)...');
-            
-            execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+            execSync(`npx prisma db push --schema=${schemaPath} --accept-data-loss --skip-generate`, {
               stdio: 'inherit',
               env: { ...process.env },
               cwd: projectRoot,
               shell: true,
-              timeout: 600000, // 10 minute timeout for migrations
+              timeout: 300000, // 5 minute timeout
             });
-            log.info('✅ Migrations deployed successfully (fallback)');
+            log.info('✅ Database schema pushed successfully (fallback)');
             return;
-          } catch (migrateError) {
-            log.error('Fallback migrate deploy also failed:', migrateError.message);
-            
-            // Check if it's a connection issue
-            if (migrateError.message && (
-              migrateError.message.includes('ECONNREFUSED') ||
-              migrateError.message.includes('timeout') ||
-              migrateError.message.includes('connection')
-            )) {
-              log.error('❌ Database connection failed!');
-              log.error('💡 Check DATABASE_URL in Railway environment variables');
-              log.error('💡 Make sure Supabase service is linked and DATABASE_URL is set');
-            }
-            
-            throw pushError; // Throw original pushError
+          } catch (pushError) {
+            log.error('Fallback db push also failed:', pushError.message);
+            throw migrateError; // Throw original migrateError
           }
         }
       } catch (deployError) {

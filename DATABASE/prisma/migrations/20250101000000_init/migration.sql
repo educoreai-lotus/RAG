@@ -1,3 +1,19 @@
+-- Enable pgvector extension first (required for vector type)
+-- Note: This may require superuser privileges in some databases
+-- If this fails, enable it manually: CREATE EXTENSION IF NOT EXISTS vector;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_extension WHERE extname = 'vector'
+  ) THEN
+    BEGIN
+      CREATE EXTENSION vector;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'pgvector extension could not be created automatically. Please enable it manually in Supabase SQL Editor: CREATE EXTENSION IF NOT EXISTS vector;';
+    END;
+  END IF;
+END $$;
+
 -- CreateTable
 CREATE TABLE "tenants" (
     "id" TEXT NOT NULL,
