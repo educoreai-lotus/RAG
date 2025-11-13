@@ -66,16 +66,14 @@ const ChatPanel = ({
               />
             ))}
 
-            {/* Recommendations appear after bot messages (only in appropriate mode) */}
-            {messages.length > 0 &&
-              messages[messages.length - 1]?.isBot &&
-              recommendations.length > 0 && (
-                <Recommendations
-                  items={recommendations}
-                  onSelect={onSelectRecommendation}
-                  currentMode={currentMode}
-                />
-              )}
+            {/* Recommendations appear only after initial greeting or mode change */}
+            {recommendations.length > 0 && (
+              <Recommendations
+                items={recommendations}
+                onSelect={onSelectRecommendation}
+                currentMode={currentMode}
+              />
+            )}
 
             {/* Loading indicator */}
             {isLoading && (

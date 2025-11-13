@@ -110,12 +110,6 @@ export const getModeSpecificRecommendations = (mode, messages = []) => {
           label: 'Live Chat',
           description: 'Connect with support agent',
         },
-        {
-          id: 'rec-support-2',
-          type: 'button',
-          label: 'Email Support',
-          description: 'Send us an email',
-        },
       ];
     }
 

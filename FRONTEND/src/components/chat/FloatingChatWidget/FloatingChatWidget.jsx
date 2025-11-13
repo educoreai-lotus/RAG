@@ -40,21 +40,25 @@ const FloatingChatWidget = () => {
       dispatch(addMessage(greeting));
       setHasShownGreeting(true);
       
-      // Show initial recommendations after greeting
+      // Show initial recommendations only after greeting (before conversation starts)
       setTimeout(() => {
         setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
       }, 500);
     }
   }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch]);
 
-  // Update recommendations when mode or messages change
+  // Clear recommendations once conversation starts (user sends first message)
+  // Recommendations will only show:
+  // 1. After initial greeting (handled in first useEffect)
+  // 2. When mode changes to support mode (handled in handleSendMessage)
   useEffect(() => {
-    if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.isBot) {
-        setTimeout(() => {
-          setRecommendations(getModeSpecificRecommendations(currentMode, messages));
-        }, 500);
+    const userMessages = messages.filter(m => !m.isBot);
+    
+    // Once user sends a message, clear recommendations (unless mode just changed)
+    if (userMessages.length > 0) {
+      // Only keep recommendations if we're in support mode (they were set in handleSendMessage)
+      if (currentMode === MODES.GENERAL) {
+        setRecommendations([]);
       }
     }
   }, [messages, currentMode]);
@@ -107,7 +111,7 @@ const FloatingChatWidget = () => {
       // If mode changed, add mode transition message
       let botMessages = [];
       
-      if (newMode && newMode !== MODES.GENERAL) {
+      if (newMode && newMode !== MODES.GENERAL && currentMode === MODES.GENERAL) {
         const modeName = newMode === MODES.ASSESSMENT_SUPPORT 
           ? 'Assessment Support' 
           : 'DevLab Support';
@@ -117,6 +121,11 @@ const FloatingChatWidget = () => {
           isBot: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
+        // Show support mode recommendations after mode change
+        setTimeout(() => {
+          const allMessages = [...messages, userMessage, ...botMessages];
+          setRecommendations(getModeSpecificRecommendations(newMode, allMessages));
+        }, 500);
       } else if (newMode === MODES.GENERAL && currentMode !== MODES.GENERAL) {
         botMessages.push({
           id: `mode-${Date.now()}`,
@@ -124,6 +133,8 @@ const FloatingChatWidget = () => {
           isBot: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
+        // Clear recommendations when returning to general mode
+        setRecommendations([]);
       }
       
       // Add main response
