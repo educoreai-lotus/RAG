@@ -33,31 +33,40 @@ async function runMigrations() {
     
     // Validate DATABASE_URL format
     const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl.includes('sslmode=require') && !dbUrl.includes('sslmode=prefer')) {
-      log.warn('⚠️  DATABASE_URL may be missing sslmode parameter!');
-      log.warn('💡 Supabase requires: ?sslmode=require at the end of DATABASE_URL');
-      log.warn('💡 Current URL format:', dbUrl.substring(0, 50) + '...');
-      log.warn('💡 Expected format: postgresql://...?sslmode=require');
-      // Continue anyway - might work, but likely to fail
-    }
     
     // Check if it's a Supabase URL
-    if (dbUrl.includes('supabase.com')) {
+    if (dbUrl.includes('supabase.com') || dbUrl.includes('supabase.co')) {
       log.info('✅ Detected Supabase database URL');
-      if (!dbUrl.includes('sslmode=require')) {
-        log.error('❌ Supabase requires sslmode=require in DATABASE_URL!');
-        log.error('💡 Please add ?sslmode=require to your DATABASE_URL in Railway');
-        log.error('💡 This is likely causing the connection timeout');
+      
+      // Check for sslmode
+      if (!dbUrl.includes('sslmode=require') && !dbUrl.includes('sslmode=prefer')) {
+        log.error('❌ DATABASE_URL is missing sslmode parameter!');
+        log.error('💡 Supabase REQUIRES: ?sslmode=require at the end of DATABASE_URL');
+        log.error('💡 Current URL (first 80 chars):', dbUrl.substring(0, 80) + '...');
+        log.error('💡 Fix: Add ?sslmode=require to DATABASE_URL in Railway');
+        log.error('💡 This is causing the connection failure!');
+        // Continue anyway - might work in some cases
       }
       
-      // Warn about connection pooling with migrations
+      // Check connection type
       if (dbUrl.includes(':6543')) {
-        log.warn('⚠️  Using Supabase connection pooler (port 6543)');
-        log.warn('💡 This can cause "prepared statement already exists" errors');
-        log.warn('💡 Consider using direct connection (port 5432) for migrations');
-        log.warn('💡 Change DATABASE_URL to use :5432 instead of :6543');
+        log.info('Using Supabase connection pooler (port 6543)');
+        log.warn('⚠️  Pooler can cause "prepared statement" errors with migrations');
+        log.warn('💡 If you get prepared statement errors, try direct connection (5432)');
       } else if (dbUrl.includes(':5432')) {
-        log.info('✅ Using Supabase direct connection (port 5432) - good for migrations');
+        log.info('Using Supabase direct connection (port 5432)');
+        log.warn('⚠️  Direct connection may require IP allowlist configuration');
+        log.warn('💡 If connection fails, try pooler (6543) instead');
+      } else if (dbUrl.includes('db.') && dbUrl.includes('.supabase.co')) {
+        log.warn('⚠️  Detected Supabase direct connection URL');
+        log.warn('💡 This may require IP allowlist or may not be accessible from Railway');
+        log.warn('💡 Try using pooler URL instead: ...pooler.supabase.com:6543/...');
+      }
+    } else {
+      // Not Supabase - just check sslmode
+      if (!dbUrl.includes('sslmode=')) {
+        log.warn('⚠️  DATABASE_URL may be missing sslmode parameter');
+        log.warn('💡 Consider adding ?sslmode=require for secure connections');
       }
     }
     
