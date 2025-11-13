@@ -36,7 +36,7 @@ function validate(data, schema) {
  * Common validation schemas
  */
 const schemas = {
-  tenantId: Joi.string().uuid().required(),
+  tenantId: Joi.string().min(1).default('default'),
   userId: Joi.string().min(1).required(),
   query: Joi.string().min(1).max(1000).required(),
   sessionId: Joi.string().optional(),

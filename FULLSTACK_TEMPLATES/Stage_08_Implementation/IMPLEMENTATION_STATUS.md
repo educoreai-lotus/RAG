@@ -16,18 +16,26 @@
 - ✅ Node.js/Prisma/Jest/ESLint scaffolding in place
 - ✅ Core infrastructure utilities implemented (logger, cache, retry, validation, error handling)
 - ✅ Development Docker Compose stack for Postgres + Redis + Kafka (`docker-compose.dev.yml`)
+- ✅ REST API endpoint `/api/v1/query` for chatbot queries (General Chat Mode with OpenAI)
+- ✅ Query Processing Service with OpenAI integration
+- ✅ Query Controller and Routes
+- ✅ Proxy endpoints `/api/assessment/support` and `/api/devlab/support` for Support Mode
+- ✅ Microservice Support Controller for Assessment/DevLab proxy
+- ✅ CORS middleware for frontend integration
+- ✅ Request validation and error handling
 
 **In Progress:**
 - ⏳ Phase 1: Foundation – finalize database readiness
+- ✅ Phase 3: API Layer – REST API endpoint `/api/v1/query` implemented
 
 **Remaining:**
 - ⏳ Configure CI/CD pipeline
 - ⏳ Run initial Prisma migrations and capture SQL artifacts
 - ⏳ Database smoke tests against dev stack
-- ⏳ Phase 2: Core Services
-- ⏳ Phase 3: API Layer
+- ⏳ Phase 2: Core Services (Vector Retrieval, Access Control)
+- ⏳ Phase 3: API Layer (gRPC services, additional REST endpoints)
 - ⏳ Phase 4: Advanced Features
-- ⏳ Phase 5: Frontend
+- ⏳ Phase 5: Frontend (already completed)
 - ⏳ Phase 6: Integration & Testing
 
 ---

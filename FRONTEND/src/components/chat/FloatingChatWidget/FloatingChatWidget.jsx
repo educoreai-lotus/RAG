@@ -16,6 +16,7 @@ import {
 import { detectModeChange, getModeSpecificResponse } from '../../../utils/modeDetector.js';
 import { getModeSpecificRecommendations } from '../../../utils/recommendations.js';
 import { proxyToMicroservice } from '../../../services/microserviceProxy.js';
+import { useSubmitQueryMutation } from '../../../store/api/ragApi.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 
@@ -33,6 +34,7 @@ const FloatingChatWidget = ({
   
   const [recommendations, setRecommendations] = useState([]);
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
+  const [submitQuery, { isLoading: isQueryLoading }] = useSubmitQueryMutation();
 
   // Initialize mode if embedded with initialMode
   useEffect(() => {
@@ -139,6 +141,7 @@ const FloatingChatWidget = ({
     // Check if we're in Support Mode (proxy behavior)
     const isSupportMode = responseMode === MODES.ASSESSMENT_SUPPORT || responseMode === MODES.DEVLAB_SUPPORT;
     
+    // Set loading state (combine with query loading if in General Mode)
     dispatch(setLoading(true));
     
     try {
@@ -184,13 +187,52 @@ const FloatingChatWidget = ({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
       } else {
-        // GENERAL MODE: Use intelligent chatbot responses
-        botMessages.push({
-          id: `bot-${Date.now()}`,
-          text: getModeSpecificResponse(text, responseMode),
-          isBot: true,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        });
+        // GENERAL MODE: Send query to RAG API (OpenAI via backend)
+        try {
+          const sessionId = sessionStorage.getItem('chatbot_session_id') || `session_${Date.now()}`;
+          sessionStorage.setItem('chatbot_session_id', sessionId);
+          
+          const ragResponse = await submitQuery({ 
+            query: text,
+            tenant_id: localStorage.getItem('tenant_id') || 'default',
+            context: {
+              user_id: userId || localStorage.getItem('user_id') || 'anonymous',
+              session_id: sessionId,
+            },
+            options: {
+              max_results: 5,
+              min_confidence: 0.7,
+              include_metadata: true,
+            },
+          }).unwrap();
+          
+          // Use RAG API response (from OpenAI)
+          botMessages.push({
+            id: `bot-${Date.now()}`,
+            text: ragResponse.answer || ragResponse.response || 'I received your query but got an empty response.',
+            isBot: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            sources: ragResponse.sources || [],
+            confidence: ragResponse.confidence,
+          });
+        } catch (ragError) {
+          // Fallback to mock response if RAG API fails
+          console.error('RAG API error:', ragError);
+          const errorMessage = ragError?.data?.message || ragError?.message || 'Failed to connect to RAG service';
+          botMessages.push({
+            id: `bot-${Date.now()}`,
+            text: `⚠️ Error: ${errorMessage}. Using fallback response.`,
+            isBot: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+          // Also add fallback response
+          botMessages.push({
+            id: `bot-fallback-${Date.now()}`,
+            text: getModeSpecificResponse(text, responseMode),
+            isBot: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
       }
       
       // Dispatch all messages
