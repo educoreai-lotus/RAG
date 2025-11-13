@@ -1,12 +1,25 @@
 /**
  * Recommendations - Dynamic recommendation system with quick actions and cards
+ * Mode-aware recommendations display
  */
 
 import React from 'react';
 import { motion } from 'framer-motion';
 import { HiLightBulb, HiArrowRight } from 'react-icons/hi2';
+import { MODES } from '../../../store/slices/chatMode.slice.js';
 
-const Recommendations = ({ items = [], onSelect }) => {
+const getRecommendationsTitle = (currentMode) => {
+  switch (currentMode) {
+    case MODES.ASSESSMENT_SUPPORT:
+      return 'Assessment Actions';
+    case MODES.DEVLAB_SUPPORT:
+      return 'DevLab Actions';
+    default:
+      return 'Suggestions';
+  }
+};
+
+const Recommendations = ({ items = [], onSelect, currentMode = MODES.GENERAL }) => {
   if (!items || items.length === 0) return null;
 
   return (
@@ -18,7 +31,7 @@ const Recommendations = ({ items = [], onSelect }) => {
     >
       <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
         <HiLightBulb className="w-4 h-4 text-emerald-500" />
-        <span className="font-medium">Suggestions</span>
+        <span className="font-medium">{getRecommendationsTitle(currentMode)}</span>
       </div>
 
       <div className="space-y-2">

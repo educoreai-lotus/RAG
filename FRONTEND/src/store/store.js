@@ -5,6 +5,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authSlice from './slices/auth.slice.js';
 import chatSlice from './slices/chat.slice.js';
+import chatModeSlice from './slices/chatMode.slice.js';
 import userSlice from './slices/user.slice.js';
 import uiSlice from './slices/ui.slice.js';
 import { ragApi } from './api/ragApi.js';
@@ -13,6 +14,7 @@ export const store = configureStore({
   reducer: {
     auth: authSlice,
     chat: chatSlice,
+    chatMode: chatModeSlice,
     user: userSlice,
     ui: uiSlice,
     [ragApi.reducerPath]: ragApi.reducer,

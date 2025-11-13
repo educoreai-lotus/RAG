@@ -1,135 +1,36 @@
 /**
  * Floating Chat Widget - Main Component
- * Integrates all chatbot components with mock logic
+ * Integrates all chatbot components with multi-mode behavior system
  */
 
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { toggleWidget, setWidgetOpen } from '../../../store/slices/ui.slice.js';
 import { addMessage, setLoading } from '../../../store/slices/chat.slice.js';
+import {
+  setGeneralMode,
+  setAssessmentSupportMode,
+  setDevLabSupportMode,
+  MODES,
+} from '../../../store/slices/chatMode.slice.js';
+import { detectModeChange, getModeSpecificResponse } from '../../../utils/modeDetector.js';
+import { getModeSpecificRecommendations } from '../../../utils/recommendations.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
-
-// Mock bot responses
-const getBotResponse = (userMessage) => {
-  const lowerMessage = userMessage.toLowerCase();
-  
-  if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-    return "Hello! I'm here to help you. What would you like to know?";
-  }
-  
-  if (lowerMessage.includes('help')) {
-    return "I can help you with various topics. Feel free to ask me anything!";
-  }
-  
-  if (lowerMessage.includes('thanks') || lowerMessage.includes('thank you')) {
-    return "You're welcome! Is there anything else I can help you with?";
-  }
-  
-  if (lowerMessage.includes('bye') || lowerMessage.includes('goodbye')) {
-    return "Goodbye! Have a great day!";
-  }
-  
-  // Default response
-  return `I understand you're asking about "${userMessage}". Let me help you with that!`;
-};
-
-// Mock recommendations based on context
-const getRecommendations = (messages) => {
-  const lastMessage = messages[messages.length - 1]?.text?.toLowerCase() || '';
-  
-  // Initial recommendations
-  if (messages.length <= 1) {
-    return [
-      {
-        id: 'rec-1',
-        type: 'button',
-        label: 'Get Started Guide',
-        description: 'Learn how to use our platform',
-      },
-      {
-        id: 'rec-2',
-        type: 'button',
-        label: 'Contact Support',
-        description: 'Talk to our support team',
-      },
-      {
-        id: 'rec-3',
-        type: 'card',
-        label: 'Documentation',
-        description: 'Browse our comprehensive documentation',
-      },
-      {
-        id: 'rec-4',
-        type: 'card',
-        label: 'FAQ',
-        description: 'Find answers to common questions',
-      },
-    ];
-  }
-  
-  // Contextual recommendations
-  if (lastMessage.includes('help') || lastMessage.includes('support')) {
-    return [
-      {
-        id: 'rec-support-1',
-        type: 'button',
-        label: 'Live Chat',
-        description: 'Connect with support agent',
-      },
-      {
-        id: 'rec-support-2',
-        type: 'button',
-        label: 'Email Support',
-        description: 'Send us an email',
-      },
-    ];
-  }
-  
-  if (lastMessage.includes('documentation') || lastMessage.includes('docs')) {
-    return [
-      {
-        id: 'rec-docs-1',
-        type: 'card',
-        label: 'API Reference',
-        description: 'Complete API documentation',
-      },
-      {
-        id: 'rec-docs-2',
-        type: 'card',
-        label: 'Tutorials',
-        description: 'Step-by-step guides',
-      },
-    ];
-  }
-  
-  // Default recommendations
-  return [
-    {
-      id: 'rec-default-1',
-      type: 'button',
-      label: 'More Help',
-    },
-    {
-      id: 'rec-default-2',
-      type: 'button',
-      label: 'Browse Topics',
-    },
-  ];
-};
 
 const FloatingChatWidget = () => {
   const dispatch = useDispatch();
   const isOpen = useSelector((state) => state.ui.isWidgetOpen);
   const messages = useSelector((state) => state.chat.messages);
   const isLoading = useSelector((state) => state.chat.isLoading);
+  const currentMode = useSelector((state) => state.chatMode.currentMode);
   
   const [recommendations, setRecommendations] = useState([]);
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
 
-  // Show initial greeting when widget opens
+  // Show initial greeting when widget opens (only in General mode)
   useEffect(() => {
-    if (isOpen && !hasShownGreeting && messages.length === 0) {
+    if (isOpen && !hasShownGreeting && messages.length === 0 && currentMode === MODES.GENERAL) {
       const greeting = {
         id: 'greeting-1',
         text: "Hello! I'm your AI assistant. How can I help you today?",
@@ -141,22 +42,22 @@ const FloatingChatWidget = () => {
       
       // Show initial recommendations after greeting
       setTimeout(() => {
-        setRecommendations(getRecommendations([greeting]));
+        setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
       }, 500);
     }
-  }, [isOpen, hasShownGreeting, messages.length, dispatch]);
+  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch]);
 
-  // Update recommendations when messages change
+  // Update recommendations when mode or messages change
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.isBot) {
         setTimeout(() => {
-          setRecommendations(getRecommendations(messages));
+          setRecommendations(getModeSpecificRecommendations(currentMode, messages));
         }, 500);
       }
     }
-  }, [messages]);
+  }, [messages, currentMode]);
 
   const handleToggle = () => {
     dispatch(toggleWidget());
@@ -164,9 +65,27 @@ const FloatingChatWidget = () => {
 
   const handleClose = () => {
     dispatch(setWidgetOpen(false));
+    // Reset to general mode when closing
+    if (currentMode !== MODES.GENERAL) {
+      dispatch(setGeneralMode());
+    }
   };
 
   const handleSendMessage = (text) => {
+    // Detect mode change based on message
+    const newMode = detectModeChange(text, currentMode);
+    
+    // Switch mode if detected
+    if (newMode) {
+      if (newMode === MODES.GENERAL) {
+        dispatch(setGeneralMode());
+      } else if (newMode === MODES.ASSESSMENT_SUPPORT) {
+        dispatch(setAssessmentSupportMode());
+      } else if (newMode === MODES.DEVLAB_SUPPORT) {
+        dispatch(setDevLabSupportMode());
+      }
+    }
+
     // Add user message
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -179,16 +98,44 @@ const FloatingChatWidget = () => {
     // Clear recommendations while loading
     setRecommendations([]);
     
-    // Simulate bot response
+    // Get the mode to use for response (use newMode if changed, otherwise currentMode)
+    const responseMode = newMode || currentMode;
+    
+    // Simulate bot response with mode-specific logic
     dispatch(setLoading(true));
     setTimeout(() => {
-      const botResponse = {
+      // If mode changed, add mode transition message
+      let botMessages = [];
+      
+      if (newMode && newMode !== MODES.GENERAL) {
+        const modeName = newMode === MODES.ASSESSMENT_SUPPORT 
+          ? 'Assessment Support' 
+          : 'DevLab Support';
+        botMessages.push({
+          id: `mode-${Date.now()}`,
+          text: `Switched to ${modeName} mode. I'm now focused on helping you with ${modeName.toLowerCase()} issues.`,
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      } else if (newMode === MODES.GENERAL && currentMode !== MODES.GENERAL) {
+        botMessages.push({
+          id: `mode-${Date.now()}`,
+          text: "Returned to General Chat mode. How can I help you?",
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      }
+      
+      // Add main response
+      botMessages.push({
         id: `bot-${Date.now()}`,
-        text: getBotResponse(text),
+        text: getModeSpecificResponse(text, responseMode),
         isBot: true,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      dispatch(addMessage(botResponse));
+      });
+      
+      // Dispatch all messages
+      botMessages.forEach((msg) => dispatch(addMessage(msg)));
       dispatch(setLoading(false));
     }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
   };
@@ -213,6 +160,7 @@ const FloatingChatWidget = () => {
         onSendMessage={handleSendMessage}
         onSelectRecommendation={handleSelectRecommendation}
         isLoading={isLoading}
+        currentMode={currentMode}
       />
     </>
   );

@@ -17,6 +17,7 @@ const ChatPanel = ({
   onSendMessage,
   onSelectRecommendation,
   isLoading = false,
+  currentMode,
 }) => {
   const messagesEndRef = useRef(null);
 
@@ -41,7 +42,7 @@ const ChatPanel = ({
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
           {/* Header */}
-          <ChatHeader onClose={onClose} />
+          <ChatHeader onClose={onClose} currentMode={currentMode} />
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
@@ -65,13 +66,14 @@ const ChatPanel = ({
               />
             ))}
 
-            {/* Recommendations appear after bot messages */}
+            {/* Recommendations appear after bot messages (only in appropriate mode) */}
             {messages.length > 0 &&
               messages[messages.length - 1]?.isBot &&
               recommendations.length > 0 && (
                 <Recommendations
                   items={recommendations}
                   onSelect={onSelectRecommendation}
+                  currentMode={currentMode}
                 />
               )}
 
