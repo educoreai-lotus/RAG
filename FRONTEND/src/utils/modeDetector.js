@@ -36,6 +36,8 @@ const DEVLAB_KEYWORDS = [
 const EXIT_KEYWORDS = [
   'exit support',
   'finish',
+  'stop support',
+  'return to chat',
   'back to chat',
   'return to general chat',
   'exit',
@@ -88,9 +90,14 @@ export const detectModeChange = (message, currentMode) => {
 
 /**
  * Gets mode-specific bot response
+ * 
+ * NOTE: In Support Mode (ASSESSMENT_SUPPORT or DEVLAB_SUPPORT), responses are handled
+ * by the proxy service (microserviceProxy.js), not by this function. This function
+ * is only used for General Chat Mode.
+ * 
  * @param {string} message - User message
  * @param {string} mode - Current chat mode
- * @returns {string} - Bot response
+ * @returns {string} - Bot response (only for GENERAL mode)
  */
 export const getModeSpecificResponse = (message, mode) => {
   const lowerMessage = message.toLowerCase();

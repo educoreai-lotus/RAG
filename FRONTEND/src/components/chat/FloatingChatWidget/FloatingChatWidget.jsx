@@ -15,6 +15,7 @@ import {
 } from '../../../store/slices/chatMode.slice.js';
 import { detectModeChange, getModeSpecificResponse } from '../../../utils/modeDetector.js';
 import { getModeSpecificRecommendations } from '../../../utils/recommendations.js';
+import { proxyToMicroservice } from '../../../services/microserviceProxy.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 
@@ -75,7 +76,7 @@ const FloatingChatWidget = () => {
     }
   };
 
-  const handleSendMessage = (text) => {
+  const handleSendMessage = async (text) => {
     // Detect mode change based on message
     const newMode = detectModeChange(text, currentMode);
     
@@ -105,19 +106,22 @@ const FloatingChatWidget = () => {
     // Get the mode to use for response (use newMode if changed, otherwise currentMode)
     const responseMode = newMode || currentMode;
     
-    // Simulate bot response with mode-specific logic
+    // Check if we're in Support Mode (proxy behavior)
+    const isSupportMode = responseMode === MODES.ASSESSMENT_SUPPORT || responseMode === MODES.DEVLAB_SUPPORT;
+    
     dispatch(setLoading(true));
-    setTimeout(() => {
-      // If mode changed, add mode transition message
+    
+    try {
       let botMessages = [];
       
+      // If mode changed to Support Mode, add transition message
       if (newMode && newMode !== MODES.GENERAL && currentMode === MODES.GENERAL) {
         const modeName = newMode === MODES.ASSESSMENT_SUPPORT 
           ? 'Assessment Support' 
           : 'DevLab Support';
         botMessages.push({
           id: `mode-${Date.now()}`,
-          text: `Switched to ${modeName} mode. I'm now focused on helping you with ${modeName.toLowerCase()} issues.`,
+          text: `Switched to ${modeName} Mode. I'm now acting as a proxy to the ${modeName} microservice. Your questions will be forwarded directly.`,
           isBot: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
@@ -137,18 +141,52 @@ const FloatingChatWidget = () => {
         setRecommendations([]);
       }
       
-      // Add main response
-      botMessages.push({
-        id: `bot-${Date.now()}`,
-        text: getModeSpecificResponse(text, responseMode),
-        isBot: true,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      });
+      // PROXY BEHAVIOR: In Support Mode, forward to microservice and return verbatim response
+      if (isSupportMode) {
+        // Forward user message to microservice (proxy mode)
+        const microserviceResponse = await proxyToMicroservice(text, responseMode);
+        
+        // Return microservice response verbatim (no modification, no commentary)
+        botMessages.push({
+          id: `bot-${Date.now()}`,
+          text: microserviceResponse, // Verbatim response from microservice
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      } else {
+        // GENERAL MODE: Use intelligent chatbot responses
+        botMessages.push({
+          id: `bot-${Date.now()}`,
+          text: getModeSpecificResponse(text, responseMode),
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      }
       
       // Dispatch all messages
       botMessages.forEach((msg) => dispatch(addMessage(msg)));
+    } catch (error) {
+      // Handle errors in Support Mode (proxy mode)
+      if (isSupportMode) {
+        const errorMessage = error.message || 'Failed to connect to microservice';
+        dispatch(addMessage({
+          id: `bot-error-${Date.now()}`,
+          text: `Error: ${errorMessage}`, // Return error verbatim
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+      } else {
+        // General mode error handling
+        dispatch(addMessage({
+          id: `bot-error-${Date.now()}`,
+          text: "I'm sorry, I encountered an error. Please try again.",
+          isBot: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+      }
+    } finally {
       dispatch(setLoading(false));
-    }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+    }
   };
 
   const handleSelectRecommendation = (item) => {
