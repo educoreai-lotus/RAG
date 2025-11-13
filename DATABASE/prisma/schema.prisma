@@ -15,23 +15,23 @@ datasource db {
 // ============================================
 
 model Tenant {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
-  domain    String   @unique
-  settings  Json?    @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  domain    String    @unique
+  settings  Json?     @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  queries              Query[]
-  vectorEmbeddings     VectorEmbedding[]
-  knowledgeGraphNodes  KnowledgeGraphNode[]
-  knowledgeGraphEdges  KnowledgeGraphEdge[]
-  accessControlRules   AccessControlRule[]
-  userProfiles         UserProfile[]
-  auditLogs            AuditLog[]
-  cacheEntries         CacheEntry[]
+  queries             Query[]
+  vectorEmbeddings    VectorEmbedding[]
+  knowledgeGraphNodes KnowledgeGraphNode[]
+  knowledgeGraphEdges KnowledgeGraphEdge[]
+  accessControlRules  AccessControlRule[]
+  userProfiles        UserProfile[]
+  auditLogs           AuditLog[]
+  cacheEntries        CacheEntry[]
 
   @@map("tenants")
 }
@@ -41,24 +41,24 @@ model Tenant {
 // ============================================
 
 model Query {
-  id                String   @id @default(uuid())
-  tenantId          String   @map("tenant_id")
-  userId            String   @map("user_id")
-  sessionId         String?  @map("session_id")
-  queryText         String   @db.Text @map("query_text")
-  answer            String   @db.Text
-  confidenceScore   Decimal  @map("confidence_score") @db.Decimal(3, 2)
-  processingTimeMs  Int      @map("processing_time_ms")
-  modelVersion      String   @map("model_version")
-  isPersonalized    Boolean  @default(false) @map("is_personalized")
-  isCached          Boolean  @default(false) @map("is_cached")
-  metadata          Json?    @default("{}")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  userId           String   @map("user_id")
+  sessionId        String?  @map("session_id")
+  queryText        String   @map("query_text") @db.Text
+  answer           String   @db.Text
+  confidenceScore  Decimal  @map("confidence_score") @db.Decimal(3, 2)
+  processingTimeMs Int      @map("processing_time_ms")
+  modelVersion     String   @map("model_version")
+  isPersonalized   Boolean  @default(false) @map("is_personalized")
+  isCached         Boolean  @default(false) @map("is_cached")
+  metadata         Json?    @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   // Relations
-  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sources           QuerySource[]
-  recommendations   QueryRecommendation[]
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sources         QuerySource[]
+  recommendations QueryRecommendation[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -72,14 +72,14 @@ model QuerySource {
   sourceId       String   @map("source_id")
   sourceType     String   @map("source_type")
   title          String
-  contentSnippet String   @db.Text @map("content_snippet")
+  contentSnippet String   @map("content_snippet") @db.Text
   sourceUrl      String   @map("source_url")
   relevanceScore Decimal  @map("relevance_score") @db.Decimal(3, 2)
   metadata       Json?    @default("{}")
   createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
-  query          Query    @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  query Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
 
   @@index([queryId])
   @@index([sourceId])
@@ -87,19 +87,19 @@ model QuerySource {
 }
 
 model QueryRecommendation {
-  id                String   @id @default(uuid())
-  queryId           String   @map("query_id")
-  recommendationType String  @map("recommendation_type")
-  recommendationId  String   @map("recommendation_id")
-  title             String
-  description       String   @db.Text
-  reason            String   @db.Text
-  priority          Int      @default(0)
-  metadata          Json?    @default("{}")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  queryId            String   @map("query_id")
+  recommendationType String   @map("recommendation_type")
+  recommendationId   String   @map("recommendation_id")
+  title              String
+  description        String   @db.Text
+  reason             String   @db.Text
+  priority           Int      @default(0)
+  metadata           Json?    @default("{}")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   // Relations
-  query             Query    @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  query Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
 
   @@index([queryId])
   @@index([recommendationId])
@@ -111,19 +111,19 @@ model QueryRecommendation {
 // ============================================
 
 model VectorEmbedding {
-  id          String   @id @default(uuid())
-  tenantId    String   @map("tenant_id")
-  contentId   String   @map("content_id")
-  contentType String   @map("content_type")
+  id          String                      @id @default(uuid())
+  tenantId    String                      @map("tenant_id")
+  contentId   String                      @map("content_id")
+  contentType String                      @map("content_type")
   embedding   Unsupported("vector(1536)") // pgvector type
-  contentText String   @db.Text @map("content_text")
-  chunkIndex  Int      @default(0) @map("chunk_index")
-  metadata    Json?    @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  contentText String                      @map("content_text") @db.Text
+  chunkIndex  Int                         @default(0) @map("chunk_index")
+  metadata    Json?                       @default("{}")
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  updatedAt   DateTime                    @updatedAt @map("updated_at")
 
   // Relations
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([contentId])
@@ -140,41 +140,42 @@ model VectorEmbedding {
 // ============================================
 
 model KnowledgeGraphNode {
-  id        String   @id @default(uuid())
-  tenantId  String   @map("tenant_id")
-  nodeId    String   @unique @map("node_id")
-  nodeType  String   @map("node_type")
-  properties Json?   @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  nodeId     String   @unique @map("node_id")
+  nodeType   String   @map("node_type")
+  properties Json?    @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sourceEdges     KnowledgeGraphEdge[] @relation("SourceNode")
-  targetEdges     KnowledgeGraphEdge[] @relation("TargetNode")
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceEdges KnowledgeGraphEdge[] @relation("SourceNode")
+  targetEdges KnowledgeGraphEdge[] @relation("TargetNode")
 
   @@index([tenantId])
   @@index([nodeId])
   @@index([nodeType])
-  @@index([properties(ops: JsonbPathOps)], map: "idx_kg_nodes_properties")
+  // Note: GIN index for JSONB properties created manually via SQL migration
+  // See: DATABASE/prisma/migrations/template_pgvector.sql
   @@map("knowledge_graph_nodes")
 }
 
 model KnowledgeGraphEdge {
-  id            String   @id @default(uuid())
-  tenantId      String   @map("tenant_id")
-  sourceNodeId  String   @map("source_node_id")
-  targetNodeId  String   @map("target_node_id")
-  edgeType      String   @map("edge_type")
-  weight        Decimal? @db.Decimal(3, 2)
-  properties    Json?    @default("{}")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  sourceNodeId String   @map("source_node_id")
+  targetNodeId String   @map("target_node_id")
+  edgeType     String   @map("edge_type")
+  weight       Decimal? @db.Decimal(3, 2)
+  properties   Json?    @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sourceNode    KnowledgeGraphNode @relation("SourceNode", fields: [sourceNodeId], references: [nodeId], onDelete: Cascade)
-  targetNode    KnowledgeGraphNode @relation("TargetNode", fields: [targetNodeId], references: [nodeId], onDelete: Cascade)
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceNode KnowledgeGraphNode @relation("SourceNode", fields: [sourceNodeId], references: [nodeId], onDelete: Cascade)
+  targetNode KnowledgeGraphNode @relation("TargetNode", fields: [targetNodeId], references: [nodeId], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([sourceNodeId, targetNodeId])
@@ -193,7 +194,7 @@ model AccessControlRule {
   subjectType  String   @map("subject_type") // "user", "role", "group"
   subjectId    String   @map("subject_id")
   resourceType String   @map("resource_type")
-  resourceId  String?  @map("resource_id")
+  resourceId   String?  @map("resource_id")
   permission   String
   conditions   Json?    @default("{}")
   isActive     Boolean  @default(true) @map("is_active")
@@ -201,7 +202,7 @@ model AccessControlRule {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([subjectType, subjectId])
@@ -215,21 +216,21 @@ model AccessControlRule {
 // ============================================
 
 model UserProfile {
-  id             String   @id @default(uuid())
-  tenantId       String   @map("tenant_id")
-  userId         String   @unique @map("user_id")
-  role           String
-  department     String?
-  region         String?
-  skillGaps      Json?    @default("[]") @map("skill_gaps")
-  learningProgress Json?  @default("{}") @map("learning_progress")
-  preferences    Json?    @default("{}")
-  metadata       Json?    @default("{}")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  userId           String   @unique @map("user_id")
+  role             String
+  department       String?
+  region           String?
+  skillGaps        Json?    @default("[]") @map("skill_gaps")
+  learningProgress Json?    @default("{}") @map("learning_progress")
+  preferences      Json?    @default("{}")
+  metadata         Json?    @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, userId])
   @@index([tenantId, userId])
@@ -247,14 +248,14 @@ model AuditLog {
   userId       String?  @map("user_id")
   action       String
   resourceType String?  @map("resource_type")
-  resourceId  String?  @map("resource_id")
+  resourceId   String?  @map("resource_id")
   ipAddress    String?  @map("ip_address")
   userAgent    String?  @map("user_agent")
   details      Json?    @default("{}")
   createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -267,22 +268,18 @@ model AuditLog {
 // ============================================
 
 model CacheEntry {
-  id          String   @id @default(uuid())
-  tenantId    String   @map("tenant_id")
-  cacheKey    String   @unique @map("cache_key")
-  queryHash   String   @map("query_hash")
-  responseData Json    @map("response_data")
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  cacheKey     String   @unique @map("cache_key")
+  queryHash    String   @map("query_hash")
+  responseData Json     @map("response_data")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([cacheKey])
   @@index([expiresAt])
   @@map("cache_entries")
 }
-
-
-
-
