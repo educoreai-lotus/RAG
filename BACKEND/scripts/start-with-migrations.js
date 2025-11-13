@@ -31,6 +31,26 @@ async function runMigrations() {
       return;
     }
     
+    // Validate DATABASE_URL format
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl.includes('sslmode=require') && !dbUrl.includes('sslmode=prefer')) {
+      log.warn('⚠️  DATABASE_URL may be missing sslmode parameter!');
+      log.warn('💡 Supabase requires: ?sslmode=require at the end of DATABASE_URL');
+      log.warn('💡 Current URL format:', dbUrl.substring(0, 50) + '...');
+      log.warn('💡 Expected format: postgresql://...?sslmode=require');
+      // Continue anyway - might work, but likely to fail
+    }
+    
+    // Check if it's a Supabase URL
+    if (dbUrl.includes('supabase.com')) {
+      log.info('✅ Detected Supabase database URL');
+      if (!dbUrl.includes('sslmode=require')) {
+        log.error('❌ Supabase requires sslmode=require in DATABASE_URL!');
+        log.error('💡 Please add ?sslmode=require to your DATABASE_URL in Railway');
+        log.error('💡 This is likely causing the connection timeout');
+      }
+    }
+    
     // Skip migrations if SKIP_MIGRATIONS is set (for faster deployment)
     if (process.env.SKIP_MIGRATIONS === 'true') {
       log.warn('⚠️  SKIP_MIGRATIONS=true - Skipping database migrations');
