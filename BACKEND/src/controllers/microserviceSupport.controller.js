@@ -14,10 +14,12 @@ const supportRequestSchema = Joi.object({
   query: Joi.string().min(1).max(2000).required(),
   timestamp: Joi.string().isoDate().optional(),
   session_id: Joi.string().optional(),
-  support_mode: Joi.string().valid('Assessment', 'DevLab').required(),
+  // support_mode is optional; activation is enforced by headers/explicit flag match
+  support_mode: Joi.string().valid('Assessment', 'DevLab').optional(),
   metadata: Joi.object({
     user_id: Joi.string().optional(),
     tenant_id: Joi.string().optional(),
+    source: Joi.string().valid('assessment', 'devlab').optional(),
   }).optional(),
 });
 
@@ -36,12 +38,22 @@ export async function assessmentSupport(req, res, next) {
       });
     }
 
-    const { query, session_id, metadata = {} } = validation.value;
+    const { query, session_id, metadata = {}, support_mode } = validation.value;
+
+    // Enforce activation ONLY via explicit source (header or metadata or flag)
+    const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
+    const metaSource = (metadata.source || '').toString().toLowerCase();
+    const flagSource = (support_mode || '').toString().toLowerCase();
+    const isAssessmentSource = ['assessment'].includes(headerSource) || ['assessment'].includes(metaSource) || ['assessment'].includes(flagSource);
+    if (!isAssessmentSource) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Support mode not activated. Provide X-Source: assessment.' });
+    }
 
     logger.info('Assessment support request', {
       query,
       session_id,
       user_id: metadata.user_id,
+      source: 'assessment',
     });
 
     // TODO: Forward to actual Assessment microservice
@@ -79,12 +91,22 @@ export async function devlabSupport(req, res, next) {
       });
     }
 
-    const { query, session_id, metadata = {} } = validation.value;
+    const { query, session_id, metadata = {}, support_mode } = validation.value;
+
+    // Enforce activation ONLY via explicit source (header or metadata or flag)
+    const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
+    const metaSource = (metadata.source || '').toString().toLowerCase();
+    const flagSource = (support_mode || '').toString().toLowerCase();
+    const isDevlabSource = ['devlab'].includes(headerSource) || ['devlab'].includes(metaSource) || ['devlab'].includes(flagSource);
+    if (!isDevlabSource) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Support mode not activated. Provide X-Source: devlab.' });
+    }
 
     logger.info('DevLab support request', {
       query,
       session_id,
       user_id: metadata.user_id,
+      source: 'devlab',
     });
 
     // TODO: Forward to actual DevLab microservice
