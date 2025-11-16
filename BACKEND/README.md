@@ -2,6 +2,28 @@
 
 Backend implementation for the EDUCORE Contextual Assistant microservice.
 
+## Features
+
+- Strict RAG pipeline:
+  - Query classification to decide EDUCORE vs. general questions
+  - Vector similarity over `vector_embeddings` (pgvector)
+  - Context-only OpenAI answers for EDUCORE queries
+  - gRPC fallback to EDUCORE microservices when RAG has no hits
+  - Dynamic, contextual “no EDUCORE data” messages if both RAG and gRPC have no data
+- Caching (optional Redis) for query responses
+- Audit logs and persisted query history with sources and recommendations
+- Configurable CORS and environment-based configuration
+
+## Logging
+
+- Logging uses Winston (`src/utils/logger.util.js`).
+- Control level with `LOG_LEVEL` env var (default: `info`). Common values: `error`, `warn`, `info`, `debug`.
+- Key log points in the RAG flow (`src/services/queryProcessing.service.js`):
+  - Query classification decision (EDUCORE vs general)
+  - RAG vector search summary (count and average confidence)
+  - gRPC fallback attempts and results
+  - Final “no data” outcome after RAG and gRPC
+
 ## Structure
 
 ```
@@ -44,6 +66,9 @@ npm run dev
 
 - `npm start` - Start production server
 - `npm run dev` - Start development server with watch mode
+- `npm run db:generate` - Generate Prisma client
+- `npm run db:migrate` - Run database migrations
+- `npm run db:seed` - Seed database with sample data
 - `npm test` - Run all tests
 - `npm run test:unit` - Run unit tests only
 - `npm run test:integration` - Run integration tests
@@ -69,6 +94,16 @@ To seed database:
 ```bash
 npm run db:seed
 ```
+
+## Environment Variables (partial)
+
+- `DATABASE_URL` - PostgreSQL/Supabase connection string (required)
+- `OPENAI_API_KEY` - OpenAI API key (required for embeddings/completions)
+- `OPENAI_API_URL` - Optional base URL
+- `REDIS_URL` - Optional Redis URL
+- `REDIS_ENABLED` - Set to `false` to disable Redis
+- `LOG_LEVEL` - Logging level (`info` by default)
+- `GRPC_ENABLED` - Set to `true` to enable gRPC fallback client stubs
 
 
 

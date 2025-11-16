@@ -109,9 +109,20 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
 
     // 1) QUERY CLASSIFICATION
     const { isEducore, category } = isEducoreQuery(query);
+    logger.info('Query classification result', {
+      tenant_id: actualTenantId,
+      user_id,
+      isEducore,
+      category,
+    });
 
     // Non-EDUCORE queries → go straight to OpenAI (general knowledge)
     if (!isEducore) {
+      logger.info('Routing query to general OpenAI (non-EDUCORE)', {
+        tenant_id: actualTenantId,
+        user_id,
+      });
+
       const completion = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
@@ -185,6 +196,14 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       if (sources.length > 0) {
         confidence = sources.reduce((sum, s) => sum + s.relevanceScore, 0) / sources.length;
       }
+
+      logger.info('RAG vector search completed', {
+        tenant_id: actualTenantId,
+        user_id,
+        category,
+        sources_count: sources.length,
+        avg_confidence: sources.length ? confidence : 0,
+      });
     } catch (vectorError) {
       logger.warn('Vector search failed, continuing without retrieved context', {
         error: vectorError.message,
@@ -194,12 +213,25 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
 
     // 3) gRPC FALLBACK if no RAG hits
     if (sources.length === 0) {
+      logger.info('Attempting gRPC fallback', {
+        tenant_id: actualTenantId,
+        user_id,
+        category: category || 'general',
+      });
+
       const grpcContext = await grpcFetchByCategory(category || 'general', {
         query,
         tenantId: actualTenantId,
       });
 
       if (grpcContext && grpcContext.length > 0) {
+        logger.info('gRPC fallback returned data', {
+          tenant_id: actualTenantId,
+          user_id,
+          category,
+          items: grpcContext.length,
+        });
+
         // Convert gRPC results into sources/context and continue with strict RAG answering
         sources = grpcContext.map((item, idx) => ({
           sourceId: item.contentId || `grpc-${idx}`,
@@ -236,6 +268,13 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           personalized: false,
         },
       };
+
+      logger.info('No EDUCORE context found after RAG and gRPC', {
+        tenant_id: actualTenantId,
+        user_id,
+        category,
+        processing_time_ms: processingTimeMs,
+      });
 
       // Persist minimal query record for analytics/observability
       try {
