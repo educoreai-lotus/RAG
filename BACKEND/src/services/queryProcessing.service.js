@@ -11,9 +11,19 @@ import { searchSimilarVectors } from './vectorSearch.service.js';
 import { getOrCreateTenant } from './tenant.service.js';
 import { getOrCreateUserProfile, getUserSkillGaps } from './userProfile.service.js';
 
-// If true (default), the service MUST retrieve DB context before answering.
-// Set REQUIRE_DB_CONTEXT=false to allow answering even without DB sources.
-const requireDbContext = process.env.REQUIRE_DB_CONTEXT !== 'false';
+// Generate a dynamic, context-aware "no data" message that references the user's query
+function generateNoDataMessage(userQuery) {
+  const templates = [
+    (q) => `לא נמצאה כרגע תכולה רלוונטית במאגר ה־EDUCORE לשאלה: "${q}".`,
+    (q) => `אין לנו מידע מתאים ב־EDUCORE לגבי: "${q}".`,
+    (q) => `נראה שאין כרגע פריטים מתאימים במאגר ה־EDUCORE עבור: "${q}".`,
+    (q) => `בזמן זה, בסיס הידע של EDUCORE לא כולל מידע על "${q}".`,
+    (q) => `לא מצאתי נתונים מתוך EDUCORE שמתייחסים ל־"${q}".`,
+  ];
+  const pick = Math.floor(Math.random() * templates.length);
+  const base = templates[pick](String(userQuery || '').trim());
+  return `${base} מומלץ להוסיף/לייבא מסמכים ותכנים קשורים כדי לשפר מענה עתידי.`;
+}
 
 /**
  * Process a query using RAG (Retrieval-Augmented Generation)
@@ -114,7 +124,13 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         threshold: min_confidence,
       });
 
-      sources = similarVectors.map((vec) => ({
+      // Enforce simple role-based permission on user profiles:
+      // only admins may retrieve contentType 'user_profile'
+      const filteredVectors = (userProfile?.role === 'admin')
+        ? similarVectors
+        : similarVectors.filter((vec) => vec.contentType !== 'user_profile');
+
+      sources = filteredVectors.map((vec) => ({
         sourceId: vec.contentId,
         sourceType: vec.contentType,
         sourceMicroservice: vec.microserviceId, // Track which microservice provided this source
@@ -141,14 +157,15 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // Continue without vector search results
     }
 
-    // Enforce DB-backed answers if configured (default)
-    if (requireDbContext && sources.length === 0) {
+    // Strict No-Data mode: never call OpenAI without DB context
+    if (sources.length === 0) {
       const processingTimeMs = Date.now() - startTime;
-      const answer =
-        'לא נמצאה התאמה בידע עבור הטננט הזה. יש להזרים/לזרוע תוכן למסד הנתונים ולנסות שוב.';
+      const answer = generateNoDataMessage(query);
 
       const response = {
         answer,
+        abstained: true,
+        reason: 'no_db_context',
         confidence: 0,
         sources: [],
         metadata: {
@@ -208,12 +225,15 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       }
     }
 
-    // Generate answer using OpenAI with retrieved context
-    const systemPrompt = `You are a helpful AI assistant for the EDUCORE learning platform. Provide clear, concise, and accurate answers based on the context provided.${personalizationContext ? `\n\n${personalizationContext}` : ''}`;
+    // Generate answer using OpenAI with retrieved context (STRICT RAG)
+    const systemPrompt = `You are a helpful AI assistant for the EDUCORE learning platform.
+Strict RAG rules you MUST follow:
+- Use ONLY the content under "Context from knowledge base".
+- Do NOT use outside knowledge or make assumptions.
+- If the context does not contain the requested information, clearly state that EDUCORE does not include it and do not fabricate details.
+${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` : ''}`;
     
-    const userPrompt = retrievedContext
-      ? `Context from knowledge base:\n${retrievedContext}\n\nQuestion: ${query}\n\nAnswer based on the context above:`
-      : query;
+    const userPrompt = `Context from knowledge base:\n${retrievedContext}\n\nQuestion: ${query}\n\nAnswer ONLY with facts from the context above. If the context is insufficient, say so (without adding external knowledge).`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -236,6 +256,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
 
     const response = {
       answer,
+      abstained: false,
       confidence,
       sources,
       metadata: {

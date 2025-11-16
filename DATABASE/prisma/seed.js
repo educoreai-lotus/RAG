@@ -222,6 +222,60 @@ async function main() {
 
   console.log('✅ Created user profiles');
 
+  // 4b. Create additional realistic users (with names in metadata) including an admin
+  const moreUsers = [
+    {
+      userId: 'admin-001',
+      role: 'admin',
+      department: 'IT',
+      region: 'IL',
+      skillGaps: [],
+      learningProgress: {},
+      preferences: { preferredLanguage: 'he' },
+      metadata: { fullName: 'Adi Cohen', title: 'IT Administrator' },
+    },
+    {
+      userId: 'manager-001',
+      role: 'manager',
+      department: 'Engineering',
+      region: 'IL',
+      skillGaps: ['People Management'],
+      learningProgress: {},
+      preferences: { preferredLanguage: 'he' },
+      metadata: { fullName: 'Eden Levi', title: 'Engineering Manager' },
+    },
+    {
+      userId: 'employee-001',
+      role: 'employee',
+      department: 'Engineering',
+      region: 'IL',
+      skillGaps: ['React', 'Testing'],
+      learningProgress: { completedCourses: 2, inProgressCourses: 1 },
+      preferences: { preferredLanguage: 'he' },
+      metadata: { fullName: 'Noa Bar', title: 'Frontend Developer' },
+    },
+  ];
+
+  for (const user of moreUsers) {
+    await prisma.userProfile.upsert({
+      where: { userId: user.userId },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        userId: user.userId,
+        role: user.role,
+        department: user.department,
+        region: user.region,
+        skillGaps: user.skillGaps,
+        learningProgress: user.learningProgress,
+        preferences: user.preferences,
+        metadata: user.metadata,
+      },
+    });
+  }
+
+  console.log('✅ Created additional realistic users (admin/manager/employee)');
+
   // 5. Create sample knowledge graph nodes
   const courseNode = await prisma.knowledgeGraphNode.upsert({
     where: { nodeId: 'course:js-basics-101' },
@@ -381,6 +435,52 @@ async function main() {
         title: 'Learning Progress Report',
         reportType: 'progress',
         userId: 'learner-001',
+      },
+    },
+    // User profiles as retrievable content (visible only to admin by backend rule)
+    {
+      contentId: 'user:admin-001',
+      contentType: 'user_profile',
+      microserviceId: createdMicroservices['user-management'].id,
+      contentText: 'User Profile: Adi Cohen (admin). Department: IT. Region: IL. Title: IT Administrator. Responsibilities: system operations, security reviews, access control.',
+      chunkIndex: 0,
+      embedding: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
+      metadata: {
+        fullName: 'Adi Cohen',
+        role: 'admin',
+        department: 'IT',
+        region: 'IL',
+        title: 'IT Administrator',
+      },
+    },
+    {
+      contentId: 'user:manager-001',
+      contentType: 'user_profile',
+      microserviceId: createdMicroservices['user-management'].id,
+      contentText: 'User Profile: Eden Levi (manager). Department: Engineering. Region: IL. Title: Engineering Manager. Focus: delivery, mentoring, planning.',
+      chunkIndex: 0,
+      embedding: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
+      metadata: {
+        fullName: 'Eden Levi',
+        role: 'manager',
+        department: 'Engineering',
+        region: 'IL',
+        title: 'Engineering Manager',
+      },
+    },
+    {
+      contentId: 'user:employee-001',
+      contentType: 'user_profile',
+      microserviceId: createdMicroservices['user-management'].id,
+      contentText: 'User Profile: Noa Bar (employee). Department: Engineering. Region: IL. Title: Frontend Developer. Skills: JavaScript, CSS. Learning: React, Testing.',
+      chunkIndex: 0,
+      embedding: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
+      metadata: {
+        fullName: 'Noa Bar',
+        role: 'employee',
+        department: 'Engineering',
+        region: 'IL',
+        title: 'Frontend Developer',
       },
     },
   ];
