@@ -268,11 +268,14 @@ const FloatingChatWidget = ({
         id: `bot-guide-${Date.now()}`,
         isBot: true,
         text:
-          'EDUCORE - Getting Started:\n' +
-          '1) Ask domain questions tied to your tenant data.\n' +
-          '2) For Support Mode (Assessment/DevLab), embed the bot with explicit mode or set VITE_DEFAULT_SUPPORT_MODE.\n' +
-          '3) Ensure your DB is seeded and pgvector is enabled.\n' +
-          'Helpful links: /api/v1/query (chat), /api/assessment/support (proxy), README → Features & Logging.',
+          'EDUCORE – Getting Started Guide:\n' +
+          '1) Data-first: Answers come from your Supabase DB (vector_embeddings). Make sure you ran the seed and enabled pgvector (CREATE EXTENSION IF NOT EXISTS vector;).\n' +
+          '2) Normal Chat: Send requests to /api/v1/query without X-Source/support flags. The bot uses strict RAG (context-only). If no relevant data, you will get a dynamic “no EDUCORE data” message.\n' +
+          '3) Support Mode (optional): Enable only when needed. Back end requires SUPPORT_MODE_ENABLED=true and an explicit signal per request: X-Source: assessment|devlab OR support_mode OR metadata.source. Front end can default via VITE_DEFAULT_SUPPORT_MODE=assessment|devlab|none.\n' +
+          '4) Security gating: You can lock support endpoints with SUPPORT_ALLOWED_ORIGINS and SUPPORT_SHARED_SECRET (header: X-Embed-Secret).\n' +
+          '5) Quick verification: After a chat, check tables: queries, query_sources, and vector_embeddings to confirm DB-backed behavior.\n' +
+          '6) Endpoints: /api/v1/query (chat), /api/assessment/support and /api/devlab/support (proxy, gated).\n' +
+          'Tip: For best results, add your EDUCORE content as embeddings (title, content_text, metadata) and keep tenant_id consistent.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       // Push bot guide and keep recommendations visible
