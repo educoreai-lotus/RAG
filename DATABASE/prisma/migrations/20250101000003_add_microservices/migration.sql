@@ -112,3 +112,30 @@ COMMENT ON COLUMN "microservices"."service_id" IS 'Unique identifier across all 
 COMMENT ON COLUMN "vector_embeddings"."microservice_id" IS 'Which microservice this content came from';
 COMMENT ON COLUMN "query_sources"."source_microservice" IS 'Which microservice provided this source';
 
+-- Seed: Create default microservices for existing tenants
+-- This ensures all tenants have the 10 core microservices available
+DO $$
+DECLARE
+    tenant_record RECORD;
+BEGIN
+    -- Loop through all tenants and create microservices for each
+    FOR tenant_record IN SELECT id, domain FROM tenants LOOP
+        -- Insert 10 core microservices for this tenant
+        INSERT INTO microservices (
+            id, tenant_id, name, service_id, display_name, description,
+            api_endpoint, version, is_active, settings, metadata, created_at, updated_at
+        ) VALUES
+            (gen_random_uuid()::text, tenant_record.id, 'assessment', 'assessment', 'Assessment Service', 'Handles assessments, quizzes, and evaluations', 'https://assessment.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'devlab', 'devlab', 'DevLab Service', 'Development lab environment and coding exercises', 'https://devlab.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'content', 'content', 'Content Management Service', 'Manages learning content, courses, and materials', 'https://content.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'analytics', 'analytics', 'Analytics Service', 'Learning analytics and progress tracking', 'https://analytics.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'user-management', 'user-management', 'User Management Service', 'User accounts, profiles, and authentication', 'https://users.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'notification', 'notification', 'Notification Service', 'Sends notifications and alerts to users', 'https://notifications.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'reporting', 'reporting', 'Reporting Service', 'Generates reports and analytics dashboards', 'https://reporting.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'integration', 'integration', 'Integration Service', 'Third-party integrations and API management', 'https://integration.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'ai-assistant', 'ai-assistant', 'AI Assistant Service', 'RAG microservice - Contextual AI assistant (this service)', 'https://ai-assistant.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()),
+            (gen_random_uuid()::text, tenant_record.id, 'gateway', 'gateway', 'API Gateway', 'API Gateway for routing and load balancing', 'https://gateway.educore.local/api', '1.0.0', true, '{}'::jsonb, '{}'::jsonb, NOW(), NOW())
+        ON CONFLICT (service_id) DO NOTHING;
+    END LOOP;
+END $$;
+
