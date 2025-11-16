@@ -10,19 +10,21 @@ import { getPrismaClient } from '../config/database.config.js';
 import { searchSimilarVectors } from './vectorSearch.service.js';
 import { getOrCreateTenant } from './tenant.service.js';
 import { getOrCreateUserProfile, getUserSkillGaps } from './userProfile.service.js';
+import { isEducoreQuery } from '../utils/query-classifier.util.js';
+import { grpcFetchByCategory } from './grpcFallback.service.js';
 
-// Generate a dynamic, context-aware "no data" message that references the user's query
+// Generate a dynamic, context-aware "no data" message that references the user's query (English only)
 function generateNoDataMessage(userQuery) {
   const templates = [
-    (q) => `לא נמצאה כרגע תכולה רלוונטית במאגר ה־EDUCORE לשאלה: "${q}".`,
-    (q) => `אין לנו מידע מתאים ב־EDUCORE לגבי: "${q}".`,
-    (q) => `נראה שאין כרגע פריטים מתאימים במאגר ה־EDUCORE עבור: "${q}".`,
-    (q) => `בזמן זה, בסיס הידע של EDUCORE לא כולל מידע על "${q}".`,
-    (q) => `לא מצאתי נתונים מתוך EDUCORE שמתייחסים ל־"${q}".`,
+    (q) => `I couldn't find EDUCORE knowledge related to: "${q}".`,
+    (q) => `There is currently no EDUCORE content matching: "${q}".`,
+    (q) => `The EDUCORE knowledge base does not include information about: "${q}".`,
+    (q) => `No relevant EDUCORE items were found for: "${q}".`,
+    (q) => `It appears we don't have EDUCORE data covering: "${q}".`,
   ];
   const pick = Math.floor(Math.random() * templates.length);
   const base = templates[pick](String(userQuery || '').trim());
-  return `${base} מומלץ להוסיף/לייבא מסמכים ותכנים קשורים כדי לשפר מענה עתידי.`;
+  return `${base} Please add or import relevant documents to improve future answers.`;
 }
 
 /**
@@ -105,12 +107,45 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       }
     }
 
-    // Generate embedding for the query
+    // 1) QUERY CLASSIFICATION
+    const { isEducore, category } = isEducoreQuery(query);
+
+    // Non-EDUCORE queries → go straight to OpenAI (general knowledge)
+    if (!isEducore) {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are a friendly assistant. Provide a concise, helpful answer.' },
+          { role: 'user', content: query },
+        ],
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      const answer = completion.choices[0]?.message?.content || '';
+      const processingTimeMs = Date.now() - startTime;
+
+      return {
+        answer,
+        abstained: false,
+        confidence: 1,
+        sources: [],
+        metadata: {
+          processing_time_ms: processingTimeMs,
+          sources_retrieved: 0,
+          cached: false,
+          model_version: 'gpt-3.5-turbo',
+          personalized: !!userProfile,
+          mode: 'general_openai',
+        },
+      };
+    }
+
+    // 2) RAG LOOKUP (EDUCORE queries only)
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
       input: query,
     });
-
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // Vector similarity search in PostgreSQL (pgvector)
@@ -157,7 +192,32 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // Continue without vector search results
     }
 
-    // Strict No-Data mode: never call OpenAI without DB context
+    // 3) gRPC FALLBACK if no RAG hits
+    if (sources.length === 0) {
+      const grpcContext = await grpcFetchByCategory(category || 'general', {
+        query,
+        tenantId: actualTenantId,
+      });
+
+      if (grpcContext && grpcContext.length > 0) {
+        // Convert gRPC results into sources/context and continue with strict RAG answering
+        sources = grpcContext.map((item, idx) => ({
+          sourceId: item.contentId || `grpc-${idx}`,
+          sourceType: item.contentType || category || 'grpc',
+          sourceMicroservice: 'grpc',
+          title: item.metadata?.title || item.contentType || 'gRPC Source',
+          contentSnippet: String(item.contentText || '').substring(0, 200),
+          sourceUrl: item.metadata?.url || '',
+          relevanceScore: 0.75,
+          metadata: { ...(item.metadata || {}), via: 'grpc' },
+        }));
+
+        retrievedContext = sources.map((s, i) => `[gRPC ${i + 1}]: ${s.contentSnippet}`).join('\n\n');
+        confidence = 0.75;
+      }
+    }
+
+    // If still no context after gRPC → dynamic no-data
     if (sources.length === 0) {
       const processingTimeMs = Date.now() - startTime;
       const answer = generateNoDataMessage(query);
@@ -165,7 +225,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       const response = {
         answer,
         abstained: true,
-        reason: 'no_db_context',
+        reason: 'no_edudata_context',
         confidence: 0,
         sources: [],
         metadata: {
