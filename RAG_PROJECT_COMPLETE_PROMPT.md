@@ -20,7 +20,7 @@ This is a production-ready RAG (Retrieval-Augmented Generation) microservice tha
 
 ---
 
-## Complete Feature List (F-0002 to F-0017)
+## Complete Feature List (F-0002 to F-0019)
 
 ### F-0002: Unified Knowledge Graph Integration 📋 Planned
 **Status:** Planned  
@@ -177,6 +177,22 @@ This is a production-ready RAG (Retrieval-Augmented Generation) microservice tha
 - Custom recommendation system: Quick Action Buttons in General Mode, microservice support cards in Support Mode
 - No default Documentation/FAQ cards
 
+### F-0018: Support-Mode Explicit Gating (Embed/Headers only) ✅ Done
+**Status:** Complete  
+**Dependencies:** F-0016, F-0017  
+**Description:** Support Mode is activated only via explicit signals and gated by env
+- Activation requires one of: `X-Source: assessment|devlab`, `support_mode: "Assessment"|"DevLab"`, or `metadata.source: "assessment"|"devlab"`
+- Backend gating env: `SUPPORT_MODE_ENABLED` (true/false), optional `SUPPORT_ALLOWED_ORIGINS` (CSV), optional `SUPPORT_SHARED_SECRET` (+ header `X-Embed-Secret`)
+- Route middleware on `/api/assessment/support` and `/api/devlab/support` blocks unauthorized requests (403)
+- Normal chat never switches to support mode based on keywords
+
+### F-0019: Remove Keyword-Based Support Auto-Switch ✅ Done
+**Status:** Complete  
+**Dependencies:** F-0016  
+**Description:** Frontend no longer enters Support Mode based on message content
+- `modeDetector` no longer triggers support by keywords; only explicit embed/init or UI controls can set the mode
+- Default UI mode can be set at build time: `VITE_DEFAULT_SUPPORT_MODE=assessment|devlab|none`
+
 ---
 
 ## Technical Specifications
@@ -221,6 +237,10 @@ This is a production-ready RAG (Retrieval-Augmented Generation) microservice tha
 - Framer Motion (animations)
 - Material-UI (MUI) components
 - Vite (build tool)
+
+**Frontend Mode Control:**
+- Build-time default mode via `VITE_DEFAULT_SUPPORT_MODE=assessment|devlab|none`
+- Script embed (`public/bot.js`) can initialize support mode by microservice: `"ASSESSMENT"` or `"DEVLAB"`
 
 **Testing:**
 - Jest (unit/integration)
@@ -704,6 +724,8 @@ This prompt contains all the specifications, features, and implementation detail
 - `FRONTEND/src/utils/modeDetector.js` - Mode detection and routing logic
 - `FRONTEND/src/utils/recommendations.js` - Recommendation system
 - `FRONTEND/src/store/slices/chatMode.slice.js` - Chat mode state management
+- `FRONTEND/src/App.jsx` - Default mode initialization (reads `VITE_DEFAULT_SUPPORT_MODE`)
+- `FRONTEND/public/bot.js` - Embed script that can start in support mode based on microservice
 - `BACKEND/src/services/queryProcessing.service.js` - Query processing with OpenAI
 - `BACKEND/src/controllers/query.controller.js` - Query API controller
 - `BACKEND/src/controllers/microserviceSupport.controller.js` - Proxy controllers
@@ -720,5 +742,5 @@ This prompt contains all the specifications, features, and implementation detail
 
 ---
 
-**Last Updated:** 2025-01-27 (CORS fixed for multiple origins, Redis made optional, Backend REST API endpoints implemented)
+**Last Updated:** 2025-11-16 (Support Mode hardening: explicit gating + middleware, frontend default mode env, removed keyword auto-switch, strict RAG with dynamic no-data)
 

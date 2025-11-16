@@ -24,6 +24,9 @@ Recent additions (backend + frontend)
 - Frontend Mode Detection Update
   - Removed keyword-based auto-switch to support modes
   - Support mode is now controlled solely by embed/init config or explicit UI toggle
+- General Mode UX Cleanup
+  - Removed "Contact Support" quick-action from initial recommendations
+  - Kept minimal buttons only (e.g., "Get Started Guide", "Live Chat")
 - RAG and Fallback
   - RAG-only answers with strict context
   - gRPC fallback hook (disabled unless configured) for EDUCORE services

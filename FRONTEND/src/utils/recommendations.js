@@ -65,11 +65,6 @@ export const getModeSpecificRecommendations = (mode, messages = []) => {
         {
           id: 'rec-2',
           type: 'button',
-          label: 'Contact Support',
-        },
-        {
-          id: 'rec-3',
-          type: 'button',
           label: 'Live Chat',
         },
       ];
