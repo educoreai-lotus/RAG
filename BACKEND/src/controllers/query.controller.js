@@ -38,21 +38,53 @@ export async function submitQuery(req, res, next) {
     const metaSource = (req.body?.metadata?.source || '').toString().toLowerCase();
     const supportModeFlag = (req.body?.support_mode || '').toString().toLowerCase();
 
-    if (headerSource === 'assessment' || metaSource === 'assessment' || supportModeFlag === 'assessment') {
-      logger.info('Routing to Assessment Support (header/metadata/flag matched)', {
+    // Hardened gating: support mode must be explicitly enabled and authorized
+    const supportEnabled = (process.env.SUPPORT_MODE_ENABLED || '').toLowerCase() === 'true';
+    const sharedSecret = process.env.SUPPORT_SHARED_SECRET || '';
+    const providedSecret = (req.headers['x-embed-secret'] || '').toString();
+    const origin = (req.headers.origin || '').toString();
+    const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const originAllowed = allowedOrigins.length === 0 || (origin && allowedOrigins.includes(origin));
+    const secretOk = !sharedSecret || providedSecret === sharedSecret;
+
+    const supportAuthorized = supportEnabled && originAllowed && secretOk;
+
+    if (supportAuthorized) {
+      if (headerSource === 'assessment' || metaSource === 'assessment' || supportModeFlag === 'assessment') {
+        logger.info('Routing to Assessment Support (authorized + header/metadata/flag matched)', {
+          headerSource,
+          metaSource,
+          supportModeFlag,
+          origin,
+          originAllowed,
+          hasSecret: !!providedSecret,
+        });
+        return assessmentSupport(req, res, next);
+      }
+      if (headerSource === 'devlab' || metaSource === 'devlab' || supportModeFlag === 'devlab') {
+        logger.info('Routing to DevLab Support (authorized + header/metadata/flag matched)', {
+          headerSource,
+          metaSource,
+          supportModeFlag,
+          origin,
+          originAllowed,
+          hasSecret: !!providedSecret,
+        });
+        return devlabSupport(req, res, next);
+      }
+    } else if (headerSource === 'assessment' || headerSource === 'devlab' || metaSource === 'assessment' || metaSource === 'devlab' || supportModeFlag === 'assessment' || supportModeFlag === 'devlab') {
+      logger.warn('Support-mode signal ignored (not enabled/authorized)', {
         headerSource,
         metaSource,
         supportModeFlag,
+        supportEnabled,
+        origin,
+        originAllowed,
+        secretProvided: !!providedSecret,
       });
-      return assessmentSupport(req, res, next);
-    }
-    if (headerSource === 'devlab' || metaSource === 'devlab' || supportModeFlag === 'devlab') {
-      logger.info('Routing to DevLab Support (header/metadata/flag matched)', {
-        headerSource,
-        metaSource,
-        supportModeFlag,
-      });
-      return devlabSupport(req, res, next);
     }
 
     // Validate request body
