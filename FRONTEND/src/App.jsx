@@ -14,9 +14,8 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { setAssessmentSupportMode, setDevLabSupportMode } from './store/slices/chatMode.slice.js';
 
-function App() {
+function SupportModeInit() {
   const dispatch = useDispatch();
-
   useEffect(() => {
     const defaultMode = (import.meta.env.VITE_DEFAULT_SUPPORT_MODE || '').toLowerCase();
     if (defaultMode === 'assessment') {
@@ -25,11 +24,16 @@ function App() {
       dispatch(setDevLabSupportMode());
     }
   }, [dispatch]);
+  return null;
+}
+
+function App() {
 
   return (
     <Provider store={store}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <SupportModeInit />
         <FloatingChatWidget />
       </ThemeProvider>
     </Provider>
