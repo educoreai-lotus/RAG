@@ -12,6 +12,7 @@ import { getOrCreateTenant } from './tenant.service.js';
 import { getOrCreateUserProfile, getUserSkillGaps } from './userProfile.service.js';
 import { isEducoreQuery } from '../utils/query-classifier.util.js';
 import { grpcFetchByCategory } from './grpcFallback.service.js';
+import { generatePersonalizedRecommendations } from './recommendations.service.js';
 
 // Generate a dynamic, context-aware "no data" message that references the user's query (English only)
 function generateNoDataMessage(userQuery) {
@@ -353,11 +354,35 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
     const answer = completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response.';
     const processingTimeMs = Date.now() - startTime;
 
+    // Generate personalized recommendations based on user profile and query context
+    let recommendations = [];
+    try {
+      if (user_id && user_id !== 'anonymous') {
+        recommendations = await generatePersonalizedRecommendations(
+          actualTenantId,
+          user_id,
+          {
+            limit: 3,
+            mode: 'general',
+            recentQueries: [{ queryText: query, sources }],
+          }
+        );
+      }
+    } catch (recError) {
+      logger.warn('Failed to generate recommendations', {
+        error: recError.message,
+        tenantId: actualTenantId,
+        userId: user_id,
+      });
+      // Continue without recommendations
+    }
+
     const response = {
       answer,
       abstained: false,
       confidence,
       sources,
+      recommendations, // Include recommendations in response
       metadata: {
         processing_time_ms: processingTimeMs,
         sources_retrieved: sources.length,
@@ -380,7 +405,7 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
       isPersonalized: !!userProfile,
       isCached: false,
       sources,
-      recommendations: [], // Can be populated later based on user profile
+      recommendations, // Save recommendations to database
     });
 
     // Cache the response (TTL: 1 hour) - if Redis is available

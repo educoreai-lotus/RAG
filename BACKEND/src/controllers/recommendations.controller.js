@@ -4,33 +4,56 @@
  */
 
 import { logger } from '../utils/logger.util.js';
-import Joi from 'joi';
-import { validate } from '../utils/validation.util.js';
+import { generatePersonalizedRecommendations } from '../services/recommendations.service.js';
+import { getOrCreateTenant } from '../services/tenant.service.js';
 
 /**
  * GET /api/v1/personalized/recommendations/:userId
  * Get personalized recommendations for a user
+ * Query params:
+ *   - tenant_id: Tenant identifier (optional, defaults to 'default.local')
+ *   - mode: Chat mode - 'general', 'assessment', 'devlab' (optional, defaults to 'general')
+ *   - limit: Maximum number of recommendations (optional, defaults to 5)
  */
 export async function getRecommendations(req, res, next) {
   try {
     const { userId } = req.params;
+    const { tenant_id, mode = 'general', limit = 5 } = req.query;
 
-    if (!userId) {
+    if (!userId || userId === 'undefined') {
       return res.status(400).json({
         error: 'Validation error',
         message: 'User ID is required',
       });
     }
 
-    logger.info('Recommendations request', { userId });
+    // Get or create tenant
+    const tenantDomain = tenant_id || 'default.local';
+    const tenant = await getOrCreateTenant(tenantDomain);
 
-    // TODO: Implement personalized recommendations logic
-    // For now, return empty recommendations
-    const recommendations = [];
+    logger.info('Recommendations request', {
+      userId,
+      tenantId: tenant.id,
+      mode,
+      limit,
+    });
+
+    // Generate personalized recommendations
+    const recommendations = await generatePersonalizedRecommendations(
+      tenant.id,
+      userId,
+      {
+        limit: parseInt(limit, 10) || 5,
+        mode: mode.toLowerCase(),
+      }
+    );
 
     res.json({
       recommendations,
       userId,
+      tenantId: tenant.id,
+      mode,
+      count: recommendations.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

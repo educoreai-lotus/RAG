@@ -16,7 +16,7 @@ import {
 import { detectModeChange, getModeSpecificResponse } from '../../../utils/modeDetector.js';
 import { getModeSpecificRecommendations } from '../../../utils/recommendations.js';
 import { proxyToMicroservice } from '../../../services/microserviceProxy.js';
-import { useSubmitQueryMutation } from '../../../store/api/ragApi.js';
+import { useSubmitQueryMutation, useGetRecommendationsQuery } from '../../../store/api/ragApi.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 
@@ -35,6 +35,25 @@ const FloatingChatWidget = ({
   const [recommendations, setRecommendations] = useState([]);
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
   const [submitQuery, { isLoading: isQueryLoading }] = useSubmitQueryMutation();
+  
+  // Get current user ID for recommendations
+  const currentUserId = userId || localStorage.getItem('user_id') || 'anonymous';
+  const currentTenantId = localStorage.getItem('tenant_id') || 'default';
+  
+  // Fetch recommendations from backend API
+  const modeParam = currentMode === MODES.ASSESSMENT_SUPPORT ? 'assessment' 
+    : currentMode === MODES.DEVLAB_SUPPORT ? 'devlab' 
+    : 'general';
+  
+  const { data: apiRecommendations, isLoading: isLoadingRecommendations } = useGetRecommendationsQuery(
+    currentUserId !== 'anonymous' ? currentUserId : null,
+    {
+      skip: currentUserId === 'anonymous' || !isOpen, // Skip if anonymous or widget closed
+      tenant_id: currentTenantId,
+      mode: modeParam,
+      limit: 5,
+    }
+  );
 
   // Initialize mode if embedded with initialMode
   useEffect(() => {
@@ -64,11 +83,27 @@ const FloatingChatWidget = ({
       setHasShownGreeting(true);
       
       // Show initial recommendations only after greeting (before conversation starts)
+      // Use API recommendations if available, otherwise use client-side generator
       setTimeout(() => {
-        setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
+        if (apiRecommendations?.recommendations && apiRecommendations.recommendations.length > 0) {
+          // Convert API recommendations to component format
+          const formattedRecs = apiRecommendations.recommendations.map((rec) => ({
+            id: rec.id,
+            type: rec.type || 'button',
+            label: rec.label || rec.title,
+            description: rec.description,
+            reason: rec.reason,
+            priority: rec.priority,
+            metadata: rec.metadata,
+          }));
+          setRecommendations(formattedRecs);
+        } else {
+          // Fallback to client-side recommendations
+          setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
+        }
       }, 500);
     }
-  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded]);
+  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, apiRecommendations]);
 
   // Clear recommendations once conversation starts (user sends first message)
   // Recommendations will only show:
@@ -215,6 +250,20 @@ const FloatingChatWidget = ({
             sources: ragResponse.sources || [],
             confidence: ragResponse.confidence,
           });
+          
+          // Update recommendations from query response if available
+          if (ragResponse.recommendations && ragResponse.recommendations.length > 0) {
+            const formattedRecs = ragResponse.recommendations.map((rec) => ({
+              id: rec.id,
+              type: rec.type || 'button',
+              label: rec.label || rec.title,
+              description: rec.description,
+              reason: rec.reason,
+              priority: rec.priority,
+              metadata: rec.metadata,
+            }));
+            setRecommendations(formattedRecs);
+          }
         } catch (ragError) {
           // Fallback to mock response if RAG API fails
           console.error('RAG API error:', ragError);
@@ -262,28 +311,8 @@ const FloatingChatWidget = ({
   };
 
   const handleSelectRecommendation = (item) => {
-    // Special handling for "Get Started Guide" → return EDUCORE guide immediately
-    if (item?.id === 'rec-1' || item?.label?.toLowerCase() === 'get started guide') {
-      const guideMessage = {
-        id: `bot-guide-${Date.now()}`,
-        isBot: true,
-        text:
-          'EDUCORE – Getting Started Guide:\n' +
-          '1) Data-first: Answers come from your Supabase DB (vector_embeddings). Make sure you ran the seed and enabled pgvector (CREATE EXTENSION IF NOT EXISTS vector;).\n' +
-          '2) Normal Chat: Send requests to /api/v1/query without X-Source/support flags. The bot uses strict RAG (context-only). If no relevant data, you will get a dynamic “no EDUCORE data” message.\n' +
-          '3) Support Mode (optional): Enable only when needed. Back end requires SUPPORT_MODE_ENABLED=true and an explicit signal per request: X-Source: assessment|devlab OR support_mode OR metadata.source. Front end can default via VITE_DEFAULT_SUPPORT_MODE=assessment|devlab|none.\n' +
-          '4) Security gating: You can lock support endpoints with SUPPORT_ALLOWED_ORIGINS and SUPPORT_SHARED_SECRET (header: X-Embed-Secret).\n' +
-          '5) Quick verification: After a chat, check tables: queries, query_sources, and vector_embeddings to confirm DB-backed behavior.\n' +
-          '6) Endpoints: /api/v1/query (chat), /api/assessment/support and /api/devlab/support (proxy, gated).\n' +
-          'Tip: For best results, add your EDUCORE content as embeddings (title, content_text, metadata) and keep tenant_id consistent.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      // Push bot guide and keep recommendations visible
-      dispatch(addMessage(guideMessage));
-      return;
-    }
-
-    // Default: send the recommendation label as a user message
+    // Send the recommendation label as a user message.
+    // The backend will retrieve the guide content from the database (vector_embeddings).
     handleSendMessage(item.label);
   };
 

@@ -29,13 +29,22 @@ export const ragApi = createApi({
       invalidatesTags: ['Query'],
     }),
     getRecommendations: builder.query({
-      query: (userId) => `/api/v1/personalized/recommendations/${userId}`,
+      query: (userId, { tenant_id, mode, limit } = {}) => {
+        const params = new URLSearchParams();
+        if (tenant_id) params.append('tenant_id', tenant_id);
+        if (mode) params.append('mode', mode);
+        if (limit) params.append('limit', limit);
+        const queryString = params.toString();
+        return `/api/v1/personalized/recommendations/${userId}${queryString ? `?${queryString}` : ''}`;
+      },
       providesTags: ['Recommendation'],
     }),
   }),
 });
 
 export const { useSubmitQueryMutation, useGetRecommendationsQuery } = ragApi;
+
+
 
 
 

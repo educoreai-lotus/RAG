@@ -372,6 +372,20 @@ async function main() {
   
   const sampleEmbeddings = [
     {
+      contentId: 'guide-get-started',
+      contentType: 'guide',
+      microserviceId: createdMicroservices['content'].id,
+      contentText:
+        'EDUCORE – Getting Started Guide: 1) Data-first: answers come from your Supabase database via vector_embeddings; ensure seed ran and pgvector is enabled (CREATE EXTENSION IF NOT EXISTS vector;). 2) Normal Chat: call /api/v1/query with no support flags; strict RAG uses only retrieved context; if no context, a dynamic no-data message is returned. 3) Support Mode (Assessment/DevLab): enable SUPPORT_MODE_ENABLED=true and send an explicit signal per request (X-Source: assessment|devlab or support_mode or metadata.source); optionally set VITE_DEFAULT_SUPPORT_MODE on frontend. 4) Security gating: SUPPORT_ALLOWED_ORIGINS and SUPPORT_SHARED_SECRET (header X-Embed-Secret). 5) Verify persistence in queries, query_sources, and vector_embeddings. Endpoints: /api/v1/query, /api/assessment/support, /api/devlab/support.',
+      chunkIndex: 0,
+      embedding: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
+      metadata: {
+        title: 'Get Started Guide',
+        category: 'guide',
+        tags: ['get started', 'guide', 'educore', 'setup', 'support mode', 'rag'],
+      },
+    },
+    {
       contentId: 'assessment-001',
       contentType: 'assessment',
       microserviceId: createdMicroservices['assessment'].id,
