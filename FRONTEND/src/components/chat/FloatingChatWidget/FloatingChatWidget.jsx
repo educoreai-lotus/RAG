@@ -45,13 +45,15 @@ const FloatingChatWidget = ({
     : currentMode === MODES.DEVLAB_SUPPORT ? 'devlab' 
     : 'general';
   
-  const { data: apiRecommendations, isLoading: isLoadingRecommendations } = useGetRecommendationsQuery(
-    currentUserId !== 'anonymous' ? currentUserId : null,
+  const { data: apiRecommendations, isLoading: isLoadingRecommendations, error: recommendationsError } = useGetRecommendationsQuery(
     {
-      skip: currentUserId === 'anonymous' || !isOpen, // Skip if anonymous or widget closed
+      userId: currentUserId,
       tenant_id: currentTenantId,
       mode: modeParam,
       limit: 5,
+    },
+    {
+      skip: currentUserId === 'anonymous' || !isOpen, // Skip if anonymous or widget closed
     }
   );
 
@@ -85,7 +87,14 @@ const FloatingChatWidget = ({
       // Show initial recommendations only after greeting (before conversation starts)
       // Use API recommendations if available, otherwise use client-side generator
       setTimeout(() => {
-        if (apiRecommendations?.recommendations && apiRecommendations.recommendations.length > 0) {
+        // For anonymous users, always use client-side recommendations
+        if (currentUserId === 'anonymous') {
+          setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
+          return;
+        }
+        
+        // Check if API recommendations are available and not in error state
+        if (!recommendationsError && apiRecommendations?.recommendations && apiRecommendations.recommendations.length > 0) {
           // Convert API recommendations to component format
           const formattedRecs = apiRecommendations.recommendations.map((rec) => ({
             id: rec.id,
@@ -98,12 +107,41 @@ const FloatingChatWidget = ({
           }));
           setRecommendations(formattedRecs);
         } else {
-          // Fallback to client-side recommendations
+          // Fallback to client-side recommendations (always show something)
+          console.log('Using fallback recommendations:', { 
+            hasApiData: !!apiRecommendations, 
+            error: recommendationsError,
+            isAnonymous: currentUserId === 'anonymous',
+            isLoading: isLoadingRecommendations
+          });
           setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
         }
       }, 500);
     }
-  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, apiRecommendations]);
+  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, apiRecommendations, recommendationsError, currentUserId, isLoadingRecommendations]);
+
+  // Update recommendations when API data arrives (for logged-in users)
+  useEffect(() => {
+    // Only update if user is logged in, widget is open, and we have API data
+    if (currentUserId !== 'anonymous' && isOpen && !isLoadingRecommendations && !recommendationsError) {
+      if (apiRecommendations?.recommendations && apiRecommendations.recommendations.length > 0) {
+        // Convert API recommendations to component format
+        const formattedRecs = apiRecommendations.recommendations.map((rec) => ({
+          id: rec.id,
+          type: rec.type || 'button',
+          label: rec.label || rec.title,
+          description: rec.description,
+          reason: rec.reason,
+          priority: rec.priority,
+          metadata: rec.metadata,
+        }));
+        setRecommendations(formattedRecs);
+      } else if (apiRecommendations && (!apiRecommendations.recommendations || apiRecommendations.recommendations.length === 0)) {
+        // API returned empty recommendations, use fallback
+        setRecommendations(getModeSpecificRecommendations(currentMode, messages));
+      }
+    }
+  }, [apiRecommendations, isLoadingRecommendations, recommendationsError, currentUserId, isOpen, currentMode, messages]);
 
   // Clear recommendations once conversation starts (user sends first message)
   // Recommendations will only show:

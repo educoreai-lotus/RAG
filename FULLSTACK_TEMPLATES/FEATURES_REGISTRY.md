@@ -11,7 +11,7 @@ Format: `ID | Name | Owner | Status | Dependencies | Stage`
 - F-0006 | Analytics Explanations & Report Links | Project Team | Planned | F-0003 | Stage_04
 - F-0007 | HR Reporting Explanations & Navigation | Project Team | Planned | F-0003 | Stage_04
 - F-0008 | Content Studio Content Retrieval | Project Team | Planned | F-0003 | Stage_04
-- F-0009 | Personalized Assistance Engine | Project Team | Planned | F-0003 | Stage_04
+- F-0009 | Personalized Assistance Engine | Project Team | Done | F-0003 | Stage_08
 - F-0010 | RBAC (Role-Based Access Control) | Project Team | Planned | F-0003 | Stage_04
 - F-0011 | ABAC (Attribute-Based Access Control) | Project Team | Planned | F-0010 | Stage_04
 - F-0012 | Fine-Grained Content Permissions | Project Team | Planned | F-0010 | Stage_04
@@ -22,5 +22,6 @@ Format: `ID | Name | Owner | Status | Dependencies | Stage`
 - F-0017 | Chatbot Proxy Assistant Behavior | Project Team | Done | F-0016 | Stage_05
 - F-0018 | Support-Mode Explicit Gating (Embed/Headers only) | Backend/Frontend | Done | F-0016, F-0017 | Stage_08
 - F-0019 | Remove Keyword-Based Support Auto-Switch | Frontend | Done | F-0016 | Stage_05
+- F-0020 | Backend Recommendations API Integration | Backend/Frontend | Done | F-0009, F-0016 | Stage_08
 
 

@@ -29,7 +29,7 @@ export const ragApi = createApi({
       invalidatesTags: ['Query'],
     }),
     getRecommendations: builder.query({
-      query: (userId, { tenant_id, mode, limit } = {}) => {
+      query: ({ userId, tenant_id, mode, limit }) => {
         const params = new URLSearchParams();
         if (tenant_id) params.append('tenant_id', tenant_id);
         if (mode) params.append('mode', mode);
