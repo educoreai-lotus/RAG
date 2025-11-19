@@ -115,7 +115,31 @@ export async function searchSimilarVectors(
       resultsCount: results.length,
       threshold,
       limit,
+      queryEmbeddingLength: queryEmbedding?.length || 0,
+      hasResults: results.length > 0,
+      topSimilarity: results.length > 0 ? parseFloat(results[0].similarity) : null,
     });
+    
+    // Log first result details for debugging
+    if (results.length > 0) {
+      logger.debug('Vector search top result', {
+        contentId: results[0].content_id,
+        contentType: results[0].content_type,
+        similarity: parseFloat(results[0].similarity),
+        contentTextPreview: results[0].content_text?.substring(0, 100),
+      });
+    } else {
+      // If no results, check if there's any data in the table
+      const totalCount = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*) as count FROM vector_embeddings WHERE tenant_id = $1`,
+        tenantId
+      );
+      logger.warn('No vector search results found', {
+        tenantId,
+        threshold,
+        totalRecordsInTable: totalCount[0]?.count || 0,
+      });
+    }
 
     return results.map((row) => ({
       id: row.id,
