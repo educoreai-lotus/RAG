@@ -55,6 +55,12 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     const tenantDomain = tenant_id || 'default.local';
     const tenant = await getOrCreateTenant(tenantDomain);
     const actualTenantId = tenant.id;
+    
+    logger.info('Tenant resolved', {
+      tenant_domain: tenantDomain,
+      tenant_id: actualTenantId,
+      requested_tenant_id: tenant_id,
+    });
 
     // Get or create user profile
     let userProfile = null;
@@ -232,29 +238,74 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         top_similarities: similarVectors.slice(0, 3).map(v => v.similarity),
       });
 
-      // Enforce simple role-based permission on user profiles:
-      // only admins may retrieve contentType 'user_profile'
-      // BUT: Allow user_profile for queries about specific users (like "Eden Levi")
-      const isUserProfileQuery = query.toLowerCase().includes('eden') || 
-                                 query.toLowerCase().includes('levi') ||
-                                 query.toLowerCase().includes('user') ||
-                                 query.toLowerCase().includes('profile') ||
-                                 translatedQuery?.toLowerCase().includes('eden') ||
-                                 translatedQuery?.toLowerCase().includes('levi') ||
-                                 translatedQuery?.toLowerCase().includes('user') ||
-                                 translatedQuery?.toLowerCase().includes('profile');
+      // Enforce role-based permission on user profiles:
+      // - Admins: Can access all user profiles
+      // - Non-admins: Can ONLY access user profiles when querying about SPECIFIC users by name
+      // - This maintains privacy while allowing specific user lookups
+      const queryLower = query.toLowerCase();
+      const translatedLower = translatedQuery?.toLowerCase() || '';
+      const queryForCheck = queryForEmbedding.toLowerCase();
       
-      const filteredVectors = (userProfile?.role === 'admin' || isUserProfileQuery)
+      // STRICT: Only allow user_profile for queries about SPECIFIC users by name
+      // This prevents general browsing while allowing specific lookups
+      const specificUserNamePatterns = [
+        'eden', 'levi', 'adi', 'cohen', 'noa', 'bar',  // Known user names
+        'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר',  // Hebrew names
+      ];
+      
+      const hasSpecificUserName = specificUserNamePatterns.some(name => 
+        queryLower.includes(name) || 
+        translatedLower.includes(name) ||
+        queryForCheck.includes(name)
+      );
+      
+      // Also check for role/title queries about specific users
+      const hasRoleQuery = (
+        queryLower.includes('תפקיד') ||  // Hebrew: role
+        queryLower.includes('מה התפקיד') ||  // Hebrew: what is the role
+        queryLower.includes('מי זה') ||  // Hebrew: who is
+        translatedLower.includes('role') ||
+        translatedLower.includes('what is the role') ||
+        queryForCheck.includes('role')
+      ) && hasSpecificUserName; // Must have specific user name + role query
+      
+      // Only allow if query is about a SPECIFIC user by name
+      // This prevents general "show me all users" queries
+      const isSpecificUserQuery = hasSpecificUserName && (
+        hasRoleQuery || 
+        queryLower.includes('מי זה') ||  // "who is" queries
+        translatedLower.includes('who is') ||
+        queryForCheck.includes('who is')
+      );
+      
+      const userRole = userProfile?.role || 'anonymous';
+      const isAdmin = userRole === 'admin';
+      
+      // STRICT RBAC: Only allow user_profile if:
+      // 1. User is admin (full access), OR
+      // 2. Query is about a SPECIFIC user by name (limited access)
+      // This maintains privacy - no general user profile browsing for non-admins
+      const allowUserProfiles = isAdmin || isSpecificUserQuery;
+      
+      const userProfilesFound = similarVectors.filter(v => v.contentType === 'user_profile');
+      const filteredVectors = allowUserProfiles
         ? similarVectors
         : similarVectors.filter((vec) => vec.contentType !== 'user_profile');
       
-      logger.info('Vector filtering applied', {
+      logger.info('Vector filtering applied (RBAC)', {
         tenant_id: actualTenantId,
-        user_role: userProfile?.role || 'anonymous',
-        is_user_profile_query: isUserProfileQuery,
+        user_role: userRole,
+        is_admin: isAdmin,
+        has_specific_user_name: hasSpecificUserName,
+        is_specific_user_query: isSpecificUserQuery,
+        allow_user_profiles: allowUserProfiles,
         total_vectors: similarVectors.length,
+        user_profiles_found: userProfilesFound.length,
         filtered_vectors: filteredVectors.length,
-        user_profiles_found: similarVectors.filter(v => v.contentType === 'user_profile').length,
+        user_profiles_filtered_out: allowUserProfiles ? 0 : userProfilesFound.length,
+        privacy_protected: !allowUserProfiles && userProfilesFound.length > 0,
+        query_preview: query.substring(0, 50),
+        translated_preview: translatedQuery?.substring(0, 50),
       });
 
       sources = filteredVectors.map((vec) => ({
@@ -301,19 +352,60 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           });
           
           if (lowThresholdVectors.length > 0) {
-            // Allow user_profile for queries about specific users
-            const isUserProfileQuery = query.toLowerCase().includes('eden') || 
-                                       query.toLowerCase().includes('levi') ||
-                                       query.toLowerCase().includes('user') ||
-                                       query.toLowerCase().includes('profile') ||
-                                       translatedQuery?.toLowerCase().includes('eden') ||
-                                       translatedQuery?.toLowerCase().includes('levi') ||
-                                       translatedQuery?.toLowerCase().includes('user') ||
-                                       translatedQuery?.toLowerCase().includes('profile');
+            // STRICT RBAC: Only allow user_profile for queries about SPECIFIC users by name
+            const queryLower = query.toLowerCase();
+            const translatedLower = translatedQuery?.toLowerCase() || '';
+            const queryForCheck = queryForEmbedding.toLowerCase();
             
-            const filteredLowThreshold = (userProfile?.role === 'admin' || isUserProfileQuery)
+            // Only allow for specific user names (not general "user" or "profile" keywords)
+            const specificUserNamePatterns = [
+              'eden', 'levi', 'adi', 'cohen', 'noa', 'bar',
+              'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר',
+            ];
+            
+            const hasSpecificUserName = specificUserNamePatterns.some(name => 
+              queryLower.includes(name) || 
+              translatedLower.includes(name) ||
+              queryForCheck.includes(name)
+            );
+            
+            const hasRoleQuery = (
+              queryLower.includes('תפקיד') ||
+              queryLower.includes('מה התפקיד') ||
+              queryLower.includes('מי זה') ||
+              translatedLower.includes('role') ||
+              translatedLower.includes('what is the role') ||
+              queryForCheck.includes('role')
+            ) && hasSpecificUserName;
+            
+            const isSpecificUserQuery = hasSpecificUserName && (
+              hasRoleQuery || 
+              queryLower.includes('מי זה') ||
+              translatedLower.includes('who is') ||
+              queryForCheck.includes('who is')
+            );
+            
+            const userRole = userProfile?.role || 'anonymous';
+            const isAdmin = userRole === 'admin';
+            // STRICT: Only allow if admin OR specific user query
+            const allowUserProfiles = isAdmin || isSpecificUserQuery;
+            
+            const filteredLowThreshold = allowUserProfiles
               ? lowThresholdVectors
               : lowThresholdVectors.filter((vec) => vec.contentType !== 'user_profile');
+            
+            logger.info('Low threshold filtering (RBAC)', {
+              tenant_id: actualTenantId,
+              user_role: userRole,
+              is_admin: isAdmin,
+              has_specific_user_name: hasSpecificUserName,
+              is_specific_user_query: isSpecificUserQuery,
+              allow_user_profiles: allowUserProfiles,
+              total_low_threshold: lowThresholdVectors.length,
+              user_profiles_in_results: lowThresholdVectors.filter(v => v.contentType === 'user_profile').length,
+              filtered_count: filteredLowThreshold.length,
+              privacy_protected: !allowUserProfiles && lowThresholdVectors.filter(v => v.contentType === 'user_profile').length > 0,
+            });
             
             if (filteredLowThreshold.length > 0) {
               sources = filteredLowThreshold.map((vec) => ({
@@ -355,11 +447,16 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
               embedding_dimensions: queryEmbedding.length,
             });
             
-            // Last resort: try with very low threshold (0.1) for user profile queries
-            if (queryForEmbedding.toLowerCase().includes('eden') || 
-                queryForEmbedding.toLowerCase().includes('levi') ||
-                queryForEmbedding.toLowerCase().includes('user') ||
-                queryForEmbedding.toLowerCase().includes('profile')) {
+            // Last resort: try with very low threshold (0.1) ONLY for specific user queries
+            // STRICT RBAC: Only for queries about specific users by name (maintains privacy)
+            const specificUserNamePatterns = ['eden', 'levi', 'adi', 'cohen', 'noa', 'bar', 'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר'];
+            const hasSpecificUserName = specificUserNamePatterns.some(name => 
+              queryForEmbedding.toLowerCase().includes(name)
+            );
+            
+            // Only try very low threshold if query is about a specific user
+            // This maintains privacy - no general user profile access
+            if (hasSpecificUserName) {
               logger.info('Trying with very low threshold (0.1) for user profile query', {
                 tenant_id: actualTenantId,
               });

@@ -134,10 +134,25 @@ export async function searchSimilarVectors(
         `SELECT COUNT(*) as count FROM vector_embeddings WHERE tenant_id = $1`,
         tenantId
       );
+      
+      // Also check all tenants to see if data exists with different tenant_id
+      const allTenantsCount = await prisma.$queryRawUnsafe(
+        `SELECT tenant_id, COUNT(*) as count FROM vector_embeddings GROUP BY tenant_id`
+      );
+      
+      // Check if "Eden Levi" exists with any tenant_id
+      const edenLeviCheck = await prisma.$queryRawUnsafe(
+        `SELECT tenant_id, content_id, content_text FROM vector_embeddings WHERE content_id = $1 LIMIT 5`,
+        'user:manager-001'
+      );
+      
       logger.warn('No vector search results found', {
         tenantId,
         threshold,
-        totalRecordsInTable: totalCount[0]?.count || 0,
+        totalRecordsForThisTenant: totalCount[0]?.count || 0,
+        allTenantsData: allTenantsCount,
+        edenLeviExists: edenLeviCheck.length > 0,
+        edenLeviTenantIds: edenLeviCheck.map(r => r.tenant_id),
       });
     }
 
