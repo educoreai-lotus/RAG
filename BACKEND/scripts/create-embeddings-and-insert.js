@@ -6,8 +6,44 @@
  * 2. Inserts them into vector_embeddings table
  * 3. Verifies the embeddings are correct
  * 
- * Usage: node scripts/create-embeddings-and-insert.js
+ * Usage: 
+ *   node scripts/create-embeddings-and-insert.js
+ *   or with API key: node scripts/create-embeddings-and-insert.js <OPENAI_API_KEY>
+ * 
+ * Environment variables:
+ *   OPENAI_API_KEY - OpenAI API key (required)
+ *   DATABASE_URL - Database connection string (required)
  */
+
+// Load environment variables from .env file if it exists (for local development)
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Try to load .env file if it exists
+try {
+  const envPath = join(__dirname, '../../.env');
+  const envFile = readFileSync(envPath, 'utf-8');
+  envFile.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split('=');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join('=').trim();
+      if (!process.env[key.trim()]) {
+        process.env[key.trim()] = value.replace(/^["']|["']$/g, '');
+      }
+    }
+  });
+} catch (error) {
+  // .env file doesn't exist, that's okay - use environment variables
+}
+
+// Allow API key to be passed as command line argument
+if (process.argv[2] && !process.env.OPENAI_API_KEY) {
+  process.env.OPENAI_API_KEY = process.argv[2];
+}
 
 import { getPrismaClient } from '../src/config/database.config.js';
 import { openai } from '../src/config/openai.config.js';

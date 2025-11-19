@@ -221,6 +221,50 @@ async function runMigrations() {
   }
 }
 
+async function runEmbeddingsIfNeeded() {
+  // Only run embeddings if explicitly enabled and if OPENAI_API_KEY is set
+  if (process.env.RUN_EMBEDDINGS_ON_STARTUP !== 'true') {
+    log.info('Skipping embeddings creation (RUN_EMBEDDINGS_ON_STARTUP not set to "true")');
+    return;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    log.warn('⚠️  RUN_EMBEDDINGS_ON_STARTUP=true but OPENAI_API_KEY not set');
+    log.warn('⚠️  Skipping embeddings creation');
+    return;
+  }
+
+  try {
+    log.info('Creating embeddings and inserting seed data...');
+    log.info('💡 This may take a few minutes...');
+    
+    const embeddingsScript = join(backendRoot, 'scripts', 'create-embeddings-and-insert.js');
+    
+    // Check if script exists
+    const fs = await import('fs');
+    if (!fs.existsSync(embeddingsScript)) {
+      log.warn('⚠️  Embeddings script not found:', embeddingsScript);
+      return;
+    }
+
+    // Run the embeddings script
+    execSync(`node ${embeddingsScript}`, {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: backendRoot,
+      shell: true,
+      timeout: 600000, // 10 minute timeout
+    });
+    
+    log.info('✅ Embeddings created successfully');
+  } catch (error) {
+    log.error('Failed to create embeddings:', error.message);
+    log.warn('⚠️  Continuing with server start despite embeddings error');
+    log.warn('💡 You can run embeddings manually later');
+    // Don't exit - let the server start anyway
+  }
+}
+
 async function startServer() {
   try {
     log.info('Starting server...');
@@ -233,8 +277,9 @@ async function startServer() {
   }
 }
 
-// Run migrations first, then start server
+// Run migrations first, then embeddings (if enabled), then start server
 runMigrations()
+  .then(() => runEmbeddingsIfNeeded())
   .then(() => startServer())
   .catch((error) => {
     log.error('Startup failed:', error);
