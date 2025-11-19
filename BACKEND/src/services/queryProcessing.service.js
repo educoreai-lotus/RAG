@@ -165,9 +165,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let sources = [];
     let retrievedContext = '';
     let confidence = min_confidence;
+    let similarVectors = []; // Initialize outside try block to avoid "not defined" error
 
     try {
-      const similarVectors = await searchSimilarVectors(queryEmbedding, actualTenantId, {
+      similarVectors = await searchSimilarVectors(queryEmbedding, actualTenantId, {
         limit: max_results,
         threshold: min_confidence,
       });
