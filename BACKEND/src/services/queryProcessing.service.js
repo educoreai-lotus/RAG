@@ -12,6 +12,7 @@ import { getOrCreateTenant } from './tenant.service.js';
 import { getOrCreateUserProfile, getUserSkillGaps } from './userProfile.service.js';
 import { isEducoreQuery } from '../utils/query-classifier.util.js';
 import { grpcFetchByCategory } from './grpcFallback.service.js';
+import { mergeResults, createContextBundle, handleFallbacks } from '../communication/routingEngine.service.js';
 import { generatePersonalizedRecommendations } from './recommendations.service.js';
 
 // Generate a dynamic, context-aware "no data" message that references the user's query (English only)
@@ -212,42 +213,97 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // Continue without vector search results
     }
 
-    // 3) gRPC FALLBACK if no RAG hits
-    if (sources.length === 0) {
-      logger.info('Attempting gRPC fallback', {
-        tenant_id: actualTenantId,
-        user_id,
-        category: category || 'general',
-      });
+    // 3) EVALUATE INTERNAL RESULTS AND DECIDE ON COORDINATOR
+    // RAG must ALWAYS search its own Supabase database first (Step 1 - already done above)
+    // Now evaluate if internal data is sufficient (Step 2)
+    
+    // Prepare internal data for evaluation
+    const internalData = {
+      vectorResults: similarVectors || [],
+      sources: sources,
+      cachedData: [], // Could be populated from cache if available
+      kgRelations: [], // Could be populated from KG if available
+      metadata: {
+        category,
+        hasUserProfile: !!userProfile,
+      },
+    };
 
+    // Step 3: Decision layer - Check if Coordinator is needed
+    // grpcFetchByCategory now includes shouldCallCoordinator() decision internally
+    // It will only call Coordinator if internal data is insufficient
+    
+    let coordinatorSources = [];
+    let coordinatorErrors = [];
+    
+    // Attempt Coordinator call (only if internal data is insufficient)
+    // Note: grpcFetchByCategory() will check shouldCallCoordinator() internally
+    try {
       const grpcContext = await grpcFetchByCategory(category || 'general', {
         query,
         tenantId: actualTenantId,
+        userId: user_id,
+        vectorResults: similarVectors || [],
+        internalData: internalData,
       });
 
       if (grpcContext && grpcContext.length > 0) {
-        logger.info('gRPC fallback returned data', {
+        logger.info('Coordinator returned data', {
           tenant_id: actualTenantId,
           user_id,
           category,
           items: grpcContext.length,
         });
 
-        // Convert gRPC results into sources/context and continue with strict RAG answering
-        sources = grpcContext.map((item, idx) => ({
-          sourceId: item.contentId || `grpc-${idx}`,
-          sourceType: item.contentType || category || 'grpc',
-          sourceMicroservice: 'grpc',
-          title: item.metadata?.title || item.contentType || 'gRPC Source',
+        // Convert Coordinator results into sources format
+        coordinatorSources = grpcContext.map((item, idx) => ({
+          sourceId: item.contentId || `coordinator-${idx}`,
+          sourceType: item.contentType || category || 'coordinator',
+          sourceMicroservice: item.metadata?.target_services?.[0] || 'coordinator',
+          title: item.metadata?.title || item.contentType || 'Coordinator Source',
           contentSnippet: String(item.contentText || '').substring(0, 200),
           sourceUrl: item.metadata?.url || '',
-          relevanceScore: 0.75,
-          metadata: { ...(item.metadata || {}), via: 'grpc' },
+          relevanceScore: item.metadata?.relevanceScore || 0.75,
+          metadata: { ...(item.metadata || {}), via: 'coordinator' },
         }));
-
-        retrievedContext = sources.map((s, i) => `[gRPC ${i + 1}]: ${s.contentSnippet}`).join('\n\n');
-        confidence = 0.75;
       }
+    } catch (coordinatorError) {
+      logger.warn('Coordinator call failed, continuing with internal data only', {
+        error: coordinatorError.message,
+        tenant_id: actualTenantId,
+        user_id,
+      });
+      coordinatorErrors.push({
+        type: 'coordinator_error',
+        message: coordinatorError.message,
+      });
+    }
+
+    // Step 4: Merge internal and Coordinator results (if Coordinator was called)
+    if (coordinatorSources.length > 0 || sources.length > 0) {
+      const merged = mergeResults(sources, {
+        sources: coordinatorSources,
+        metadata: {
+          target_services: coordinatorSources[0]?.metadata?.target_services || [],
+        },
+      });
+
+      // Update sources and context with merged results
+      sources = merged.sources || sources;
+      retrievedContext = merged.context || retrievedContext;
+
+      // Recalculate confidence based on merged results
+      if (sources.length > 0) {
+        confidence = sources.reduce((sum, s) => sum + (s.relevanceScore || 0), 0) / sources.length;
+      }
+
+      logger.info('Merged internal and Coordinator results', {
+        tenant_id: actualTenantId,
+        user_id,
+        internal_sources: merged.metadata?.internal_sources || 0,
+        coordinator_sources: merged.metadata?.coordinator_sources || 0,
+        total_sources: sources.length,
+      });
     }
 
     // If still no context after gRPC → dynamic no-data

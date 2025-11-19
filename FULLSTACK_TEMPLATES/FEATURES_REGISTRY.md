@@ -23,5 +23,7 @@ Format: `ID | Name | Owner | Status | Dependencies | Stage`
 - F-0018 | Support-Mode Explicit Gating (Embed/Headers only) | Backend/Frontend | Done | F-0016, F-0017 | Stage_08
 - F-0019 | Remove Keyword-Based Support Auto-Switch | Frontend | Done | F-0016 | Stage_05
 - F-0020 | Backend Recommendations API Integration | Backend/Frontend | Done | F-0009, F-0016 | Stage_08
+- F-0021 | AI LEARNER Learning Recommendations Integration | Backend | Done | F-0020 | Stage_08
+- F-0022 | gRPC Communication for Microservices | Backend | Done | F-0021 | Stage_08
 
 

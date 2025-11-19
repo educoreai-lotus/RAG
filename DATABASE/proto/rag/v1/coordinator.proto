@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package rag.v1;
+
+/**
+ * Coordinator Service
+ * Handles routing and real-time data retrieval from microservices
+ * RAG calls this service to get real-time data when internal retrieval is insufficient
+ */
+service CoordinatorService {
+  /**
+   * Route request to appropriate microservices and return normalized data
+   * RPC Method: Route
+   */
+  rpc Route(RouteRequest) returns (RouteResponse);
+}
+
+/**
+ * Route Request
+ * Sent by RAG when real-time microservice data is needed
+ */
+message RouteRequest {
+  string tenant_id = 1;                    // Tenant identifier
+  string user_id = 2;                      // User identifier
+  string query_text = 3;                   // Original user query
+  map<string, string> metadata = 4;        // Additional metadata (query context, required fields, etc.)
+}
+
+/**
+ * Route Response
+ * Contains normalized fields and routing information from Coordinator
+ */
+message RouteResponse {
+  repeated string target_services = 1;     // List of microservices that were called
+  map<string, string> normalized_fields = 2; // Normalized data fields from microservices
+  string envelope_json = 3;                // JSON string containing the envelope payload
+  string routing_metadata = 4;             // Additional routing metadata (JSON string)
+}
+

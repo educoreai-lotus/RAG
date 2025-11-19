@@ -7,6 +7,7 @@ import { getPrismaClient } from '../config/database.config.js';
 import { logger } from '../utils/logger.util.js';
 import { getUserProfile, getUserSkillGaps } from './userProfile.service.js';
 import { getOrCreateTenant } from './tenant.service.js';
+import { fetchLearningRecommendations } from '../clients/aiLearner.client.js';
 
 /**
  * Generate personalized recommendations for a user
@@ -55,6 +56,30 @@ export async function generatePersonalizedRecommendations(
     // Get popular content based on query sources
     const popularContent = await getPopularContent(tenantId, queries);
 
+    // Fetch learning recommendations from AI LEARNER microservice (for General mode)
+    let aiLearnerRecommendations = [];
+    if (mode === 'general' && userId && userId !== 'anonymous') {
+      try {
+        aiLearnerRecommendations = await fetchLearningRecommendations(userId, tenantId, {
+          limit: limit,
+          skillGaps,
+          recentQueries: queries,
+        });
+        logger.info('Fetched AI LEARNER recommendations', {
+          userId,
+          tenantId,
+          count: aiLearnerRecommendations.length,
+        });
+      } catch (error) {
+        logger.warn('Failed to fetch AI LEARNER recommendations', {
+          error: error.message,
+          userId,
+          tenantId,
+        });
+        // Continue without AI LEARNER recommendations
+      }
+    }
+
     // Generate recommendations based on mode
     let recommendations = [];
 
@@ -73,14 +98,20 @@ export async function generatePersonalizedRecommendations(
         limit
       );
     } else {
-      // General mode - mix of personalized and general recommendations
-      recommendations = generateGeneralRecommendations(
-        userProfile,
-        skillGaps,
-        queries,
-        popularContent,
-        limit
-      );
+      // General mode - prioritize AI LEARNER recommendations, then add other recommendations
+      if (aiLearnerRecommendations.length > 0) {
+        // Use AI LEARNER recommendations as primary source
+        recommendations = aiLearnerRecommendations.slice(0, limit);
+      } else {
+        // Fallback to general recommendations if AI LEARNER not available
+        recommendations = generateGeneralRecommendations(
+          userProfile,
+          skillGaps,
+          queries,
+          popularContent,
+          limit
+        );
+      }
     }
 
     logger.info('Generated personalized recommendations', {
@@ -167,29 +198,17 @@ function generateGeneralRecommendations(
     });
   }
 
-  // 4. Default recommendations (if not enough)
+  // 4. Default recommendations (if not enough) - NO Get Started Guide
   if (recommendations.length < 2) {
     recommendations.push({
       id: 'default-1',
       type: 'button',
-      label: 'Get Started Guide',
-      description: 'Learn how to use the platform',
-      reason: 'Getting started',
-      priority: 5,
+      label: 'Live Chat',
+      description: 'Get help from our support team',
+      reason: 'Support',
+      priority: 4,
       metadata: { source: 'default' },
     });
-
-    if (recommendations.length < 2) {
-      recommendations.push({
-        id: 'default-2',
-        type: 'button',
-        label: 'Live Chat',
-        description: 'Get help from our support team',
-        reason: 'Support',
-        priority: 4,
-        metadata: { source: 'default' },
-      });
-    }
   }
 
   // Sort by priority and limit
@@ -407,17 +426,10 @@ function generateFallbackRecommendations(mode, limit) {
     ];
   }
 
-  // General fallback
+  // General fallback - NO Get Started Guide
   return [
     {
       id: 'fallback-1',
-      type: 'button',
-      label: 'Get Started Guide',
-      priority: 5,
-      metadata: { source: 'fallback' },
-    },
-    {
-      id: 'fallback-2',
       type: 'button',
       label: 'Live Chat',
       priority: 4,

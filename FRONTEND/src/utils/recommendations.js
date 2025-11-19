@@ -52,18 +52,13 @@ export const getModeSpecificRecommendations = (mode, messages = []) => {
     ];
   }
 
-  // GENERAL CHAT MODE - Only quick-action buttons (NO documentation/FAQ cards)
+  // GENERAL CHAT MODE - Only learning recommendations (NO Get Started Guide)
   if (mode === MODES.GENERAL) {
     // Show recommendations only after initial greeting
     if (messages.length <= 1) {
       return [
         {
           id: 'rec-1',
-          type: 'button',
-          label: 'Get Started Guide',
-        },
-        {
-          id: 'rec-2',
           type: 'button',
           label: 'Live Chat',
         },
