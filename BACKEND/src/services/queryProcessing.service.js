@@ -43,7 +43,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   const { user_id, session_id } = context;
   const {
     max_results = 5,
-    min_confidence = 0.7,
+    min_confidence = 0.5, // Lowered from 0.7 to 0.5 for better recall, especially for Hebrew queries
     include_metadata = true,
   } = options;
 
@@ -155,9 +155,52 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     }
 
     // 2) RAG LOOKUP (EDUCORE queries only)
+    // Translate query to English for better matching with English content in database
+    // OpenAI embeddings work cross-lingual, but translating helps when content is in English
+    let queryForEmbedding = query;
+    let translatedQuery = null;
+    
+    try {
+      // Detect if query contains Hebrew characters
+      const hasHebrew = /[\u0590-\u05FF]/.test(query);
+      
+      if (hasHebrew) {
+        logger.info('Detected Hebrew in query, translating to English for better vector matching', {
+          original_query: query.substring(0, 100),
+        });
+        
+        // Translate to English using OpenAI
+        const translationResponse = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'You are a translation assistant. Translate the user query to English. Only return the translation, nothing else. If the query is already in English, return it as-is.' 
+            },
+            { role: 'user', content: query },
+          ],
+          temperature: 0.3,
+          max_tokens: 100,
+        });
+        
+        translatedQuery = translationResponse.choices[0]?.message?.content?.trim() || query;
+        queryForEmbedding = translatedQuery;
+        
+        logger.info('Query translated', {
+          original: query.substring(0, 100),
+          translated: translatedQuery.substring(0, 100),
+        });
+      }
+    } catch (translationError) {
+      logger.warn('Translation failed, using original query', {
+        error: translationError.message,
+      });
+      // Continue with original query if translation fails
+    }
+    
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
-      input: query,
+      input: queryForEmbedding, // Use translated query for embedding
     });
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
@@ -206,7 +249,70 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         category,
         sources_count: sources.length,
         avg_confidence: sources.length ? confidence : 0,
+        similar_vectors_count: similarVectors.length,
       });
+
+      // If no results found, try with lower threshold as fallback
+      if (sources.length === 0) {
+        logger.info('No results with default threshold (0.5), trying with lower threshold (0.3)', {
+          tenant_id: actualTenantId,
+          similar_vectors_found: similarVectors.length,
+        });
+        try {
+          const lowThresholdVectors = await searchSimilarVectors(queryEmbedding, actualTenantId, {
+            limit: max_results * 2, // Get more results with lower threshold
+            threshold: 0.3, // Much lower threshold for fallback
+          });
+          
+          if (lowThresholdVectors.length > 0) {
+            const filteredLowThreshold = (userProfile?.role === 'admin')
+              ? lowThresholdVectors
+              : lowThresholdVectors.filter((vec) => vec.contentType !== 'user_profile');
+            
+            if (filteredLowThreshold.length > 0) {
+              sources = filteredLowThreshold.map((vec) => ({
+                sourceId: vec.contentId,
+                sourceType: vec.contentType,
+                sourceMicroservice: vec.microserviceId,
+                title: vec.metadata?.title || `${vec.contentType}:${vec.contentId}`,
+                contentSnippet: vec.contentText.substring(0, 200),
+                sourceUrl: vec.metadata?.url || `/${vec.contentType}/${vec.contentId}`,
+                relevanceScore: vec.similarity,
+                metadata: vec.metadata,
+              }));
+
+              retrievedContext = sources
+                .map((source, idx) => `[Source ${idx + 1}]: ${source.contentSnippet}`)
+                .join('\n\n');
+
+              if (sources.length > 0) {
+                confidence = sources.reduce((sum, s) => sum + s.relevanceScore, 0) / sources.length;
+              }
+
+              logger.info('Found results with lower threshold', {
+                tenant_id: actualTenantId,
+                sources_count: sources.length,
+                avg_confidence: confidence,
+                total_found: lowThresholdVectors.length,
+                filtered_count: filteredLowThreshold.length,
+              });
+            } else {
+              logger.warn('Found vectors but all filtered out (user_profile without admin role)', {
+                tenant_id: actualTenantId,
+                total_found: lowThresholdVectors.length,
+              });
+            }
+          } else {
+            logger.warn('No results even with lower threshold (0.3)', {
+              tenant_id: actualTenantId,
+            });
+          }
+        } catch (fallbackError) {
+          logger.warn('Fallback vector search also failed', {
+            error: fallbackError.message,
+          });
+        }
+      }
     } catch (vectorError) {
       logger.warn('Vector search failed, continuing without retrieved context', {
         error: vectorError.message,
