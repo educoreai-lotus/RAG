@@ -22,17 +22,36 @@ import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-vali
  * @param {Object} filteringContext - Filtering context with reason, counts, etc.
  * @returns {string} Appropriate error message
  */
+/**
+ * Generate appropriate error message based on filtering context
+ * @param {string} userQuery - The user's query
+ * @param {Object} filteringContext - Context about why no results were returned
+ * @returns {string} Appropriate error message
+ */
 function generateNoResultsMessage(userQuery, filteringContext) {
   // Escape the query to prevent JSON issues with quotes and special characters
   const query = String(userQuery || '').trim();
   const safeQuery = query.replace(/"/g, "'"); // Replace double quotes with single quotes
   const reason = filteringContext?.reason || 'NO_DATA';
   const userRole = filteringContext?.userRole || 'anonymous';
+  const isAuthenticated = filteringContext?.isAuthenticated || false;
+  const userProfilesFound = filteringContext?.userProfilesFound || 0;
+  const userProfilesRemoved = filteringContext?.userProfilesRemoved || 0;
+  
+  console.log('📢 Generating No Results Message:', {
+    reason,
+    userRole,
+    isAuthenticated,
+    userProfilesFound,
+    userProfilesRemoved,
+    query: safeQuery,
+  });
   
   switch(reason) {
     case 'NO_PERMISSION':
-      // 🔐 SECURITY: Provide specific messages based on authentication status
-      if (userRole === 'anonymous' || userRole === 'guest') {
+    case 'RBAC_BLOCKED_USER_PROFILES':
+      // 🔐 SECURITY: User profiles were found but blocked by RBAC
+      if (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') {
         return `I found information about "${safeQuery}", but you need to log in to access employee information. Please authenticate to continue.`;
       } else if (userRole === 'admin') {
         return `I found information about "${safeQuery}", but there may be a configuration issue with access permissions. Please check RBAC settings.`;
@@ -40,12 +59,36 @@ function generateNoResultsMessage(userQuery, filteringContext) {
         return `I found information about "${safeQuery}", but you don't have permission to access it. Your current role: ${userRole}. Please contact your administrator if you need access to this information.`;
       }
     
+    case 'RBAC_BLOCKED_ALL':
+      // All results were blocked by RBAC
+      if (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') {
+        return `The information you're looking for requires authentication. Please log in to continue.`;
+      } else {
+        return `You don't have permission to access this information. Role: ${userRole}. Contact your administrator for access.`;
+      }
+    
     case 'LOW_SIMILARITY':
       return `I found some content, but nothing closely matches "${safeQuery}". Please try rephrasing your question or add more relevant content.`;
     
     case 'NO_DATA':
     default:
-      // No results found in vector search (default case)
+      // Truly no data in database - only use generic messages for actual no-data scenarios
+      if (userProfilesFound > 0 && userProfilesRemoved > 0) {
+        // Data exists but was filtered - this shouldn't happen with proper reason setting
+        console.warn('⚠️ WARNING: NO_DATA reason but user profiles were found and removed', {
+          userProfilesFound,
+          userProfilesRemoved,
+          reason,
+        });
+        // Fallback to permission message
+        if (!isAuthenticated || userRole === 'anonymous') {
+          return `I found information about "${safeQuery}", but you need to log in to access employee information. Please authenticate to continue.`;
+        } else {
+          return `I found information about "${safeQuery}", but you don't have permission to access it. Your current role: ${userRole}.`;
+        }
+      }
+      
+      // Truly no data in database
       const templates = [
         (q) => `I couldn't find information about "${q}" in the knowledge base.`,
         (q) => `There is currently no EDUCORE content matching "${q}".`,
@@ -376,7 +419,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       vectorResultsFound: 0,
       afterThreshold: 0,
       afterRBAC: 0,
-      reason: null, // 'NO_DATA', 'LOW_SIMILARITY', 'NO_PERMISSION', 'SUCCESS'
+      userProfilesFound: 0,
+      userProfilesRemoved: 0,
+      reason: null, // 'NO_DATA', 'LOW_SIMILARITY', 'NO_PERMISSION', 'RBAC_BLOCKED_USER_PROFILES', 'RBAC_BLOCKED_ALL', 'SUCCESS'
       threshold: min_confidence,
       userRole: userRoleForContext,
       isAuthenticated: user_id && user_id !== 'anonymous' && user_id !== 'guest',
@@ -679,6 +724,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       
       // Track vectors after RBAC filtering
       filteringContext.afterRBAC = filteredVectors.length;
+      filteringContext.userProfilesRemoved = userProfilesFound.length - filteredVectors.filter(v => v.contentType === 'user_profile').length;
       
       // 🔍 AFTER RBAC Filtering - Detailed logging
       console.log('🔍 AFTER RBAC Filtering:', {
@@ -687,28 +733,46 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         removedCount: similarVectors.length - filteredVectors.length,
         allowUserProfiles: allowUserProfiles,
         userProfilesFound: userProfilesFound.length,
-        userProfilesRemoved: allowUserProfiles ? 0 : userProfilesFound.length,
+        userProfilesRemoved: filteringContext.userProfilesRemoved,
       });
       
-      // 🎯 Update filtering reason based on context
-      if (similarVectors.length > 0 && filteredVectors.length === 0 && !allowUserProfiles) {
-        filteringContext.reason = 'NO_PERMISSION'; // Key fix: distinguish permission from no data
-        console.error('⚠️ WARNING: RBAC filtered out ALL results!', {
-          hadResults: similarVectors.length,
-          hadUserProfiles: userProfilesFound.length,
-          allowUserProfiles: allowUserProfiles,
+      // 🎯 Update filtering reason based on context - IMPROVED LOGIC
+      if (similarVectors.length === 0) {
+        // No vector results at all
+        filteringContext.reason = 'NO_DATA';
+      } else if (filteringContext.userProfilesRemoved > 0 && filteredVectors.length === 0) {
+        // Had user profiles but all were removed by RBAC and nothing else left
+        filteringContext.reason = 'RBAC_BLOCKED_USER_PROFILES';
+        console.warn('🚨 RBAC Security: User profile access blocked - all results filtered', {
           userRole: userRole,
-          isAdmin: isAdmin,
+          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
-          hasSpecificUserName: hasSpecificUserName,
-          isQueryAboutOwnProfile: isQueryAboutOwnProfile,
-          matchedName: matchedName,
           query: query.substring(0, 100),
-          filteringContext: filteringContext,
+          userProfilesFound: filteringContext.userProfilesFound,
+          userProfilesRemoved: filteringContext.userProfilesRemoved,
+          action: 'BLOCKED_ALL_RESULTS'
         });
-      } else if (similarVectors.length > 0 && filteredVectors.length > 0) {
+      } else if (filteringContext.userProfilesRemoved > 0) {
+        // Had user profiles, some were removed, but other results remain
+        filteringContext.reason = 'SUCCESS'; // Still have some results
+        console.warn('🚨 RBAC Security: Some user profiles blocked', {
+          userRole: userRole,
+          userId: user_id || 'anonymous',
+          isAuthenticated: isAuthenticated,
+          query: query.substring(0, 100),
+          userProfilesFound: filteringContext.userProfilesFound,
+          userProfilesRemoved: filteringContext.userProfilesRemoved,
+          remainingResults: filteredVectors.length,
+          action: 'PARTIAL_BLOCK'
+        });
+      } else if (similarVectors.length > 0 && filteredVectors.length === 0) {
+        // Had results but all filtered (not user profiles)
+        filteringContext.reason = 'RBAC_BLOCKED_ALL';
+      } else if (filteredVectors.length > 0) {
+        // Have results after filtering
         filteringContext.reason = 'SUCCESS';
-      } else if (similarVectors.length === 0) {
+      } else {
+        // Fallback
         filteringContext.reason = 'NO_DATA';
       }
       
