@@ -694,8 +694,15 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       }
 
       // Ensure all metadata values are JSON-serializable
+      // Clean the answer to prevent JSON issues
+      const cleanAnswer = String(answer || '')
+        .replace(/\n/g, ' ') // Replace newlines with spaces
+        .replace(/\r/g, ' ') // Replace carriage returns
+        .replace(/\t/g, ' ') // Replace tabs
+        .trim();
+      
       const response = {
-        answer: String(answer || ''), // Ensure answer is a string
+        answer: cleanAnswer,
         abstained: true,
         reason: String(reasonCode || 'no_edudata_context'),
         confidence: 0,
@@ -711,6 +718,32 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           vectors_after_rbac: Number(vectorsAfterRBAC) || 0,
         },
       };
+      
+      // Validate response is JSON-serializable before returning
+      try {
+        JSON.stringify(response);
+      } catch (jsonError) {
+        logger.error('Response JSON validation failed', {
+          error: jsonError.message,
+          answer_preview: cleanAnswer.substring(0, 100),
+          filtering_reason: filteringReason,
+        });
+        // Return a safe fallback response
+        return {
+          answer: 'I couldn\'t find information about your query. Please try rephrasing your question.',
+          abstained: true,
+          reason: 'no_edudata_context',
+          confidence: 0,
+          sources: [],
+          metadata: {
+            processing_time_ms: processingTimeMs,
+            sources_retrieved: 0,
+            cached: false,
+            model_version: 'db-required',
+            personalized: false,
+          },
+        };
+      }
 
       logger.info('No EDUCORE context found after RAG and gRPC', {
         tenant_id: actualTenantId,
