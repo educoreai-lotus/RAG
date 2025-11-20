@@ -23,20 +23,23 @@ import { generatePersonalizedRecommendations } from './recommendations.service.j
  * @returns {string} Appropriate error message
  */
 function generateNoDataMessage(userQuery, filteringReason = null, userRole = 'anonymous') {
+  // Escape the query to prevent JSON issues with quotes and special characters
   const query = String(userQuery || '').trim();
+  // Use single quotes in template strings to avoid JSON issues, or escape properly
+  const safeQuery = query.replace(/"/g, "'"); // Replace double quotes with single quotes to avoid JSON issues
   
   // Scenario 1: Results filtered by RBAC (permission denied)
   if (filteringReason === 'RBAC_FILTERED') {
     if (userRole === 'admin') {
-      return `I found information about "${query}", but there may be a configuration issue with access permissions. Please check RBAC settings.`;
+      return `I found information about "${safeQuery}", but there may be a configuration issue with access permissions. Please check RBAC settings.`;
     } else {
-      return `I found information about "${query}", but you don't have permission to access it. Your role: ${userRole}. Please contact your administrator if you need access.`;
+      return `I found information about "${safeQuery}", but you don't have permission to access it. Your role: ${userRole}. Please contact your administrator if you need access.`;
     }
   }
   
   // Scenario 2: Results found but all below threshold (low similarity)
   if (filteringReason === 'BELOW_THRESHOLD') {
-    return `I couldn't find relevant information about "${query}". The available content doesn't closely match your query. Please try rephrasing your question or adding more specific details.`;
+    return `I couldn't find relevant information about "${safeQuery}". The available content doesn't closely match your query. Please try rephrasing your question or adding more specific details.`;
   }
   
   // Scenario 3: No results found in vector search (default case)
@@ -48,7 +51,7 @@ function generateNoDataMessage(userQuery, filteringReason = null, userRole = 'an
     (q) => `No relevant EDUCORE items were found for "${q}".`,
   ];
   const pick = Math.floor(Math.random() * templates.length);
-  const base = templates[pick](query);
+  const base = templates[pick](safeQuery);
   return `${base} Please add or import relevant documents to improve future answers.`;
 }
 
@@ -690,21 +693,22 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         reasonCode = 'no_vector_results';
       }
 
+      // Ensure all metadata values are JSON-serializable
       const response = {
-        answer,
+        answer: String(answer || ''), // Ensure answer is a string
         abstained: true,
-        reason: reasonCode,
+        reason: String(reasonCode || 'no_edudata_context'),
         confidence: 0,
         sources: [],
         metadata: {
-          processing_time_ms: processingTimeMs,
+          processing_time_ms: Number(processingTimeMs) || 0,
           sources_retrieved: 0,
           cached: false,
           model_version: 'db-required',
           personalized: false,
-          filtering_reason: filteringReason,
-          vectors_before_rbac: vectorsBeforeRBAC,
-          vectors_after_rbac: vectorsAfterRBAC,
+          filtering_reason: filteringReason ? String(filteringReason) : null,
+          vectors_before_rbac: Number(vectorsBeforeRBAC) || 0,
+          vectors_after_rbac: Number(vectorsAfterRBAC) || 0,
         },
       };
 

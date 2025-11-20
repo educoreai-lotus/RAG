@@ -119,8 +119,25 @@ export async function submitQuery(req, res, next) {
       options,
     });
 
-    // Return response
-    res.json(result);
+    // Return response - ensure it's JSON serializable
+    try {
+      // Validate that result can be serialized to JSON
+      JSON.stringify(result);
+      res.json(result);
+    } catch (jsonError) {
+      logger.error('JSON serialization error', {
+        error: jsonError.message,
+        result_keys: Object.keys(result || {}),
+        result_answer_preview: result?.answer?.substring(0, 100),
+      });
+      
+      // Return a safe error response
+      res.status(500).json({
+        error: 'Response serialization error',
+        message: 'An error occurred while processing your query. Please try again.',
+        details: process.env.NODE_ENV === 'development' ? jsonError.message : undefined,
+      });
+    }
   } catch (error) {
     logger.error('Query controller error', {
       error: error.message,
