@@ -16,6 +16,7 @@ import { mergeResults, createContextBundle, handleFallbacks } from '../communica
 import { generatePersonalizedRecommendations } from './recommendations.service.js';
 import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-validation.util.js';
 import { MESSAGES, validateMessages } from '../config/messages.js';
+import { formatBotResponse, formatErrorMessage, formatRecommendations } from '../utils/responseFormatter.util.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -310,7 +311,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         max_tokens: 500,
       });
 
-      const answer = completion.choices[0]?.message?.content || '';
+      const rawAnswer = completion.choices[0]?.message?.content || '';
+      const answer = formatBotResponse(rawAnswer, { mode: 'general_openai' });
       const processingTimeMs = Date.now() - startTime;
 
       return {
@@ -1273,7 +1275,11 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     if (filteringContext.reason === 'RBAC_BLOCKED_USER_PROFILES') {
       // User asked specifically about a user profile and it was blocked
       const processingTimeMs = Date.now() - startTime;
-      const answer = generateNoResultsMessage(query, filteringContext);
+      const rawAnswer = generateNoResultsMessage(query, filteringContext);
+      const answer = formatErrorMessage(rawAnswer, { 
+        reason: 'permission_denied',
+        context: filteringContext 
+      });
       
       console.log('📢 Returning Permission Denied Message for User Profile Query:', {
         reason: filteringContext.reason,
@@ -1348,7 +1354,11 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         }
       });
       
-      const answer = generateNoResultsMessage(query, filteringContext);
+      const rawAnswer = generateNoResultsMessage(query, filteringContext);
+      const answer = formatErrorMessage(rawAnswer, { 
+        reason: filteringContext.reason,
+        context: filteringContext 
+      });
 
       // Determine reason code for response
       let reasonCode = 'no_edudata_context';
@@ -1500,14 +1510,19 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
       max_tokens: 500,
     });
 
-    const answer = completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response.';
+    const rawAnswer = completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response.';
+    const answer = formatBotResponse(rawAnswer, { 
+      mode: 'rag',
+      hasUserProfile: !!userProfile,
+      sources: sources.length 
+    });
     const processingTimeMs = Date.now() - startTime;
 
     // Generate personalized recommendations based on user profile and query context
     let recommendations = [];
     try {
       if (user_id && user_id !== 'anonymous') {
-        recommendations = await generatePersonalizedRecommendations(
+        const rawRecommendations = await generatePersonalizedRecommendations(
           actualTenantId,
           user_id,
           {
@@ -1516,6 +1531,7 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
             recentQueries: [{ queryText: query, sources }],
           }
         );
+        recommendations = formatRecommendations(rawRecommendations);
       }
     } catch (recError) {
       logger.warn('Failed to generate recommendations', {
