@@ -132,12 +132,26 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     }
 
     // 1) QUERY CLASSIFICATION
-    const { isEducore, category } = isEducoreQuery(query);
+    let { isEducore, category } = isEducoreQuery(query);
+    
+    // If query contains user names but wasn't classified as EDUCORE, treat it as EDUCORE
+    const hasUserNames = ['eden', 'levi', 'adi', 'cohen', 'noa', 'bar', 'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר']
+      .some(name => query.toLowerCase().includes(name));
+    
+    if (!isEducore && hasUserNames) {
+      logger.info('Query contains user names, treating as EDUCORE query', {
+        query: query.substring(0, 100),
+      });
+      isEducore = true;
+      category = 'users';
+    }
+    
     logger.info('Query classification result', {
       tenant_id: actualTenantId,
       user_id,
       isEducore,
       category,
+      hasUserNames,
     });
 
     // Non-EDUCORE queries → go straight to OpenAI (general knowledge)
@@ -280,22 +294,35 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       );
       
       // Also check for role/title queries about specific users
-      const hasRoleQuery = (
+      // Check if query asks about role, title, or identity of a specific user
+      const hasRoleQuery = hasSpecificUserName && (
         queryLower.includes('תפקיד') ||  // Hebrew: role
         queryLower.includes('מה התפקיד') ||  // Hebrew: what is the role
         queryLower.includes('מי זה') ||  // Hebrew: who is
         translatedLower.includes('role') ||
         translatedLower.includes('what is the role') ||
-        queryForCheck.includes('role')
-      ) && hasSpecificUserName; // Must have specific user name + role query
+        translatedLower.includes("what's the role") ||
+        translatedLower.includes('what is') ||
+        translatedLower.includes("what's") ||
+        queryForCheck.includes('role') ||
+        queryForCheck.includes('what is') ||
+        queryForCheck.includes("what's")
+      );
       
       // Only allow if query is about a SPECIFIC user by name
       // This prevents general "show me all users" queries
+      // If query contains a specific user name, it's likely about that user
       const isSpecificUserQuery = hasSpecificUserName && (
         hasRoleQuery || 
         queryLower.includes('מי זה') ||  // "who is" queries
         translatedLower.includes('who is') ||
-        queryForCheck.includes('who is')
+        translatedLower.includes("who's") ||
+        translatedLower.includes('what is') ||
+        translatedLower.includes("what's") ||
+        queryForCheck.includes('who is') ||
+        queryForCheck.includes("who's") ||
+        queryForCheck.includes('what is') ||
+        queryForCheck.includes("what's")
       );
       
       const userRole = userProfile?.role || 'anonymous';
