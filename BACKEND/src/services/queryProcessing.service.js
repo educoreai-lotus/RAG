@@ -31,8 +31,10 @@ function generateNoResultsMessage(userQuery, filteringContext) {
   
   switch(reason) {
     case 'NO_PERMISSION':
-      // THIS IS THE KEY FIX: Distinguish permission from no data
-      if (userRole === 'admin') {
+      // 🔐 SECURITY: Provide specific messages based on authentication status
+      if (userRole === 'anonymous' || userRole === 'guest') {
+        return `I found information about "${safeQuery}", but you need to log in to access employee information. Please authenticate to continue.`;
+      } else if (userRole === 'admin') {
         return `I found information about "${safeQuery}", but there may be a configuration issue with access permissions. Please check RBAC settings.`;
       } else {
         return `I found information about "${safeQuery}", but you don't have permission to access it. Your current role: ${userRole}. Please contact your administrator if you need access to this information.`;
@@ -369,13 +371,15 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let similarVectors = []; // Initialize outside try block to avoid "not defined" error
     
     // 🎯 Filtering Context Tracking
+    const userRoleForContext = userProfile?.role || context?.role || 'anonymous';
     let filteringContext = {
       vectorResultsFound: 0,
       afterThreshold: 0,
       afterRBAC: 0,
       reason: null, // 'NO_DATA', 'LOW_SIMILARITY', 'NO_PERMISSION', 'SUCCESS'
       threshold: min_confidence,
-      userRole: userProfile?.role || context?.role || 'anonymous',
+      userRole: userRoleForContext,
+      isAuthenticated: user_id && user_id !== 'anonymous' && user_id !== 'guest',
     };
 
     try {
@@ -503,14 +507,55 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       const userRoleFromProfile = userProfile?.role;
       const userRoleFromContext = context?.role;
       const userRole = userProfile?.role || context?.role || 'anonymous';
+      
+      // 🔐 SECURITY: Check authentication and authorization levels
+      const isAuthenticated = user_id && user_id !== 'anonymous' && user_id !== 'guest';
       const isAdmin = userRole === 'admin' || userRole === 'administrator';
+      const isManager = userRole === 'manager';
+      const isEmployee = userRole === 'employee' || userRole === 'user';
+      const isTrainer = userRole === 'trainer' || userRole === 'TRAINER';
+      const isHR = userRole === 'hr' || userRole === 'HR' || userRole === 'human_resources';
+      
+      // Check if query is about the user's own profile
+      const isQueryAboutOwnProfile = (() => {
+        if (!isAuthenticated || !userProfile) return false;
+        
+        const queryLower = query.toLowerCase();
+        const translatedLower = translatedQuery?.toLowerCase() || '';
+        const queryForCheck = queryForEmbedding.toLowerCase();
+        
+        // Get user's name from profile (if available)
+        const userName = userProfile?.name || userProfile?.fullName || '';
+        const userNameLower = userName ? userName.toLowerCase() : '';
+        
+        // Check if query mentions user's own name
+        const mentionsOwnName = userNameLower && (
+          queryLower.includes(userNameLower) ||
+          translatedLower.includes(userNameLower) ||
+          queryForCheck.includes(userNameLower)
+        );
+        
+        // Check for "my" queries
+        const isMyQuery = queryLower.includes('my role') ||
+                         queryLower.includes('my profile') ||
+                         queryLower.includes('about me') ||
+                         queryLower.includes('מה התפקיד שלי') ||
+                         queryLower.includes('מי אני');
+        
+        return mentionsOwnName || isMyQuery;
+      })();
       
       console.log('👤 User Context:', {
         user_id: user_id,
         userRoleFromProfile: userRoleFromProfile,
         userRoleFromContext: userRoleFromContext,
         finalRole: userRole,
+        isAuthenticated: isAuthenticated,
         isAdmin: isAdmin,
+        isHR: isHR,
+        isTrainer: isTrainer,
+        isManager: isManager,
+        isEmployee: isEmployee,
         query: query.substring(0, 100),
         queryLower: queryLower.substring(0, 100),
         translatedLower: translatedLower.substring(0, 100),
@@ -518,24 +563,116 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         hasSpecificUserName: hasSpecificUserName,
         matchedName: matchedName,
         hasUserQueryPattern: hasUserQueryPattern,
+        isQueryAboutOwnProfile: isQueryAboutOwnProfile,
       });
       
-      // RBAC: Allow user_profile if:
-      // 1. User is admin (full access), OR
-      // 2. Query contains a specific user name (allows queries about that user)
-      // Simplified logic: if query mentions a specific user name, allow user_profile results
-      // This is more permissive but still maintains privacy (no general "show all users" queries)
-      const allowUserProfiles = isAdmin || hasSpecificUserName;
+      /**
+       * 🔐 SECURE RBAC LOGIC for User Profile Access:
+       * 
+       * 1. ADMIN/ADMINISTRATOR:
+       *    - Can access ALL user profiles
+       *    - No restrictions
+       * 
+       * 2. HR (Human Resources):
+       *    - Can access ALL user profiles
+       *    - Required for employee management
+       * 
+       * 3. TRAINER:
+       *    - Can access user profiles when explicitly asked about specific users
+       *    - Can view profiles of trainees/students
+       *    - Cannot browse all users
+       * 
+       * 4. MANAGER:
+       *    - Can access user profiles when explicitly asked about specific users
+       *    - Can view profiles of team members
+       *    - Cannot browse all users
+       * 
+       * 5. EMPLOYEE/USER:
+       *    - Can ONLY access their OWN profile
+       *    - Cannot view other employees' profiles
+       * 
+       * 6. ANONYMOUS/GUEST/UNAUTHENTICATED:
+       *    - CANNOT access ANY user profiles
+       *    - Must authenticate first
+       *    - Blocked completely from user_profile content
+       */
+      let allowUserProfiles = false;
       
       if (isAdmin) {
+        // Admins can see all user profiles
+        allowUserProfiles = true;
         console.log('✅ Admin user - allowing all user_profile results');
-      } else if (hasSpecificUserName) {
-        console.log(`✅ Query mentions specific user (${matchedName}) - allowing user_profile results`);
+        
+      } else if (isHR) {
+        // HR can see all user profiles (required for employee management)
+        allowUserProfiles = true;
+        console.log('✅ HR user - allowing all user_profile results');
+        
+      } else if (isTrainer && hasSpecificUserName) {
+        // Trainers can see specific user profiles when explicitly asked (trainees/students)
+        allowUserProfiles = true;
+        console.log(`✅ Trainer asking about specific user (${matchedName}) - allowing user_profile results`);
+        
+      } else if (isManager && hasSpecificUserName) {
+        // Managers can see specific user profiles when explicitly asked
+        allowUserProfiles = true;
+        console.log(`✅ Manager asking about specific user (${matchedName}) - allowing user_profile results`);
+        
+      } else if (isEmployee && isQueryAboutOwnProfile) {
+        // Employees can only see their OWN profile
+        allowUserProfiles = true;
+        console.log('✅ Employee viewing own profile - allowing user_profile results');
+        
       } else {
-        console.log('❌ Non-admin, no specific user mentioned - blocking user_profile results');
+        // Everyone else (anonymous, guest, unauthorized) - NO ACCESS
+        allowUserProfiles = false;
+        console.log('❌ Insufficient permissions - blocking user_profile results');
       }
       
+      console.log('🔐 RBAC Decision:', {
+        userRole: userRole,
+        isAuthenticated: isAuthenticated,
+        isAdmin: isAdmin,
+        isHR: isHR,
+        isTrainer: isTrainer,
+        isManager: isManager,
+        isEmployee: isEmployee,
+        hasSpecificUserName: hasSpecificUserName,
+        isQueryAboutOwnProfile: isQueryAboutOwnProfile,
+        allowUserProfiles: allowUserProfiles,
+      });
+      
       const userProfilesFound = similarVectors.filter(v => v.contentType === 'user_profile');
+      
+      // 🚨 SECURITY LOGGING: Log unauthorized access attempts
+      if (!allowUserProfiles && userProfilesFound.length > 0) {
+        console.warn('🚨 SECURITY: Unauthorized access attempt blocked:', {
+          userRole: userRole,
+          userId: user_id || 'anonymous',
+          isAuthenticated: isAuthenticated,
+          query: query.substring(0, 100),
+          attemptedAccess: 'user_profile',
+          userProfilesFound: userProfilesFound.length,
+          matchedName: matchedName,
+          action: 'BLOCKED',
+          reason: !isAuthenticated 
+            ? 'User not authenticated' 
+            : isEmployee && !isQueryAboutOwnProfile 
+              ? 'Employee trying to access other user profile'
+              : 'Insufficient permissions',
+        });
+        
+        logger.warn('🚨 SECURITY: Unauthorized user profile access blocked', {
+          userRole: userRole,
+          userId: user_id || 'anonymous',
+          isAuthenticated: isAuthenticated,
+          query: query.substring(0, 100),
+          attemptedAccess: 'user_profile',
+          userProfilesFound: userProfilesFound.length,
+          action: 'BLOCKED',
+        });
+      }
+      
       const filteredVectors = allowUserProfiles
         ? similarVectors
         : similarVectors.filter((vec) => vec.contentType !== 'user_profile');
@@ -562,7 +699,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           allowUserProfiles: allowUserProfiles,
           userRole: userRole,
           isAdmin: isAdmin,
+          isAuthenticated: isAuthenticated,
           hasSpecificUserName: hasSpecificUserName,
+          isQueryAboutOwnProfile: isQueryAboutOwnProfile,
           matchedName: matchedName,
           query: query.substring(0, 100),
           filteringContext: filteringContext,
@@ -667,38 +806,86 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           });
           
           if (lowThresholdVectors.length > 0) {
-            // RBAC: Use same logic as main search - allow user_profile if admin or query contains specific user name
-            const queryLower = query.toLowerCase();
-            const translatedLower = translatedQuery?.toLowerCase() || '';
-            const queryForCheck = queryForEmbedding.toLowerCase();
+            // RBAC: Use same secure logic as main search
+            // Re-check authentication and authorization (same logic as above)
+            const isAuthenticatedLow = user_id && user_id !== 'anonymous' && user_id !== 'guest';
+            const userRoleLow = userProfile?.role || context?.role || 'anonymous';
+            const isAdminLow = userRoleLow === 'admin' || userRoleLow === 'administrator';
+            const isHRLow = userRoleLow === 'hr' || userRoleLow === 'HR' || userRoleLow === 'human_resources';
+            const isTrainerLow = userRoleLow === 'trainer' || userRoleLow === 'TRAINER';
+            const isManagerLow = userRoleLow === 'manager';
+            const isEmployeeLow = userRoleLow === 'employee' || userRoleLow === 'user';
+            
+            const queryLowerLow = query.toLowerCase();
+            const translatedLowerLow = translatedQuery?.toLowerCase() || '';
+            const queryForCheckLow = queryForEmbedding.toLowerCase();
             
             const specificUserNamePatterns = [
               'eden', 'levi', 'adi', 'cohen', 'noa', 'bar',
               'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר',
             ];
             
-            const hasSpecificUserName = specificUserNamePatterns.some(name => 
-              queryLower.includes(name) || 
-              translatedLower.includes(name) ||
-              queryForCheck.includes(name)
+            const hasSpecificUserNameLow = specificUserNamePatterns.some(name => 
+              queryLowerLow.includes(name) || 
+              translatedLowerLow.includes(name) ||
+              queryForCheckLow.includes(name)
             );
             
-            const matchedName = specificUserNamePatterns.find(name => 
-              queryLower.includes(name) || 
-              translatedLower.includes(name) ||
-              queryForCheck.includes(name)
+            const matchedNameLow = specificUserNamePatterns.find(name => 
+              queryLowerLow.includes(name) || 
+              translatedLowerLow.includes(name) ||
+              queryForCheckLow.includes(name)
             );
             
-            const userRole = userProfile?.role || context?.role || 'anonymous';
-            const isAdmin = userRole === 'admin' || userRole === 'administrator';
-            // Simplified: Allow if admin OR query contains specific user name
-            const allowUserProfiles = isAdmin || hasSpecificUserName;
+            // Check if query is about own profile
+            const isQueryAboutOwnProfileLow = (() => {
+              if (!isAuthenticatedLow || !userProfile) return false;
+              
+              const userName = userProfile?.name || userProfile?.fullName || '';
+              const userNameLower = userName ? userName.toLowerCase() : '';
+              
+              const mentionsOwnName = userNameLower && (
+                queryLowerLow.includes(userNameLower) ||
+                translatedLowerLow.includes(userNameLower) ||
+                queryForCheckLow.includes(userNameLower)
+              );
+              
+              const isMyQuery = queryLowerLow.includes('my role') ||
+                               queryLowerLow.includes('my profile') ||
+                               queryLowerLow.includes('about me');
+              
+              return mentionsOwnName || isMyQuery;
+            })();
+            
+            // Apply same secure RBAC logic (including HR and Trainer)
+            let allowUserProfilesLow = false;
+            
+            if (isAdminLow) {
+              allowUserProfilesLow = true;
+            } else if (isHRLow) {
+              // HR can see all user profiles
+              allowUserProfilesLow = true;
+            } else if (isTrainerLow && hasSpecificUserNameLow) {
+              // Trainers can see specific user profiles when asked
+              allowUserProfilesLow = true;
+            } else if (isManagerLow && hasSpecificUserNameLow) {
+              allowUserProfilesLow = true;
+            } else if (isEmployeeLow && isQueryAboutOwnProfileLow) {
+              allowUserProfilesLow = true;
+            }
+            
+            const allowUserProfiles = allowUserProfilesLow;
             
             console.log('🔍 Low Threshold RBAC Decision:', {
-              hasSpecificUserName: hasSpecificUserName,
-              matchedName: matchedName,
-              userRole: userRole,
-              isAdmin: isAdmin,
+              hasSpecificUserName: hasSpecificUserNameLow,
+              matchedName: matchedNameLow,
+              userRole: userRoleLow,
+              isAdmin: isAdminLow,
+              isHR: isHRLow,
+              isTrainer: isTrainerLow,
+              isManager: isManagerLow,
+              isEmployee: isEmployeeLow,
+              isQueryAboutOwnProfile: isQueryAboutOwnProfileLow,
               allowUserProfiles: allowUserProfiles,
               lowThresholdVectorsCount: lowThresholdVectors.length,
               userProfilesInResults: lowThresholdVectors.filter(v => v.contentType === 'user_profile').length,
@@ -708,18 +895,43 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
               ? lowThresholdVectors
               : lowThresholdVectors.filter((vec) => vec.contentType !== 'user_profile');
             
+            // 🚨 SECURITY LOGGING: Log unauthorized access attempts (low threshold)
+            const userProfilesInLowThreshold = lowThresholdVectors.filter(v => v.contentType === 'user_profile');
+            if (!allowUserProfiles && userProfilesInLowThreshold.length > 0) {
+              console.warn('🚨 SECURITY: Unauthorized access attempt blocked (low threshold):', {
+                userRole: userRoleLow,
+                userId: user_id || 'anonymous',
+                isAuthenticated: isAuthenticatedLow,
+                query: query.substring(0, 100),
+                attemptedAccess: 'user_profile',
+                userProfilesFound: userProfilesInLowThreshold.length,
+                action: 'BLOCKED',
+                reason: !isAuthenticatedLow 
+                  ? 'User not authenticated' 
+                  : isEmployeeLow && !isQueryAboutOwnProfileLow 
+                    ? 'Employee trying to access other user profile'
+                    : 'Insufficient permissions',
+              });
+            }
+            
             logger.info('Low threshold filtering (RBAC)', {
               tenant_id: actualTenantId,
               tenant_domain: tenantDomain,
-              user_role: userRole,
-              is_admin: isAdmin,
-              has_specific_user_name: hasSpecificUserName,
-              matched_name: matchedName,
+              user_role: userRoleLow,
+              is_admin: isAdminLow,
+              is_hr: isHRLow,
+              is_trainer: isTrainerLow,
+              is_manager: isManagerLow,
+              is_employee: isEmployeeLow,
+              is_authenticated: isAuthenticatedLow,
+              has_specific_user_name: hasSpecificUserNameLow,
+              is_query_about_own_profile: isQueryAboutOwnProfileLow,
+              matched_name: matchedNameLow,
               allow_user_profiles: allowUserProfiles,
               total_low_threshold: lowThresholdVectors.length,
-              user_profiles_in_results: lowThresholdVectors.filter(v => v.contentType === 'user_profile').length,
+              user_profiles_in_results: userProfilesInLowThreshold.length,
               filtered_count: filteredLowThreshold.length,
-              privacy_protected: !allowUserProfiles && lowThresholdVectors.filter(v => v.contentType === 'user_profile').length > 0,
+              privacy_protected: !allowUserProfiles && userProfilesInLowThreshold.length > 0,
               threshold_used: 0.1,
             });
             
