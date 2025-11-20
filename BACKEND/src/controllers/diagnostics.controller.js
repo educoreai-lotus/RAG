@@ -103,40 +103,63 @@ export async function getEmbeddingsStatus(req, res, next) {
       `
     ).catch(() => []);
 
+    // Helper function to safely serialize data for JSON
+    const safeSerialize = (data) => {
+      if (data === null || data === undefined) return null;
+      if (typeof data === 'string') {
+        return data.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ').trim();
+      }
+      if (typeof data === 'object') {
+        if (Array.isArray(data)) {
+          return data.map(safeSerialize);
+        }
+        const cleaned = {};
+        for (const [key, value] of Object.entries(data)) {
+          try {
+            cleaned[key] = safeSerialize(value);
+          } catch (e) {
+            cleaned[key] = String(value);
+          }
+        }
+        return cleaned;
+      }
+      return data;
+    };
+
     const response = {
       status: 'ok',
       timestamp: new Date().toISOString(),
       tenant: {
-        domain: tenantDomain,
-        id: tenantId,
+        domain: String(tenantDomain || ''),
+        id: String(tenantId || ''),
       },
       pgvector: {
         extension_enabled: extensionCheck.length > 0,
-        extension_info: extensionCheck[0] || null,
+        extension_info: extensionCheck[0] ? safeSerialize(extensionCheck[0]) : null,
       },
       indexes: {
         hnsw_index_exists: indexCheck.length > 0,
-        indexes: indexCheck,
+        indexes: safeSerialize(indexCheck),
       },
       embeddings: {
-        total_in_database: totalCount[0]?.count || 0,
-        total_for_tenant: tenantCount[0]?.count || 0,
-        by_content_type: contentTypeCount,
-        sample_embeddings: sampleEmbeddings,
+        total_in_database: Number(totalCount[0]?.count || 0),
+        total_for_tenant: Number(tenantCount[0]?.count || 0),
+        by_content_type: safeSerialize(contentTypeCount),
+        sample_embeddings: safeSerialize(sampleEmbeddings),
       },
       tenants: {
-        all_tenants_with_embeddings: allTenants,
+        all_tenants_with_embeddings: safeSerialize(allTenants),
       },
       eden_levi_check: {
         found: edenLeviCheck.length > 0,
-        records: edenLeviCheck,
+        records: safeSerialize(edenLeviCheck),
       },
       recommendations: {
-        check_tenant_id: 'Make sure queries use the correct tenant_id. Current tenant: ' + tenantId,
-        check_embeddings: tenantCount[0]?.count === 0 
+        check_tenant_id: String('Make sure queries use the correct tenant_id. Current tenant: ' + tenantId),
+        check_embeddings: String(tenantCount[0]?.count === 0 
           ? 'No embeddings found for this tenant. Run the embeddings script.' 
-          : `${tenantCount[0]?.count} embeddings found for this tenant.`,
-        check_threshold: 'Current default threshold is 0.5. Lower thresholds may return more results.',
+          : `${tenantCount[0]?.count} embeddings found for this tenant.`),
+        check_threshold: String('Current default threshold is 0.25. Lower thresholds may return more results.'),
       },
     };
 
@@ -146,7 +169,27 @@ export async function getEmbeddingsStatus(req, res, next) {
       tenantEmbeddings: tenantCount[0]?.count || 0,
     });
 
-    res.json(response);
+    // Validate JSON before sending
+    try {
+      JSON.stringify(response);
+      res.json(response);
+    } catch (jsonError) {
+      logger.error('Diagnostics JSON serialization error', {
+        error: jsonError.message,
+        position: jsonError.message.match(/position (\d+)/)?.[1],
+      });
+      
+      // Return a safe fallback response
+      res.status(500).json({
+        status: 'error',
+        error: 'Failed to serialize response data',
+        timestamp: new Date().toISOString(),
+        tenant: {
+          domain: String(tenantDomain || ''),
+          id: String(tenantId || ''),
+        },
+      });
+    }
   } catch (error) {
     logger.error('Diagnostics error', {
       error: error.message,
@@ -209,36 +252,59 @@ export async function testVectorSearch(req, res, next) {
       threshold: 0.0, // No threshold
     });
 
+    // Helper function to safely serialize data for JSON
+    const safeSerialize = (data) => {
+      if (data === null || data === undefined) return null;
+      if (typeof data === 'string') {
+        return data.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ').trim();
+      }
+      if (typeof data === 'object') {
+        if (Array.isArray(data)) {
+          return data.map(safeSerialize);
+        }
+        const cleaned = {};
+        for (const [key, value] of Object.entries(data)) {
+          try {
+            cleaned[key] = safeSerialize(value);
+          } catch (e) {
+            cleaned[key] = String(value);
+          }
+        }
+        return cleaned;
+      }
+      return data;
+    };
+
     const response = {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      test_query: testQuery,
+      test_query: String(testQuery || ''),
       tenant: {
-        domain: tenantDomain,
-        id: tenantId,
+        domain: String(tenantDomain || ''),
+        id: String(tenantId || ''),
       },
       embedding: {
-        dimensions: queryEmbedding.length,
-        preview: queryEmbedding.slice(0, 5),
+        dimensions: Number(queryEmbedding.length || 0),
+        preview: Array.isArray(queryEmbedding) ? queryEmbedding.slice(0, 5).map(n => Number(n)) : [],
       },
       search_results: {
         with_threshold: {
-          threshold: parseFloat(threshold),
-          count: results.length,
+          threshold: Number(parseFloat(threshold) || 0),
+          count: Number(results.length || 0),
           results: results.map(r => ({
-            contentId: r.contentId,
-            contentType: r.contentType,
-            similarity: r.similarity,
-            contentTextPreview: r.contentText.substring(0, 100),
+            contentId: String(r.contentId || ''),
+            contentType: String(r.contentType || ''),
+            similarity: Number(r.similarity || 0),
+            contentTextPreview: String(r.contentText || '').substring(0, 100).replace(/\n/g, ' ').replace(/\r/g, ' ').trim(),
           })),
         },
         without_threshold: {
-          count: allResults.length,
+          count: Number(allResults.length || 0),
           top_10: allResults.slice(0, 10).map(r => ({
-            contentId: r.contentId,
-            contentType: r.contentType,
-            similarity: r.similarity,
-            contentTextPreview: r.contentText.substring(0, 100),
+            contentId: String(r.contentId || ''),
+            contentType: String(r.contentType || ''),
+            similarity: Number(r.similarity || 0),
+            contentTextPreview: String(r.contentText || '').substring(0, 100).replace(/\n/g, ' ').replace(/\r/g, ' ').trim(),
           })),
         },
       },
@@ -251,7 +317,28 @@ export async function testVectorSearch(req, res, next) {
       allResultsCount: allResults.length,
     });
 
-    res.json(response);
+    // Validate JSON before sending
+    try {
+      JSON.stringify(response);
+      res.json(response);
+    } catch (jsonError) {
+      logger.error('Vector search test JSON serialization error', {
+        error: jsonError.message,
+        position: jsonError.message.match(/position (\d+)/)?.[1],
+      });
+      
+      // Return a safe fallback response
+      res.status(500).json({
+        status: 'error',
+        error: 'Failed to serialize response data',
+        timestamp: new Date().toISOString(),
+        test_query: String(testQuery || ''),
+        tenant: {
+          domain: String(tenantDomain || ''),
+          id: String(tenantId || ''),
+        },
+      });
+    }
   } catch (error) {
     logger.error('Vector search test error', {
       error: error.message,
