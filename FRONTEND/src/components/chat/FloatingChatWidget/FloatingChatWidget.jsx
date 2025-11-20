@@ -305,20 +305,35 @@ const FloatingChatWidget = ({
         } catch (ragError) {
           // Fallback to mock response if RAG API fails
           console.error('RAG API error:', ragError);
-          const errorMessage = ragError?.data?.message || ragError?.message || 'Failed to connect to RAG service';
+          const errorMessage = ragError?.data?.message || ragError?.message || '';
+          
+          // Determine specific error message based on error type
+          let userFriendlyMessage = 'I encountered an error while processing your request. Please try again or contact support if the issue persists.';
+          
+          if (errorMessage.includes('tenant') || errorMessage.includes('Tenant')) {
+            userFriendlyMessage = 'There was an issue accessing your workspace data. Please contact support.';
+          } else if (errorMessage.includes('permission') || errorMessage.includes('Permission') || errorMessage.includes('RBAC')) {
+            userFriendlyMessage = 'I found information about that, but you don\'t have permission to access it. Please contact your administrator.';
+          } else if (errorMessage.includes('connect') || errorMessage.includes('Failed')) {
+            userFriendlyMessage = 'I encountered an error connecting to the service. Please try again in a moment.';
+          }
+          
           botMessages.push({
             id: `bot-${Date.now()}`,
-            text: `⚠️ Error: ${errorMessage}. Using fallback response.`,
+            text: userFriendlyMessage,
             isBot: true,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           });
-          // Also add fallback response
-          botMessages.push({
-            id: `bot-fallback-${Date.now()}`,
-            text: getModeSpecificResponse(text, responseMode),
-            isBot: true,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          });
+          
+          // Only add fallback response if it's not a permission error
+          if (!errorMessage.includes('permission') && !errorMessage.includes('Permission') && !errorMessage.includes('RBAC')) {
+            botMessages.push({
+              id: `bot-fallback-${Date.now()}`,
+              text: getModeSpecificResponse(text, responseMode),
+              isBot: true,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+          }
         }
       }
       

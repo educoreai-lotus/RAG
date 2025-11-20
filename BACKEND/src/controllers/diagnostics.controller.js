@@ -7,16 +7,31 @@ import { getPrismaClient } from '../config/database.config.js';
 import { logger } from '../utils/logger.util.js';
 import { Prisma } from '@prisma/client';
 import { getOrCreateTenant } from '../services/tenant.service.js';
+import { validateAndFixTenantId } from '../utils/tenant-validation.util.js';
 
 /**
  * GET /api/debug/embeddings-status
  * Check embeddings status in database
  */
 export async function getEmbeddingsStatus(req, res, next) {
+  // CRITICAL: Validate and fix tenant_id (declare outside try for error handling)
+  let tenantDomainOrId = req.query.tenant_id || 'default.local';
+  let tenant = null;
+  let tenantId = null;
+  
   try {
-    const tenantDomain = req.query.tenant_id || 'default.local';
-    const tenant = await getOrCreateTenant(tenantDomain);
-    const tenantId = tenant.id;
+    tenantDomainOrId = validateAndFixTenantId(tenantDomainOrId);
+    
+    tenant = await getOrCreateTenant(tenantDomainOrId);
+    tenantId = tenant.id;
+    
+    // Log tenant resolution for debugging
+    logger.info('🔍 Tenant resolved for embeddings status', {
+      requested: req.query.tenant_id,
+      validated: tenantDomainOrId,
+      final_tenant_id: tenantId,
+      tenant_domain: tenant.domain,
+    });
 
     const prisma = await getPrismaClient();
 
@@ -166,7 +181,7 @@ export async function getEmbeddingsStatus(req, res, next) {
       status: 'ok',
       timestamp: new Date().toISOString(),
       tenant: {
-        domain: String(tenantDomain || ''),
+        domain: String(tenant.domain || tenantDomainOrId || ''),
         id: String(tenantId || ''),
       },
       pgvector: {
@@ -310,7 +325,7 @@ export async function getEmbeddingsStatus(req, res, next) {
         },
         timestamp: new Date().toISOString(),
         tenant: {
-          domain: String(tenantDomain || ''),
+          domain: String(tenant?.domain || tenantDomainOrId || ''),
           id: String(tenantId || ''),
         },
       });
@@ -338,9 +353,13 @@ export async function getEmbeddingsStatus(req, res, next) {
  * The production endpoint (/api/v1/query) applies RBAC filtering.
  */
 export async function testVectorSearch(req, res, next) {
+  // CRITICAL: Validate and fix tenant_id (declare outside try for error handling)
+  const { query: testQuery, tenant_id, threshold = 0.3 } = req.query || {};
+  let tenantDomainOrId = tenant_id || 'default.local';
+  let tenant = null;
+  let tenantId = null;
+  
   try {
-    const { query: testQuery, tenant_id, threshold = 0.3 } = req.query;
-    
     if (!testQuery) {
       return res.status(400).json({
         error: 'Missing query parameter',
@@ -348,9 +367,19 @@ export async function testVectorSearch(req, res, next) {
       });
     }
 
-    const tenantDomain = tenant_id || 'default.local';
-    const tenant = await getOrCreateTenant(tenantDomain);
-    const tenantId = tenant.id;
+    // CRITICAL: Validate and fix tenant_id
+    tenantDomainOrId = validateAndFixTenantId(tenantDomainOrId);
+    
+    tenant = await getOrCreateTenant(tenantDomainOrId);
+    tenantId = tenant.id;
+    
+    // Log tenant resolution for debugging
+    logger.info('🔍 Tenant resolved for vector search test', {
+      requested: tenant_id,
+      validated: tenantDomainOrId,
+      final_tenant_id: tenantId,
+      tenant_domain: tenant.domain,
+    });
 
     // Import OpenAI config
     const { openai } = await import('../config/openai.config.js');
@@ -436,7 +465,7 @@ export async function testVectorSearch(req, res, next) {
       timestamp: new Date().toISOString(),
       test_query: String(testQuery || ''),
       tenant: {
-        domain: String(tenantDomain || ''),
+        domain: String(tenant.domain || tenantDomainOrId || ''),
         id: String(tenantId || ''),
       },
       embedding: {

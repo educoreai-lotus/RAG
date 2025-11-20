@@ -7,6 +7,7 @@ import { processQuery } from '../services/queryProcessing.service.js';
 import { assessmentSupport, devlabSupport } from './microserviceSupport.controller.js';
 import { validate, schemas } from '../utils/validation.util.js';
 import { logger } from '../utils/logger.util.js';
+import { validateAndFixTenantId, logTenantAtEntryPoint } from '../utils/tenant-validation.util.js';
 import Joi from 'joi';
 
 /**
@@ -98,6 +99,20 @@ export async function submitQuery(req, res, next) {
 
     const { query, tenant_id, context = {}, options = {} } = validation.value;
 
+    // CRITICAL: Validate and fix tenant_id at entry point
+    // This ensures we never use the wrong tenant ID
+    let validatedTenantId = tenant_id;
+    if (!validatedTenantId || validatedTenantId === 'default.local') {
+      // If tenant_id is 'default.local' or empty, resolve to correct tenant
+      validatedTenantId = validateAndFixTenantId(validatedTenantId || 'default.local');
+    } else {
+      // Validate and auto-correct any wrong tenant IDs
+      validatedTenantId = validateAndFixTenantId(validatedTenantId);
+    }
+    
+    // Log tenant information at entry point for debugging
+    logTenantAtEntryPoint(req, validatedTenantId);
+    
     // Extract user_id from token if not provided
     const user_id = context.user_id || req.user?.id || 'anonymous';
     const session_id = context.session_id || req.session?.id;
@@ -113,7 +128,7 @@ export async function submitQuery(req, res, next) {
     });
     const result = await processQuery({
       query,
-      tenant_id,
+      tenant_id: validatedTenantId, // Use validated tenant ID
       context: {
         ...context,
         user_id,

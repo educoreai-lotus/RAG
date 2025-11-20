@@ -14,6 +14,7 @@ import { isEducoreQuery } from '../utils/query-classifier.util.js';
 import { grpcFetchByCategory } from './grpcFallback.service.js';
 import { mergeResults, createContextBundle, handleFallbacks } from '../communication/routingEngine.service.js';
 import { generatePersonalizedRecommendations } from './recommendations.service.js';
+import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-validation.util.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -77,10 +78,47 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   let isCached = false;
 
   try {
-    // Get or create tenant (use domain as identifier)
+    // CRITICAL: Validate and fix tenant_id FIRST
+    // This ensures we never use the wrong tenant ID
+    let validatedTenantId = tenant_id;
+    if (!validatedTenantId || validatedTenantId === 'default.local') {
+      // If tenant_id is 'default.local' or empty, resolve to correct tenant
+      console.log('🔧 Resolving default.local to correct tenant_id');
+      validatedTenantId = getCorrectTenantId();
+    } else {
+      // Validate and auto-correct any wrong tenant IDs
+      validatedTenantId = validateAndFixTenantId(validatedTenantId);
+    }
+    
+    console.log('✅ Using tenant_id:', validatedTenantId);
+    
+    // Get or create tenant (use validated tenant ID or domain)
+    // If validatedTenantId is a UUID, getOrCreateTenant will handle it
+    // If it's a domain, it will map to the correct tenant
     const tenantDomain = tenant_id || 'default.local';
-    const tenant = await getOrCreateTenant(tenantDomain);
-    const actualTenantId = tenant.id;
+    let tenant = await getOrCreateTenant(validatedTenantId);
+    let actualTenantId = tenant.id;
+    
+    // DOUBLE-CHECK: Ensure we're using the correct tenant ID
+    if (actualTenantId === '2fbb2ecb-2b41-43c9-8010-3fe9d3df6bb1') {
+      logger.error('❌ CRITICAL: Wrong tenant ID detected after resolution!', {
+        wrong_tenant: actualTenantId,
+        correct_tenant: getCorrectTenantId(),
+        requested: tenant_id,
+        validated: validatedTenantId,
+      });
+      // Try to get correct tenant
+      const correctTenant = await getOrCreateTenant(getCorrectTenantId());
+      if (correctTenant && correctTenant.id !== actualTenantId) {
+        logger.warn('Found correct tenant, using that instead', {
+          wrong_tenant: actualTenantId,
+          correct_tenant: correctTenant.id,
+        });
+        // Use correct tenant
+        tenant = correctTenant;
+        actualTenantId = correctTenant.id;
+      }
+    }
     
     // Verify tenant has embeddings (for diagnostic purposes)
     let tenantEmbeddingCount = 0;
@@ -403,7 +441,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         threshold_used: min_confidence,
         query_for_embedding: queryForEmbedding.substring(0, 100),
         embedding_dimensions: queryEmbedding.length,
-        filtering_reason: filteringReason,
+        filtering_reason: filteringContext.reason,
       });
 
       // Enforce role-based permission on user profiles:

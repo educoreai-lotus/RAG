@@ -5,6 +5,7 @@
 import Joi from 'joi';
 import { getUserSkillProgress } from '../services/knowledgeGraph.service.js';
 import { validate } from '../utils/validation.util.js';
+import { validateAndFixTenantId } from '../utils/tenant-validation.util.js';
 
 const progressParamsSchema = Joi.object({
   userId: Joi.string().min(1).required(),
@@ -31,7 +32,10 @@ export async function getSkillProgress(req, res, next) {
     }
 
     const { userId, skillId } = paramsValidation.value;
-    const { tenant_id } = queryValidation.value;
+    let { tenant_id } = queryValidation.value;
+
+    // CRITICAL: Validate and fix tenant_id
+    tenant_id = validateAndFixTenantId(tenant_id || 'default.local');
 
     const { progress, weight } = await getUserSkillProgress(tenant_id, userId, skillId);
 

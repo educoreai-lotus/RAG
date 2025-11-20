@@ -6,6 +6,7 @@
 import { logger } from '../utils/logger.util.js';
 import { generatePersonalizedRecommendations } from '../services/recommendations.service.js';
 import { getOrCreateTenant } from '../services/tenant.service.js';
+import { validateAndFixTenantId } from '../utils/tenant-validation.util.js';
 
 /**
  * GET /api/v1/personalized/recommendations/:userId
@@ -27,9 +28,12 @@ export async function getRecommendations(req, res, next) {
       });
     }
 
+    // CRITICAL: Validate and fix tenant_id
+    let validatedTenantId = tenant_id || 'default.local';
+    validatedTenantId = validateAndFixTenantId(validatedTenantId);
+    
     // Get or create tenant
-    const tenantDomain = tenant_id || 'default.local';
-    const tenant = await getOrCreateTenant(tenantDomain);
+    const tenant = await getOrCreateTenant(validatedTenantId);
 
     logger.info('Recommendations request', {
       userId,
