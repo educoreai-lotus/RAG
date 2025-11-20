@@ -15,6 +15,7 @@ import { grpcFetchByCategory } from './grpcFallback.service.js';
 import { mergeResults, createContextBundle, handleFallbacks } from '../communication/routingEngine.service.js';
 import { generatePersonalizedRecommendations } from './recommendations.service.js';
 import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-validation.util.js';
+import { MESSAGES, validateMessages } from '../config/messages.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -55,10 +56,11 @@ function generateNoResultsMessage(userQuery, filteringContext) {
   if (safeQuery.toLowerCase().includes('eden') && safeQuery.toLowerCase().includes('levi')) {
     console.log('🚨 EDEN LEVI MESSAGE GENERATION DEBUG:', {
       reason: reason,
-      willUsePermissionMessage: reason === 'RBAC_BLOCKED_USER_PROFILES' || reason === 'NO_PERMISSION',
-      hasSpecificUserName: hasSpecificUserName,
-      userProfilesFound: userProfilesFound,
-      userProfilesRemoved: userProfilesRemoved
+      userRole: userRole,
+      isAuthenticated: isAuthenticated,
+      willUseRBACMessage: reason === 'RBAC_BLOCKED_USER_PROFILES' || reason === 'NO_PERMISSION',
+      messageType: (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') ? 'NO_AUTH' : 
+                   (userRole === 'employee' || userRole === 'user') ? 'NO_PERM_EMPLOYEE' : 'NO_PERM_OTHER'
     });
   }
   
@@ -66,12 +68,27 @@ function generateNoResultsMessage(userQuery, filteringContext) {
     case 'NO_PERMISSION':
     case 'RBAC_BLOCKED_USER_PROFILES':
       // 🔐 SECURITY: User asked about a specific user profile and it was blocked
+      // Use role-specific messages from configuration
+      
       if (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') {
-        return `I found information about "${safeQuery}", but you need to log in to access employee information. Please authenticate to continue.`;
-      } else if (userRole === 'admin') {
-        return `I found information about "${safeQuery}", but there may be a configuration issue with access permissions. Please check RBAC settings.`;
+        // User is not authenticated - needs to log in
+        return MESSAGES.rbac.noAuth(safeQuery);
+        
+      } else if (userRole === 'employee' || userRole === 'user') {
+        // Employee is authenticated but doesn't have permission
+        return MESSAGES.rbac.noPermissionEmployee(safeQuery, userRole);
+        
+      } else if (userRole === 'manager' || userRole === 'hr' || userRole === 'trainer') {
+        // Manager/HR/Trainer with some permissions but not for this query
+        return MESSAGES.rbac.noPermissionManager(safeQuery, userRole);
+        
+      } else if (userRole === 'admin' || userRole === 'administrator') {
+        // Admin should have access - this might be a configuration issue
+        return `I found information about "${safeQuery}", but there may be a configuration issue with access permissions. Please check RBAC settings for admin role.`;
+        
       } else {
-        return `I found information about "${safeQuery}", but you don't have permission to access it. Your current role: ${userRole}. Please contact your administrator if you need access to this information.`;
+        // Unknown role
+        return MESSAGES.rbac.noPermissionGeneral(safeQuery, userRole);
       }
     
     case 'RBAC_BLOCKED_ALL':
@@ -79,7 +96,7 @@ function generateNoResultsMessage(userQuery, filteringContext) {
       if (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') {
         return `The information you're looking for requires authentication. Please log in to continue.`;
       } else {
-        return `You don't have permission to access this information. Role: ${userRole}. Contact your administrator for access.`;
+        return MESSAGES.rbac.noPermissionGeneral(safeQuery, userRole);
       }
     
     case 'PARTIAL_RBAC_BLOCK':
@@ -89,7 +106,7 @@ function generateNoResultsMessage(userQuery, filteringContext) {
       return null; // Don't generate error message for partial blocks
     
     case 'LOW_SIMILARITY':
-      return `I found some content, but nothing closely matches "${safeQuery}". Please try rephrasing your question or add more relevant content.`;
+      return MESSAGES.lowSimilarity(safeQuery);
     
     case 'NO_DATA':
     default:
@@ -101,24 +118,16 @@ function generateNoResultsMessage(userQuery, filteringContext) {
           userProfilesRemoved,
           reason,
         });
-        // Fallback to permission message
+        // Fallback to permission message based on authentication status
         if (!isAuthenticated || userRole === 'anonymous') {
-          return `I found information about "${safeQuery}", but you need to log in to access employee information. Please authenticate to continue.`;
+          return MESSAGES.rbac.noAuth(safeQuery);
         } else {
-          return `I found information about "${safeQuery}", but you don't have permission to access it. Your current role: ${userRole}.`;
+          return MESSAGES.rbac.noPermissionEmployee(safeQuery, userRole);
         }
       }
       
-      // Truly no data in database
-      const templates = [
-        (q) => `I couldn't find information about "${q}" in the knowledge base.`,
-        (q) => `There is currently no EDUCORE content matching "${q}".`,
-        (q) => `I couldn't find any EDUCORE content about "${q}".`,
-        (q) => `No relevant EDUCORE items were found for "${q}".`,
-      ];
-      const pick = Math.floor(Math.random() * templates.length);
-      const base = templates[pick](safeQuery);
-      return `${base} Please add or import relevant documents to improve future answers.`;
+      // Truly no data in database - use random template from configuration
+      return MESSAGES.noData.getRandom(safeQuery);
   }
 }
 
@@ -586,6 +595,20 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       const userRoleFromProfile = userProfile?.role;
       const userRoleFromContext = context?.role;
       const userRole = userProfile?.role || context?.role || 'anonymous';
+      
+      // 👤 DEBUG: Role Detection Logging
+      console.log('👤 Role Detection:', {
+        from_profile: userRoleFromProfile,
+        from_context: userRoleFromContext,
+        final_role: userRole,
+        normalized: userRole?.toLowerCase(),
+        isAnonymous: !userRole || userRole === 'anonymous',
+        isEmployee: userRole === 'employee' || userRole === 'user',
+        isManager: userRole === 'manager',
+        isAdmin: userRole === 'admin' || userRole === 'administrator',
+        isHR: userRole === 'hr' || userRole === 'HR',
+        isTrainer: userRole === 'trainer' || userRole === 'TRAINER'
+      });
       
       // 🔐 SECURITY: Check authentication and authorization levels
       const isAuthenticated = user_id && user_id !== 'anonymous' && user_id !== 'guest';
