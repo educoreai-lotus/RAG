@@ -220,77 +220,58 @@ export async function getEmbeddingsStatus(req, res, next) {
       tenantEmbeddings: safeTenantCount,
     });
 
-    // DEBUG: Test JSON serialization of each field individually
-    console.log('🔍 Testing JSON serialization of each field:');
+    // Test JSON serialization
     const fieldErrors = [];
     
     for (const [key, value] of Object.entries(response)) {
       try {
         JSON.stringify(value);
-        console.log(`  ✅ ${key}: OK`);
       } catch (err) {
-        console.log(`  ❌ ${key}: FAILED - ${err.message}`);
-        console.log(`  Value type: ${typeof value}`);
-        console.log(`  Value preview:`, value instanceof Object ? Object.keys(value).slice(0, 5) : String(value).substring(0, 100));
         fieldErrors.push({ field: key, error: err.message, valueType: typeof value });
       }
     }
 
     // Test nested fields if top-level passes
     if (fieldErrors.length === 0) {
-      console.log('🔍 Testing nested fields:');
-      
       // Test tenant object
       try {
         JSON.stringify(response.tenant);
-        console.log('  ✅ tenant: OK');
       } catch (err) {
-        console.log(`  ❌ tenant: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'tenant', error: err.message });
       }
       
       // Test pgvector object
       try {
         JSON.stringify(response.pgvector);
-        console.log('  ✅ pgvector: OK');
       } catch (err) {
-        console.log(`  ❌ pgvector: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'pgvector', error: err.message });
       }
       
       // Test indexes object
       try {
         JSON.stringify(response.indexes);
-        console.log('  ✅ indexes: OK');
       } catch (err) {
-        console.log(`  ❌ indexes: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'indexes', error: err.message });
       }
       
       // Test embeddings object
       try {
         JSON.stringify(response.embeddings);
-        console.log('  ✅ embeddings: OK');
       } catch (err) {
-        console.log(`  ❌ embeddings: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'embeddings', error: err.message });
       }
       
       // Test tenants object
       try {
         JSON.stringify(response.tenants);
-        console.log('  ✅ tenants: OK');
       } catch (err) {
-        console.log(`  ❌ tenants: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'tenants', error: err.message });
       }
       
       // Test eden_levi_check object
       try {
         JSON.stringify(response.eden_levi_check);
-        console.log('  ✅ eden_levi_check: OK');
       } catch (err) {
-        console.log(`  ❌ eden_levi_check: FAILED - ${err.message}`);
         fieldErrors.push({ field: 'eden_levi_check', error: err.message });
       }
     }
@@ -299,11 +280,8 @@ export async function getEmbeddingsStatus(req, res, next) {
     try {
       // Test for circular references using JSON.parse(JSON.stringify())
       const testJson = JSON.parse(JSON.stringify(response));
-      console.log('✅ Full JSON serialization successful');
       res.json(response);
     } catch (jsonError) {
-      console.error('❌ Full JSON serialization failed:', jsonError.message);
-      console.error('Error stack:', jsonError.stack);
       
       logger.error('Diagnostics JSON serialization error', {
         error: jsonError.message,
@@ -508,8 +486,6 @@ export async function testVectorSearch(req, res, next) {
       const testJson = JSON.parse(JSON.stringify(response));
       res.json(response);
     } catch (jsonError) {
-      console.error('❌ Vector search test JSON serialization failed:', jsonError.message);
-      console.error('Error stack:', jsonError.stack);
       
       logger.error('Vector search test JSON serialization error', {
         error: jsonError.message,

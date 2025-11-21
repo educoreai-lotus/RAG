@@ -38,17 +38,6 @@ export async function unifiedVectorSearch(
   try {
     const prisma = await getPrismaClient();
 
-    // 🔍 Log search parameters
-    console.log('🔍 Unified Vector Search Called:', {
-      tenantId: tenantId,
-      tenantId_type: typeof tenantId,
-      tenantId_string: String(tenantId),
-      threshold: threshold,
-      limit: limit,
-      embedding_length: queryEmbedding?.length || 0,
-      embedding_preview: queryEmbedding?.slice(0, 5) || [],
-      options: options,
-    });
 
     // Build query using same approach as working vectorSearch.service.js
     // Convert embedding array to PostgreSQL vector format
@@ -110,17 +99,6 @@ export async function unifiedVectorSearch(
     // Execute query
     const results = await prisma.$queryRawUnsafe(query, ...params);
 
-    // 🔍 Log results
-    console.log('🔍 Unified Vector Search Results:', {
-      totalFound: results.length,
-      threshold_used: threshold,
-      limit_used: limit,
-      topSimilarities: results.slice(0, 5).map(r => ({
-        contentId: r.content_id,
-        contentType: r.content_type,
-        similarity: parseFloat(r.similarity),
-      })),
-    });
 
     // Map results to consistent format
     return results.map((row) => ({
@@ -142,12 +120,6 @@ export async function unifiedVectorSearch(
       stack: error.stack,
     });
     
-    console.error('❌ Unified Vector Search Error:', {
-      error: error.message,
-      tenantId: tenantId,
-      threshold: threshold,
-      limit: limit,
-    });
     
     throw new Error(`Unified vector search failed: ${error.message}`);
   }

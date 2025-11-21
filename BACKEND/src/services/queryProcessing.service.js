@@ -42,28 +42,7 @@ function generateNoResultsMessage(userQuery, filteringContext) {
   const hasSpecificUserName = filteringContext?.hasSpecificUserName || false;
   const matchedName = filteringContext?.matchedName || '';
   
-  console.log('📢 Generating No Results Message:', {
-    reason,
-    userRole,
-    isAuthenticated,
-    userProfilesFound,
-    userProfilesRemoved,
-    hasSpecificUserName,
-    matchedName,
-    query: safeQuery,
-  });
   
-  // 🐛 DEBUG: Additional debug for Eden Levi message generation
-  if (safeQuery.toLowerCase().includes('eden') && safeQuery.toLowerCase().includes('levi')) {
-    console.log('🚨 EDEN LEVI MESSAGE GENERATION DEBUG:', {
-      reason: reason,
-      userRole: userRole,
-      isAuthenticated: isAuthenticated,
-      willUseRBACMessage: reason === 'RBAC_BLOCKED_USER_PROFILES' || reason === 'NO_PERMISSION',
-      messageType: (!isAuthenticated || userRole === 'anonymous' || userRole === 'guest') ? 'NO_AUTH' : 
-                   (userRole === 'employee' || userRole === 'user') ? 'NO_PERM_EMPLOYEE' : 'NO_PERM_OTHER'
-    });
-  }
   
   switch(reason) {
     case 'NO_PERMISSION':
@@ -103,7 +82,6 @@ function generateNoResultsMessage(userQuery, filteringContext) {
     case 'PARTIAL_RBAC_BLOCK':
       // Some results were blocked but others remain - this shouldn't generate a message
       // The remaining results should be returned normally
-      console.log('⚠️ PARTIAL_RBAC_BLOCK: This should not generate an error message - remaining results should be shown');
       return null; // Don't generate error message for partial blocks
     
     case 'LOW_SIMILARITY':
@@ -114,11 +92,6 @@ function generateNoResultsMessage(userQuery, filteringContext) {
       // Truly no data in database - only use generic messages for actual no-data scenarios
       if (userProfilesFound > 0 && userProfilesRemoved > 0) {
         // Data exists but was filtered - this shouldn't happen with proper reason setting
-        console.warn('⚠️ WARNING: NO_DATA reason but user profiles were found and removed', {
-          userProfilesFound,
-          userProfilesRemoved,
-          reason,
-        });
         // Fallback to permission message based on authentication status
         if (!isAuthenticated || userRole === 'anonymous') {
           return MESSAGES.rbac.noAuth(safeQuery);
@@ -159,14 +132,12 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let validatedTenantId = tenant_id;
     if (!validatedTenantId || validatedTenantId === 'default.local') {
       // If tenant_id is 'default.local' or empty, resolve to correct tenant
-      console.log('🔧 Resolving default.local to correct tenant_id');
       validatedTenantId = getCorrectTenantId();
     } else {
       // Validate and auto-correct any wrong tenant IDs
       validatedTenantId = validateAndFixTenantId(validatedTenantId);
     }
     
-    console.log('✅ Using tenant_id:', validatedTenantId);
     
     // Get or create tenant (use validated tenant ID or domain)
     // If validatedTenantId is a UUID, getOrCreateTenant will handle it
@@ -337,13 +308,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let queryForEmbedding = query;
     let translatedQuery = null;
     
-    // 📝 Query Transformations - Detailed Logging
-    console.log('📝 Query Transformations - START:', {
-      original_query: query,
-      original_length: query.length,
-      has_hebrew: /[\u0590-\u05FF]/.test(query),
-      query_for_embedding_initial: queryForEmbedding,
-    });
     
     try {
       // Detect if query contains Hebrew characters
@@ -354,7 +318,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           original_query: query.substring(0, 100),
         });
         
-        console.log('🌐 Attempting translation...');
         
         // Translate to English using OpenAI
         const translationResponse = await openai.chat.completions.create({
@@ -373,24 +336,14 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         translatedQuery = translationResponse.choices[0]?.message?.content?.trim() || query;
         queryForEmbedding = translatedQuery;
         
-        console.log('🌐 Translation Result:', {
-          original: query,
-          translated: translatedQuery,
-          using_translated: true,
-        });
         
         logger.info('Query translated', {
           original: query.substring(0, 100),
           translated: translatedQuery.substring(0, 100),
         });
       } else {
-        console.log('🌐 No translation needed (no Hebrew detected)');
       }
     } catch (translationError) {
-      console.error('❌ Translation failed:', {
-        error: translationError.message,
-        using_original_query: true,
-      });
       
       logger.warn('Translation failed, using original query', {
         error: translationError.message,
@@ -398,29 +351,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // Continue with original query if translation fails
     }
     
-    // 📝 Query Transformations - FINAL
-    console.log('📝 Query Transformations - FINAL:', {
-      original_query: query,
-      translated_query: translatedQuery || 'none',
-      final_query_for_embedding: queryForEmbedding,
-      query_was_modified: queryForEmbedding !== query,
-      modification_type: translatedQuery ? 'translated' : 'unchanged',
-    });
     
-    // 🔍 Vector Search Parameters - Detailed Logging
-    console.log('🔍 Vector Search Parameters:', {
-      original_query: query.substring(0, 100),
-      query_for_embedding: queryForEmbedding.substring(0, 100),
-      translated_query: translatedQuery?.substring(0, 100) || 'none',
-      tenant_id: actualTenantId,
-      tenant_id_type: typeof actualTenantId,
-      tenant_id_as_string: String(actualTenantId),
-      is_valid_uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actualTenantId),
-      threshold: min_confidence,
-      limit: max_results,
-      query_was_translated: !!translatedQuery,
-      query_has_hebrew: /[\u0590-\u05FF]/.test(query),
-    });
 
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
@@ -428,16 +359,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     });
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
-    // 📊 Embedding Generated - Detailed Logging
-    console.log('📊 Embedding Generated:', {
-      dimensions: queryEmbedding.length,
-      preview: queryEmbedding.slice(0, 5),
-      query_used: queryForEmbedding.substring(0, 100),
-      model: 'text-embedding-ada-002',
-      embedding_sum: queryEmbedding.reduce((a, b) => a + b, 0),
-      embedding_min: Math.min(...queryEmbedding),
-      embedding_max: Math.max(...queryEmbedding),
-    });
 
     // Vector similarity search in PostgreSQL (pgvector)
     let sources = [];
@@ -468,12 +389,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         embedding_dimensions: queryEmbedding.length,
       });
       
-      console.log('🔍 Calling unifiedVectorSearch with:', {
-        embedding_length: queryEmbedding.length,
-        tenant_id: actualTenantId,
-        threshold: min_confidence,
-        limit: max_results,
-      });
       
       // Use unified vector search service
       similarVectors = await unifiedVectorSearch(queryEmbedding, actualTenantId, {
@@ -485,19 +400,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       filteringContext.vectorResultsFound = similarVectors.length;
       filteringContext.userProfilesFound = similarVectors.filter(v => v.contentType === 'user_profile').length;
       
-      // 🔍 Vector Search Raw Results - Detailed Logging
-      console.log('🔍 Vector Search Raw Results (from unifiedVectorSearch):', {
-        totalFound: similarVectors.length,
-        threshold_used: min_confidence,
-        topSimilarities: similarVectors.slice(0, 5).map(r => ({
-          contentId: r.contentId,
-          contentType: r.contentType,
-          similarity: r.similarity,
-          contentTextPreview: r.contentText?.substring(0, 50),
-        })),
-        allContentTypes: [...new Set(similarVectors.map(r => r.contentType))],
-        allContentIds: similarVectors.map(r => r.contentId),
-      });
       
       // Track vectors before any filtering
       filteringContext.afterThreshold = similarVectors.length;
@@ -531,14 +433,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // - Non-admins: Can ONLY access user profiles when querying about SPECIFIC users by name
       // - This maintains privacy while allowing specific user lookups
       
-      // 🔍 BEFORE RBAC Filtering - Detailed logging
-      console.log('🔍 BEFORE RBAC Filtering:', {
-        query: query.substring(0, 100),
-        totalResults: similarVectors.length,
-        userProfileCount: similarVectors.filter(r => r.contentType === 'user_profile').length,
-        resultTypes: [...new Set(similarVectors.map(r => r.contentType))],
-        contentIds: similarVectors.map(r => r.contentId).slice(0, 5),
-      });
       
       const queryLower = query.toLowerCase();
       const translatedLower = translatedQuery?.toLowerCase() || '';
@@ -557,17 +451,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         queryForCheck.includes(name)
       );
       
-      // 🐛 DEBUG: Log user name detection
-      console.log('🔍 User Name Detection Debug:', {
-        query: query,
-        queryLower: queryLower,
-        hasSpecificUserName: hasSpecificUserName,
-        matchedPatterns: specificUserNamePatterns.filter(name => 
-          queryLower.includes(name) || 
-          translatedLower.includes(name) ||
-          queryForCheck.includes(name)
-        )
-      });
       
       // Find which name matched
       const matchedName = specificUserNamePatterns.find(name => 
@@ -598,19 +481,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       const userRoleFromContext = context?.role;
       const userRole = userProfile?.role || context?.role || 'anonymous';
       
-      // 👤 DEBUG: Role Detection Logging
-      console.log('👤 Role Detection:', {
-        from_profile: userRoleFromProfile,
-        from_context: userRoleFromContext,
-        final_role: userRole,
-        normalized: userRole?.toLowerCase(),
-        isAnonymous: !userRole || userRole === 'anonymous',
-        isEmployee: userRole === 'employee' || userRole === 'user',
-        isManager: userRole === 'manager',
-        isAdmin: userRole === 'admin' || userRole === 'administrator',
-        isHR: userRole === 'hr' || userRole === 'HR',
-        isTrainer: userRole === 'trainer' || userRole === 'TRAINER'
-      });
       
       // 🔐 SECURITY: Check authentication and authorization levels
       const isAuthenticated = user_id && user_id !== 'anonymous' && user_id !== 'guest';
@@ -649,26 +519,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         return mentionsOwnName || isMyQuery;
       })();
       
-      console.log('👤 User Context:', {
-        user_id: user_id,
-        userRoleFromProfile: userRoleFromProfile,
-        userRoleFromContext: userRoleFromContext,
-        finalRole: userRole,
-        isAuthenticated: isAuthenticated,
-        isAdmin: isAdmin,
-        isHR: isHR,
-        isTrainer: isTrainer,
-        isManager: isManager,
-        isEmployee: isEmployee,
-        query: query.substring(0, 100),
-        queryLower: queryLower.substring(0, 100),
-        translatedLower: translatedLower.substring(0, 100),
-        queryForCheck: queryForCheck.substring(0, 100),
-        hasSpecificUserName: hasSpecificUserName,
-        matchedName: matchedName,
-        hasUserQueryPattern: hasUserQueryPattern,
-        isQueryAboutOwnProfile: isQueryAboutOwnProfile,
-      });
       
       /**
        * 🔐 SECURE RBAC LOGIC for User Profile Access:
@@ -705,46 +555,28 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       if (isAdmin) {
         // Admins can see all user profiles
         allowUserProfiles = true;
-        console.log('✅ Admin user - allowing all user_profile results');
         
       } else if (isHR) {
         // HR can see all user profiles (required for employee management)
         allowUserProfiles = true;
-        console.log('✅ HR user - allowing all user_profile results');
         
       } else if (isTrainer && hasSpecificUserName) {
         // Trainers can see specific user profiles when explicitly asked (trainees/students)
         allowUserProfiles = true;
-        console.log(`✅ Trainer asking about specific user (${matchedName}) - allowing user_profile results`);
         
       } else if (isManager && hasSpecificUserName) {
         // Managers can see specific user profiles when explicitly asked
         allowUserProfiles = true;
-        console.log(`✅ Manager asking about specific user (${matchedName}) - allowing user_profile results`);
         
       } else if (isEmployee && isQueryAboutOwnProfile) {
         // Employees can only see their OWN profile
         allowUserProfiles = true;
-        console.log('✅ Employee viewing own profile - allowing user_profile results');
         
       } else {
         // Everyone else (anonymous, guest, unauthorized) - NO ACCESS
         allowUserProfiles = false;
-        console.log('❌ Insufficient permissions - blocking user_profile results');
       }
       
-      console.log('🔐 RBAC Decision:', {
-        userRole: userRole,
-        isAuthenticated: isAuthenticated,
-        isAdmin: isAdmin,
-        isHR: isHR,
-        isTrainer: isTrainer,
-        isManager: isManager,
-        isEmployee: isEmployee,
-        hasSpecificUserName: hasSpecificUserName,
-        isQueryAboutOwnProfile: isQueryAboutOwnProfile,
-        allowUserProfiles: allowUserProfiles,
-      });
       
       const userProfilesFound = similarVectors.filter(v => v.contentType === 'user_profile');
       
@@ -752,12 +584,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       if (!allowUserProfiles && userProfilesFound.length > 0) {
         console.warn('🚨 SECURITY: Unauthorized access attempt blocked:', {
           userRole: userRole,
-          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
-          query: query.substring(0, 100),
           attemptedAccess: 'user_profile',
           userProfilesFound: userProfilesFound.length,
-          matchedName: matchedName,
           action: 'BLOCKED',
           reason: !isAuthenticated 
             ? 'User not authenticated' 
@@ -768,9 +597,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         
         logger.warn('🚨 SECURITY: Unauthorized user profile access blocked', {
           userRole: userRole,
-          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
-          query: query.substring(0, 100),
           attemptedAccess: 'user_profile',
           userProfilesFound: userProfilesFound.length,
           action: 'BLOCKED',
@@ -785,15 +612,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       filteringContext.afterRBAC = filteredVectors.length;
       filteringContext.userProfilesRemoved = userProfilesFound.length - filteredVectors.filter(v => v.contentType === 'user_profile').length;
       
-      // 🔍 AFTER RBAC Filtering - Detailed logging
-      console.log('🔍 AFTER RBAC Filtering:', {
-        originalCount: similarVectors.length,
-        filteredCount: filteredVectors.length,
-        removedCount: similarVectors.length - filteredVectors.length,
-        allowUserProfiles: allowUserProfiles,
-        userProfilesFound: userProfilesFound.length,
-        userProfilesRemoved: filteringContext.userProfilesRemoved,
-      });
       
       // 🎯 Update filtering reason based on context - FIXED LOGIC
       // Store context variables for reason determination
@@ -812,13 +630,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         }
         console.warn('🚨 RBAC Security: All results blocked', {
           userRole: userRole,
-          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
-          query: query.substring(0, 100),
           userProfilesFound: filteringContext.userProfilesFound,
           userProfilesRemoved: filteringContext.userProfilesRemoved,
           hasSpecificUserName: hasSpecificUserName,
-          matchedName: matchedName,
           action: 'BLOCKED_ALL_RESULTS'
         });
       } else if (filteringContext.userProfilesRemoved > 0 && hasSpecificUserName) {
@@ -827,7 +642,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         filteringContext.reason = 'RBAC_BLOCKED_USER_PROFILES';
         console.warn('🚨 RBAC Security: User asked specifically about user profile - blocked', {
           userRole: userRole,
-          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
           query: query.substring(0, 100),
           hasSpecificUserName: hasSpecificUserName,
@@ -842,7 +656,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         filteringContext.reason = 'PARTIAL_RBAC_BLOCK';
         console.warn('🚨 RBAC Security: Some user profiles blocked (partial)', {
           userRole: userRole,
-          userId: user_id || 'anonymous',
           isAuthenticated: isAuthenticated,
           query: query.substring(0, 100),
           userProfilesFound: filteringContext.userProfilesFound,
@@ -858,30 +671,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         filteringContext.reason = 'NO_DATA';
       }
       
-      console.log('🎯 Filtering Reason Determined:', {
-        reason: filteringContext.reason,
-        hasSpecificUserName: hasSpecificUserName,
-        matchedName: matchedName,
-        userProfilesRemoved: filteringContext.userProfilesRemoved,
-        afterRBAC: filteredVectors.length,
-        vectorResultsFound: filteringContext.vectorResultsFound,
-        userProfilesFound: filteringContext.userProfilesFound,
-      });
       
-      // Log filtering context
-      console.log('🎯 Filtering Context:', filteringContext);
       
-      // 🐛 DEBUG: Additional debug for Eden Levi query
-      if (query.toLowerCase().includes('eden') && query.toLowerCase().includes('levi')) {
-        console.log('🚨 EDEN LEVI QUERY DEBUG:', {
-          query: query,
-          reason: filteringContext.reason,
-          hasSpecificUserName: hasSpecificUserName,
-          userProfilesFound: filteringContext.userProfilesFound,
-          userProfilesRemoved: filteringContext.userProfilesRemoved,
-          willTriggerEarlyReturn: filteringContext.reason === 'RBAC_BLOCKED_USER_PROFILES'
-        });
-      }
       
       logger.info('Vector filtering applied (RBAC)', {
         tenant_id: actualTenantId,
@@ -1044,20 +835,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             
             const allowUserProfiles = allowUserProfilesLow;
             
-            console.log('🔍 Low Threshold RBAC Decision:', {
-              hasSpecificUserName: hasSpecificUserNameLow,
-              matchedName: matchedNameLow,
-              userRole: userRoleLow,
-              isAdmin: isAdminLow,
-              isHR: isHRLow,
-              isTrainer: isTrainerLow,
-              isManager: isManagerLow,
-              isEmployee: isEmployeeLow,
-              isQueryAboutOwnProfile: isQueryAboutOwnProfileLow,
-              allowUserProfiles: allowUserProfiles,
-              lowThresholdVectorsCount: lowThresholdVectors.length,
-              userProfilesInResults: lowThresholdVectors.filter(v => v.contentType === 'user_profile').length,
-            });
             
             const filteredLowThreshold = allowUserProfiles
               ? lowThresholdVectors
@@ -1068,7 +845,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             if (!allowUserProfiles && userProfilesInLowThreshold.length > 0) {
               console.warn('🚨 SECURITY: Unauthorized access attempt blocked (low threshold):', {
                 userRole: userRoleLow,
-                userId: user_id || 'anonymous',
                 isAuthenticated: isAuthenticatedLow,
                 query: query.substring(0, 100),
                 attemptedAccess: 'user_profile',
@@ -1281,13 +1057,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         context: filteringContext 
       });
       
-      console.log('📢 Returning Permission Denied Message for User Profile Query:', {
-        reason: filteringContext.reason,
-        hasSpecificUserName: filteringContext.hasSpecificUserName,
-        matchedName: filteringContext.matchedName,
-        userProfilesRemoved: filteringContext.userProfilesRemoved,
-        message: answer
-      });
       
       const cleanAnswer = String(answer || '')
         .replace(/\n/g, ' ')
@@ -1341,18 +1110,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     if (sources.length === 0) {
       const processingTimeMs = Date.now() - startTime;
       
-      // 🔍 DEBUG: Log filtering context before generating message
-      console.log('🔍 DEBUG: No sources found, generating error message:', {
-        query: query.substring(0, 100),
-        filteringContext: {
-          reason: filteringContext.reason,
-          vectorResultsFound: filteringContext.vectorResultsFound,
-          userProfilesFound: filteringContext.userProfilesFound,
-          userProfilesRemoved: filteringContext.userProfilesRemoved,
-          userRole: filteringContext.userRole,
-          isAuthenticated: filteringContext.isAuthenticated,
-        }
-      });
       
       const rawAnswer = generateNoResultsMessage(query, filteringContext);
       const answer = formatErrorMessage(rawAnswer, { 

@@ -97,10 +97,8 @@ function validateMessages() {
     MESSAGES.error.generic();
     MESSAGES.error.tenant();
     
-    console.log('✅ Message configuration validated successfully');
     return true;
   } catch (error) {
-    console.error('❌ Message configuration validation failed:', error);
     return false;
   }
 }
