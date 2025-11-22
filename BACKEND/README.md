@@ -103,6 +103,42 @@ To seed database:
 npm run db:seed
 ```
 
+## Coordinator Integration
+
+The RAG service integrates with the Coordinator service via gRPC for intelligent routing to microservices.
+
+### Quick Start
+
+```javascript
+import { routeRequest } from './clients/coordinator.client.js';
+import { parseRouteResponse } from './services/coordinatorResponseParser.service.js';
+
+const response = await routeRequest({
+  tenant_id: 'org-123',
+  user_id: 'user-456',
+  query_text: 'Show me my recent payments'
+});
+
+const parsed = parseRouteResponse(response);
+```
+
+### Documentation
+
+- **[Quick Reference](./COORDINATOR_QUICK_REFERENCE.md)** - Quick reference guide
+- **[Integration Guide](./COORDINATOR_INTEGRATION_GUIDE.md)** - Complete integration guide
+- **[Testing Guide](./COORDINATOR_TESTING_GUIDE.md)** - Testing instructions with grpcurl
+- **[Usage Examples](./examples/coordinator-usage-example.js)** - Complete code examples
+
+### Testing
+
+```bash
+# Run integration tests
+node scripts/test-coordinator-integration.js
+
+# Test specific scenario
+node scripts/test-coordinator-integration.js --scenario=basic
+```
+
 ## Environment Variables (partial)
 
 - `DATABASE_URL` - PostgreSQL/Supabase connection string (required)
@@ -112,6 +148,10 @@ npm run db:seed
 - `REDIS_ENABLED` - Set to `false` to disable Redis
 - `LOG_LEVEL` - Logging level (`info` by default)
 - `GRPC_ENABLED` - Set to `true` to enable gRPC fallback client stubs
+- `COORDINATOR_ENABLED` - Enable Coordinator integration (default: `true`)
+- `COORDINATOR_URL` - Coordinator hostname (default: `coordinator` or `localhost`)
+- `COORDINATOR_GRPC_PORT` - gRPC port (default: `50051`)
+- `GRPC_TIMEOUT` - Request timeout in seconds (default: `30`)
 
 
 
