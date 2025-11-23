@@ -477,9 +477,11 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       );
       
       // 🔑 Check user role source
+      // Priority: context.role (from header/body) > userProfile.role (from DB) > anonymous
+      // This allows overriding DB role with explicit header/context role
       const userRoleFromProfile = userProfile?.role;
       const userRoleFromContext = context?.role;
-      const userRole = userProfile?.role || context?.role || 'anonymous';
+      const userRole = context?.role || userProfile?.role || 'anonymous';
       
       
       // 🔐 SECURITY: Check authentication and authorization levels
