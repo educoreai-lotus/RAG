@@ -278,3 +278,5 @@ https://rag-microservice-production.up.railway.app/api/debug/embeddings-status?t
 
 **אין צורך בטרמינל! הכל דרך הדפדפן או Postman! 🚀**
 
+
+

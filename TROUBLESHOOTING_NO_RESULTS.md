@@ -180,3 +180,5 @@ INSERT INTO vector_embeddings (
 
 **הבעיה הכי נפוצה: tenant_id לא תואם!**
 
+
+

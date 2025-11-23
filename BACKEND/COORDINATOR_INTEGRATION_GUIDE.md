@@ -361,3 +361,4 @@ if (!available) {
 2. Check [Usage Examples](./examples/coordinator-usage-example.js) for complete examples
 3. Review error handling in `coordinator.client.js` for specific error codes
 
+

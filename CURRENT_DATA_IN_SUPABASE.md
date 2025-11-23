@@ -119,3 +119,5 @@ ORDER BY content_type;
 
 **סיכום: יש 9 רשומות, אבל אין מידע על skills, modules, או trainers!**
 
+
+

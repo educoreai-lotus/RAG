@@ -91,3 +91,5 @@ AI_LEARNER_ENABLED=true
 
 אם יש בעיה, שלח את ה-Logs ואני אעזור לפתור!
 
+
+

@@ -123,10 +123,10 @@ async function runMigrations() {
         log.info('💡 If not enabled, run: CREATE EXTENSION IF NOT EXISTS vector;');
         
         // Use migrate deploy - more reliable for vector types
-        log.info('Deploying migrations...');
+        log.info('Checking for pending migrations...');
         log.info(`DATABASE_URL: ${process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET'}`);
         log.info('Using migrate deploy (more reliable for pgvector)');
-        log.info('⏳ This may take 2-5 minutes. Please wait...');
+        log.info('💡 Note: If you see "No pending migrations", your database is already up to date (this is normal)');
         
         // Set PRISMA_CLI_QUERY_ENGINE_TYPE to avoid prepared statement issues
         const env = {
@@ -135,6 +135,8 @@ async function runMigrations() {
         };
         
         try {
+          // Run migrate deploy and capture output
+          // Note: Prisma migrate deploy returns success even when no migrations are pending
           execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
             stdio: 'inherit',
             env: env,
@@ -143,7 +145,10 @@ async function runMigrations() {
             timeout: 600000, // 10 minute timeout for migrations
             maxBuffer: 10 * 1024 * 1024, // 10MB buffer for output
           });
-          log.info('✅ Migrations deployed successfully');
+          
+          // If we get here, migrations either applied successfully or were already up to date
+          log.info('✅ Migration check completed');
+          log.info('💡 If you saw "No pending migrations", that means your database is already up to date');
           return;
         } catch (migrateError) {
           log.error('Migration deploy failed:', migrateError.message);

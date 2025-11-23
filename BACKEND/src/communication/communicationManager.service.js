@@ -8,6 +8,11 @@
 
 import { logger } from '../utils/logger.util.js';
 import { routeRequest } from '../clients/coordinator.client.js';
+import { 
+  parseRouteResponse, 
+  extractBusinessData, 
+  getRoutingSummary 
+} from '../services/coordinatorResponseParser.service.js';
 
 /**
  * Decision thresholds
@@ -197,6 +202,7 @@ export async function callCoordinatorRoute({ tenant_id, user_id, query_text, met
 /**
  * Process Coordinator response
  * Transforms Coordinator response into format usable by RAG
+ * Uses comprehensive parser for all scenarios
  * 
  * @param {Object} coordinatorResponse - Response from Coordinator.Route()
  * @returns {Object} Processed response with normalized data
@@ -207,46 +213,55 @@ export function processCoordinatorResponse(coordinatorResponse) {
   }
 
   try {
-    const processed = {
-      target_services: coordinatorResponse.target_services || [],
-      normalized_fields: coordinatorResponse.normalized_fields || {},
-      envelope_json: coordinatorResponse.envelope_json || null,
-      routing_metadata: coordinatorResponse.routing_metadata || null,
-    };
-
-    // Parse envelope_json if it's a string
-    if (processed.envelope_json && typeof processed.envelope_json === 'string') {
-      try {
-        processed.envelope = JSON.parse(processed.envelope_json);
-      } catch (parseError) {
-        logger.warn('Failed to parse envelope_json', {
-          error: parseError.message,
-        });
-        processed.envelope = null;
-      }
+    // Use comprehensive parser
+    const parsed = parseRouteResponse(coordinatorResponse);
+    if (!parsed) {
+      logger.warn('Failed to parse Coordinator response');
+      return null;
     }
 
-    // Parse routing_metadata if it's a string
-    if (processed.routing_metadata && typeof processed.routing_metadata === 'string') {
-      try {
-        processed.metadata = JSON.parse(processed.routing_metadata);
-      } catch (parseError) {
-        logger.warn('Failed to parse routing_metadata', {
-          error: parseError.message,
-        });
-        processed.metadata = null;
-      }
-    }
-
-    logger.debug('Processed Coordinator response', {
-      target_services_count: processed.target_services.length,
-      normalized_fields_count: Object.keys(processed.normalized_fields).length,
+    // Extract business data
+    const businessData = extractBusinessData(parsed);
+    
+    // Get routing summary for logging
+    const routingSummary = getRoutingSummary(parsed);
+    
+    // Log routing summary
+    logger.info('Coordinator response processed', {
+      ...routingSummary,
+      has_business_data: !!businessData.data,
+      sources_count: businessData.sources.length,
     });
 
-    return processed;
+    // Return enhanced processed response
+    return {
+      // Original parsed fields
+      target_services: parsed.target_services,
+      normalized_fields: parsed.normalized_fields,
+      envelope: parsed.envelope,
+      routing: parsed.routing,
+      
+      // Status information
+      status: parsed.status,
+      success: parsed.success,
+      successful_service: parsed.successful_service,
+      rank_used: parsed.rank_used,
+      total_attempts: parsed.total_attempts,
+      stopped_reason: parsed.stopped_reason,
+      quality_score: parsed.quality_score,
+      
+      // Business data
+      business_data: businessData.data,
+      sources: businessData.sources,
+      metadata: businessData.metadata,
+      
+      // Routing summary
+      routing_summary: routingSummary,
+    };
   } catch (error) {
     logger.error('Error processing Coordinator response', {
       error: error.message,
+      stack: error.stack,
     });
     return null;
   }

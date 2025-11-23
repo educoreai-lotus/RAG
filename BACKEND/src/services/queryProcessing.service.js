@@ -354,8 +354,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     
 
     const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: 'text-embedding-3-small',
       input: queryForEmbedding, // Use translated query for embedding
+      dimensions: 1536, // Maintain compatibility with existing vector(1536) schema
     });
     const queryEmbedding = embeddingResponse.data[0].embedding;
 

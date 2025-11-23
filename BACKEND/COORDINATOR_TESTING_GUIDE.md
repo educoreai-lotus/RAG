@@ -488,3 +488,4 @@ node scripts/test-coordinator-health.js
 4. Set up monitoring and health checks
 5. Review logs for any errors or warnings
 
+

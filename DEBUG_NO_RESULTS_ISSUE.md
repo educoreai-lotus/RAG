@@ -151,3 +151,5 @@ GET https://YOUR-RAILWAY-APP.railway.app/api/debug/test-vector-search?query=What
 
 **הערה:** ה-logs החדשים (filtering_reason וכו') יופיעו רק אם יש תוצאות מה-vector search. אם אין תוצאות בכלל, ה-logs יראו רק "No vector search results found".
 
+
+

@@ -281,3 +281,5 @@ If vector search returns no results:
 - Tenant information is included in all log messages
 - The system provides clear recommendations when issues occur
 
+
+

@@ -149,3 +149,5 @@ GET /api/v1/recommendations?user_id=user123&tenant_id=tenant123&limit=5
 3. **Error Handling** - כל שגיאה ב-AI LEARNER לא תשבור את המערכת
 4. **Anonymous Users** - לא קוראים ל-AI LEARNER (זה תקין)
 
+
+

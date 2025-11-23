@@ -253,3 +253,4 @@ When updating Coordinator integration:
 3. Ensure coverage stays ≥80%
 4. Run tests before committing
 
+

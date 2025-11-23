@@ -18,5 +18,9 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   testTimeout: 10000,
   maxWorkers: '50%',
+  transform: {},
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };
 

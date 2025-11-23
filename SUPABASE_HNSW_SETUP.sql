@@ -70,3 +70,5 @@ WHERE tablename = 'vector_embeddings'
 --
 -- ============================================
 
+
+
