@@ -67,9 +67,40 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root endpoint - API information
+app.get('/', (req, res) => {
+  res.json({
+    service: 'RAG Microservice',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      query: '/api/v1/query',
+      assessmentSupport: '/api/assessment/support',
+      devlabSupport: '/api/devlab/support',
+      recommendations: '/api/v1/personalized/recommendations/:userId',
+      skillProgress: '/api/v1/knowledge/progress/user/:userId/skill/:skillId',
+      diagnostics: '/api/debug/embeddings-status',
+      embedWidget: '/embed/bot.js',
+      embedBundle: '/embed/bot-bundle.js',
+    },
+    documentation: 'https://github.com/your-repo/RAG_microservice',
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'rag-microservice' });
+});
+
+// Handle common browser requests to prevent 404 spam
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No content
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send('User-agent: *\nDisallow: /');
 });
 
 // Serve embed files (bot.js and bot-bundle.js) for widget integration
@@ -117,6 +148,7 @@ app.use(errorHandler);
 // Start server
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
+  logger.info(`Root endpoint: http://localhost:${PORT}/`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
   logger.info(`Query endpoint: http://localhost:${PORT}/api/v1/query`);
   logger.info(`Assessment support: http://localhost:${PORT}/api/assessment/support`);

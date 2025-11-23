@@ -40,19 +40,26 @@ export function errorHandler(err, req, res, next) {
  * @param {Function} next - Express next function
  */
 export function notFoundHandler(req, res, next) {
-  // Log 404 errors for debugging
-  logger.warn('404 Not Found', {
-    method: req.method,
-    path: req.path,
-    url: req.url,
-    query: req.query,
-  });
+  // Ignore common browser requests that cause 404 spam
+  const ignoredPaths = ['/favicon.ico', '/robots.txt', '/apple-touch-icon.png', '/favicon-32x32.png', '/favicon-16x16.png'];
+  
+  // Only log 404 for non-ignored paths or in debug mode
+  if (!ignoredPaths.includes(req.path)) {
+    logger.warn('404 Not Found', {
+      method: req.method,
+      path: req.path,
+      url: req.url,
+      query: req.query,
+      userAgent: req.get('user-agent'),
+    });
+  }
   
   res.status(404).json({
     error: {
       message: 'Not Found',
       statusCode: 404,
       path: req.path,
+      hint: 'Check /health for service status or /api/v1/query for API endpoint',
     },
   });
 }
