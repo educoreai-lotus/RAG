@@ -678,7 +678,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       logger.info('Vector filtering applied (RBAC)', {
         tenant_id: actualTenantId,
         tenant_domain: tenantDomain,
-        user_role: userRole,
+        user_role: filteringContext.userRole || 'anonymous',
         is_admin: isAdmin,
         has_specific_user_name: hasSpecificUserName,
         matched_name: matchedName,
@@ -1190,7 +1190,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         filtering_reason: filteringContext.reason,
         vectors_before_rbac: filteringContext.vectorResultsFound,
         vectors_after_rbac: filteringContext.afterRBAC,
-        user_role: userRole,
+        user_role: filteringContext.userRole || 'anonymous',
         reason_code: reasonCode,
       });
 
