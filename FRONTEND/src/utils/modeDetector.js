@@ -5,7 +5,7 @@
 import { MODES } from '../store/slices/chatMode.slice.js';
 
 // Assessment Support Mode keywords
-const ASSESSMENT_KEYWORDS = [
+const _ASSESSMENT_KEYWORDS = [
   'assessment',
   'test',
   'exam',
@@ -18,7 +18,7 @@ const ASSESSMENT_KEYWORDS = [
 ];
 
 // DevLab Support Mode keywords
-const DEVLAB_KEYWORDS = [
+const _DEVLAB_KEYWORDS = [
   'devlab',
   'auto grader',
   'code execution',

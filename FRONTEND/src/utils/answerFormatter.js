@@ -68,7 +68,7 @@ function formatTextSegment(text) {
   // Split by double newlines for paragraphs
   const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
   
-  paragraphs.forEach((paragraph, index) => {
+  paragraphs.forEach((paragraph, _index) => {
     const trimmedPara = paragraph.trim();
     if (!trimmedPara) return;
 
