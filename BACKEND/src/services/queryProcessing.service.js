@@ -197,14 +197,41 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     });
 
     // Get or create user profile
+    // Pass context.role if provided to set correct role in profile
     let userProfile = null;
     if (user_id && user_id !== 'anonymous') {
       try {
-        userProfile = await getOrCreateUserProfile(actualTenantId, user_id);
+        const defaultRole = context?.role || undefined; // Use context.role if provided
+        userProfile = await getOrCreateUserProfile(actualTenantId, user_id, {
+          role: defaultRole
+        });
+        // Override profile role with context.role if provided (for this request only)
+        if (context?.role) {
+          userProfile = { ...userProfile, role: context.role };
+          // Update filteringContext with correct role
+          filteringContext.userRole = context.role;
+          logger.info('Using context.role for RBAC check', {
+            userId: user_id,
+            contextRole: context.role,
+            profileRole: userProfile.role
+          });
+        } else {
+          // Update filteringContext with profile role
+          filteringContext.userRole = userProfile?.role || 'anonymous';
+        }
       } catch (profileError) {
         logger.warn('Failed to get user profile, continuing without personalization', {
           error: profileError.message,
         });
+        // Use context.role if profile failed
+        if (context?.role) {
+          filteringContext.userRole = context.role;
+        }
+      }
+    } else {
+      // No user_id, use context.role if provided
+      if (context?.role) {
+        filteringContext.userRole = context.role;
       }
     }
 
@@ -376,7 +403,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let userLearningContext = null; // Initialize user learning context outside try block
     
     // 🎯 Filtering Context Tracking
-    const userRoleForContext = userProfile?.role || context?.role || 'anonymous';
+    // Use context.role as priority, then userProfile.role, then anonymous
+    // This will be updated after userProfile is loaded
     let filteringContext = {
       vectorResultsFound: 0,
       afterThreshold: 0,
@@ -385,7 +413,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       userProfilesRemoved: 0,
       reason: null, // 'NO_DATA', 'LOW_SIMILARITY', 'NO_PERMISSION', 'RBAC_BLOCKED_USER_PROFILES', 'RBAC_BLOCKED_ALL', 'SUCCESS'
       threshold: min_confidence,
-      userRole: userRoleForContext,
+      userRole: context?.role || userProfile?.role || 'anonymous', // Will be updated after userProfile is loaded
       isAuthenticated: user_id && user_id !== 'anonymous' && user_id !== 'guest',
     };
 
