@@ -15,6 +15,7 @@ import microserviceSupportRoutes from './routes/microserviceSupport.routes.js';
 import recommendationsRoutes from './routes/recommendations.routes.js';
 import knowledgeGraphRoutes from './routes/knowledgeGraph.routes.js';
 import diagnosticsRoutes from './routes/diagnostics.routes.js';
+import contentRoutes from './routes/content.routes.js';
 
 // Get directory paths for serving static files
 const __filename = fileURLToPath(import.meta.url);
@@ -140,6 +141,7 @@ app.use('/api/v1', recommendationsRoutes);
 app.use('/api/v1', knowledgeGraphRoutes);
 app.use('/api', microserviceSupportRoutes);
 app.use('/api/debug', diagnosticsRoutes);
+app.use('/api/debug', contentRoutes);
 
 // Error handling
 app.use(notFoundHandler);
