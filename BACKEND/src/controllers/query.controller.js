@@ -19,6 +19,7 @@ const queryRequestSchema = Joi.object({
   context: Joi.object({
     user_id: schemas.userId,
     session_id: schemas.sessionId,
+    role: Joi.string().valid('admin', 'administrator', 'hr', 'manager', 'trainer', 'employee', 'user', 'learner', 'anonymous', 'guest').optional(),
     tags: Joi.array().items(Joi.string()).optional(),
   }).optional(),
   options: Joi.object({
