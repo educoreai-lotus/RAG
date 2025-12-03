@@ -17,6 +17,13 @@ import { generatePersonalizedRecommendations } from './recommendations.service.j
 import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-validation.util.js';
 import { MESSAGES, validateMessages } from '../config/messages.js';
 import { formatBotResponse, formatErrorMessage, formatRecommendations } from '../utils/responseFormatter.util.js';
+import {
+  findRelatedNodes,
+  boostResultsByKG,
+  getUserLearningContext,
+  expandResultsWithKG
+} from './knowledgeGraph.service.js';
+import { KG_CONFIG } from '../config/knowledgeGraph.config.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -365,6 +372,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     let retrievedContext = '';
     let confidence = min_confidence;
     let similarVectors = []; // Initialize outside try block to avoid "not defined" error
+    let kgRelations = []; // Initialize KG relations outside try block
+    let userLearningContext = null; // Initialize user learning context outside try block
     
     // 🎯 Filtering Context Tracking
     const userRoleForContext = userProfile?.role || context?.role || 'anonymous';
@@ -391,10 +400,23 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       
       
       // Use unified vector search service
-      similarVectors = await unifiedVectorSearch(queryEmbedding, actualTenantId, {
-        limit: max_results,
-        threshold: min_confidence,
-      });
+      // Run vector search and user context in parallel for better performance
+      const [vectorSearchResults, userLearningContext] = await Promise.all([
+        unifiedVectorSearch(queryEmbedding, actualTenantId, {
+          limit: max_results,
+          threshold: min_confidence,
+        }),
+        user_id && user_id !== 'anonymous' && user_id !== 'guest' && KG_CONFIG.FEATURES.USER_PERSONALIZATION
+          ? getUserLearningContext(actualTenantId, user_id).catch(error => {
+              logger.warn('Failed to get user learning context, continuing without personalization', {
+                error: error.message
+              });
+              return null;
+            })
+          : Promise.resolve(null)
+      ]);
+
+      similarVectors = vectorSearchResults;
       
       // Track initial results
       filteringContext.vectorResultsFound = similarVectors.length;
@@ -427,6 +449,93 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         embedding_dimensions: queryEmbedding.length,
         filtering_reason: filteringContext.reason,
       });
+
+      // ========================================
+      // KNOWLEDGE GRAPH ENHANCEMENT
+      // ========================================
+      if (similarVectors && similarVectors.length > 0 && KG_CONFIG.FEATURES.KG_TRAVERSAL) {
+        try {
+          // Step 1: User learning context already retrieved in parallel above
+          if (userLearningContext) {
+            logger.info('Retrieved user learning context', {
+              userId: user_id,
+              skillCount: userLearningContext.skills?.length || 0
+            });
+          }
+
+          // Step 2: Find related nodes in KG
+          const contentIds = similarVectors
+            .map(v => v.contentId)
+            .filter(Boolean);
+
+          if (contentIds.length > 0 && KG_CONFIG.FEATURES.KG_TRAVERSAL) {
+            kgRelations = await findRelatedNodes(
+              actualTenantId,
+              contentIds,
+              KG_CONFIG.EDGE_TYPES,
+              KG_CONFIG.MAX_TRAVERSAL_DEPTH
+            );
+            
+            logger.info('KG relations found', {
+              contentCount: contentIds.length,
+              relationsCount: kgRelations.length
+            });
+          }
+
+          // Step 3: Boost results based on KG relationships
+          if (kgRelations.length > 0 && KG_CONFIG.FEATURES.RESULT_BOOSTING) {
+            similarVectors = await boostResultsByKG(similarVectors, kgRelations, KG_CONFIG.BOOST_WEIGHTS);
+            
+            logger.info('Applied KG boosting to results', {
+              boostedCount: similarVectors.filter(v => v.kgBoost > 0).length
+            });
+          }
+
+          // Step 4: Expand results with KG-discovered content
+          if (kgRelations.length > 0 && KG_CONFIG.FEATURES.QUERY_EXPANSION) {
+            similarVectors = await expandResultsWithKG(
+              similarVectors,
+              actualTenantId,
+              queryEmbedding
+            );
+            
+            logger.info('Expanded results using KG', {
+              finalCount: similarVectors.length
+            });
+          }
+
+          // Step 5: Apply user personalization (if user context exists)
+          if (userLearningContext && 
+              userLearningContext.relevantContentIds?.length > 0 && 
+              KG_CONFIG.FEATURES.USER_PERSONALIZATION) {
+            similarVectors = similarVectors.map(result => {
+              const isRelevantToUser = userLearningContext.relevantContentIds.includes(result.contentId);
+              return {
+                ...result,
+                similarity: isRelevantToUser 
+                  ? Math.min(1.0, result.similarity + KG_CONFIG.USER_RELEVANCE_BOOST)
+                  : result.similarity,
+                userRelevant: isRelevantToUser
+              };
+            });
+            
+            // Re-sort after personalization
+            similarVectors.sort((a, b) => b.similarity - a.similarity);
+            
+            logger.info('Applied user personalization', {
+              relevantCount: similarVectors.filter(v => v.userRelevant).length
+            });
+          }
+
+        } catch (kgError) {
+          logger.warn('KG enhancement failed, continuing with vector results only', {
+            error: kgError.message,
+            stack: kgError.stack
+          });
+          // Don't fail the entire query if KG fails - graceful degradation
+          kgRelations = [];
+        }
+      }
 
       // Enforce role-based permission on user profiles:
       // - Admins: Can access all user profiles
@@ -965,10 +1074,13 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       vectorResults: similarVectors || [],
       sources: sources,
       cachedData: [], // Could be populated from cache if available
-      kgRelations: [], // Could be populated from KG if available
-      metadata: {
-        category,
+      kgRelations: kgRelations || [], // ✅ NOW POPULATED from KG enhancement
+      userLearningContext: userLearningContext || null,
+      metadata: { 
+        category, 
         hasUserProfile: !!userProfile,
+        kgEnhanced: (kgRelations?.length || 0) > 0,
+        userPersonalized: !!userLearningContext
       },
     };
 
@@ -1313,6 +1425,10 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
         cached: false,
         model_version: 'gpt-3.5-turbo',
         personalized: !!userProfile,
+        kg_enhanced: (kgRelations?.length || 0) > 0,
+        kg_relations_count: kgRelations?.length || 0,
+        user_personalized: !!userLearningContext,
+        boost_applied: similarVectors?.some(v => v.kgBoost > 0) || false
       },
     };
 
