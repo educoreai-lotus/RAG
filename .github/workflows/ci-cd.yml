@@ -62,6 +62,15 @@ jobs:
           SKIP_PRISMA: 'true'
         run: npm run test:unit
 
+      - name: Run Knowledge Graph tests
+        working-directory: BACKEND
+        env:
+          SKIP_GLOBAL_TEST_SETUP: 'true'
+          SKIP_PRISMA: 'true'
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          REDIS_URL: ${{ env.TEST_REDIS_URL }}
+        run: npm run test:kg
+
       # Integration tests still require additional Prisma ESM fixes.
       - name: Skip integration tests (pending Prisma ESM support)
         run: echo "Integration tests are temporarily disabled in CI while the Prisma ESM bridge is finalized."

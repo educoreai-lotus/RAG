@@ -11,6 +11,7 @@
     "test": "node --experimental-vm-modules ./node_modules/.bin/jest",
     "test:unit": "node --experimental-vm-modules ./node_modules/.bin/jest --testPathPattern=tests/unit",
     "test:integration": "node --experimental-vm-modules ./node_modules/.bin/jest --testPathPattern=tests/integration",
+    "test:kg": "node --experimental-vm-modules ./node_modules/.bin/jest knowledgeGraph.service.test.js",
     "test:e2e": "playwright test",
     "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --coverage",
     "test:watch": "node --experimental-vm-modules ./node_modules/.bin/jest --watch",
