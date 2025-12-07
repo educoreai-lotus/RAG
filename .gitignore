@@ -3,6 +3,10 @@ node_modules/
 package-lock.json
 yarn.lock
 
+# Allow package-lock.json in subdirectories for CI/CD
+!BACKEND/package-lock.json
+!FRONTEND/package-lock.json
+
 # Environment variables
 .env
 .env.local
