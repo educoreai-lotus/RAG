@@ -4,18 +4,25 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-jest.mock('../../../src/clients/grpcClient.util.js', () => ({
-  createGrpcClient: jest.fn(),
-  grpcCall: jest.fn(),
-}));
-jest.mock('../../../src/utils/logger.util.js', () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+// For ES modules, use jest.createMockFromModule in factory functions
+jest.mock('../../../src/clients/grpcClient.util.js', () => {
+  const { jest } = require('@jest/globals');
+  return {
+    createGrpcClient: jest.fn(),
+    grpcCall: jest.fn(),
+  };
+});
+jest.mock('../../../src/utils/logger.util.js', () => {
+  const { jest } = require('@jest/globals');
+  return {
+    logger: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 import { jest } from '@jest/globals';
 
@@ -39,15 +46,16 @@ describe('Coordinator Client', () => {
       close: jest.fn(),
     };
 
-    // Use jest.mocked() to ensure Jest recognizes these as mocks
-    // Then reset and set up return values
-    jest.mocked(createGrpcClient).mockReset();
-    jest.mocked(grpcCall).mockReset();
-    jest.mocked(createGrpcClient).mockReturnValue(mockClient);
-    jest.mocked(logger.info).mockReset();
-    jest.mocked(logger.warn).mockReset();
-    jest.mocked(logger.error).mockReset();
-    jest.mocked(logger.debug).mockReset();
+    // Reset and set up mocks - they are already jest.fn() from factory
+    createGrpcClient.mockReset();
+    grpcCall.mockReset();
+    createGrpcClient.mockReturnValue(mockClient);
+    
+    // Reset logger mocks
+    logger.info.mockReset();
+    logger.warn.mockReset();
+    logger.error.mockReset();
+    logger.debug.mockReset();
 
     // Reset environment variables
     delete process.env.COORDINATOR_ENABLED;

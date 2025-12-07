@@ -4,9 +4,9 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// In factory functions, jest is available as a global (hoisted by Jest)
+// For ES modules, use require() to access jest in factory functions
 jest.mock('../../../src/utils/logger.util.js', () => {
-  // eslint-disable-next-line no-undef
+  const { jest } = require('@jest/globals');
   return {
     logger: {
       debug: jest.fn(),

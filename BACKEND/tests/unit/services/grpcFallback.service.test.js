@@ -4,9 +4,9 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// In factory functions, jest is available as a global (hoisted by Jest)
+// For ES modules, use require() to access jest in factory functions
 jest.mock('../../../src/communication/communicationManager.service.js', () => {
-  // eslint-disable-next-line no-undef
+  const { jest } = require('@jest/globals');
   return {
     shouldCallCoordinator: jest.fn(),
     callCoordinatorRoute: jest.fn(),
@@ -14,14 +14,14 @@ jest.mock('../../../src/communication/communicationManager.service.js', () => {
   };
 });
 jest.mock('../../../src/communication/schemaInterpreter.service.js', () => {
-  // eslint-disable-next-line no-undef
+  const { jest } = require('@jest/globals');
   return {
     interpretNormalizedFields: jest.fn(),
     createStructuredFields: jest.fn(),
   };
 });
 jest.mock('../../../src/utils/logger.util.js', () => {
-  // eslint-disable-next-line no-undef
+  const { jest } = require('@jest/globals');
   return {
     logger: {
       info: jest.fn(),
@@ -79,8 +79,8 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.debug).toHaveBeenCalledWith('gRPC fallback disabled');
-        expect(shouldCallCoordinator).not.toHaveBeenCalled();
+        expect(jest.mocked(logger.debug)).toHaveBeenCalledWith('gRPC fallback disabled');
+        expect(jest.mocked(shouldCallCoordinator)).not.toHaveBeenCalled();
       });
 
       it('should proceed if GRPC_ENABLED is true', async () => {
@@ -92,7 +92,7 @@ describe('gRPC Fallback Service', () => {
           tenantId: 'org-123',
         });
 
-        expect(shouldCallCoordinator).toHaveBeenCalled();
+        expect(jest.mocked(shouldCallCoordinator)).toHaveBeenCalled();
       });
     });
 
@@ -110,11 +110,11 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.debug).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.debug)).toHaveBeenCalledWith(
           'gRPC fallback skipped: Internal data is sufficient',
           expect.any(Object)
         );
-        expect(callCoordinatorRoute).not.toHaveBeenCalled();
+        expect(jest.mocked(callCoordinatorRoute)).not.toHaveBeenCalled();
       });
 
       it('should call Coordinator if internal data is insufficient', async () => {
@@ -148,7 +148,7 @@ describe('gRPC Fallback Service', () => {
           [],
           {}
         );
-        expect(callCoordinatorRoute).toHaveBeenCalled();
+        expect(jest.mocked(callCoordinatorRoute)).toHaveBeenCalled();
       });
     });
 
@@ -173,7 +173,7 @@ describe('gRPC Fallback Service', () => {
           internalData: { test: 'data' },
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith({
+        expect(jest.mocked(callCoordinatorRoute)).toHaveBeenCalledWith({
           tenant_id: 'org-123',
           user_id: 'user-456',
           query_text: 'show me payments',
@@ -195,7 +195,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.warn)).toHaveBeenCalledWith(
           'Coordinator route returned no response',
           expect.any(Object)
         );
@@ -212,7 +212,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.warn)).toHaveBeenCalledWith(
           'Failed to process Coordinator response',
           expect.any(Object)
         );
@@ -261,7 +261,7 @@ describe('gRPC Fallback Service', () => {
           userId: 'user-456',
         });
 
-        expect(processCoordinatorResponse).toHaveBeenCalled();
+        expect(jest.mocked(processCoordinatorResponse)).toHaveBeenCalled();
         expect(interpretNormalizedFields).toHaveBeenCalledWith(
           mockProcessed.normalized_fields
         );
@@ -333,7 +333,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.info).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.info)).toHaveBeenCalledWith(
           'gRPC fallback: Coordinator data retrieved',
           expect.objectContaining({
             items_count: 0,
@@ -353,7 +353,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.warn)).toHaveBeenCalledWith(
           'gRPC fallback failed',
           expect.objectContaining({
             error: 'Network error',
@@ -374,7 +374,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn).toHaveBeenCalled();
+        expect(jest.mocked(logger.warn)).toHaveBeenCalled();
       });
     });
 
@@ -397,7 +397,7 @@ describe('gRPC Fallback Service', () => {
           userId: 'user-456',
         });
 
-        expect(logger.info).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.info)).toHaveBeenCalledWith(
           'gRPC fallback: Calling Coordinator',
           expect.objectContaining({
             category: 'payment',
@@ -429,7 +429,7 @@ describe('gRPC Fallback Service', () => {
           tenantId: 'org-123',
         });
 
-        expect(logger.info).toHaveBeenCalledWith(
+        expect(jest.mocked(logger.info)).toHaveBeenCalledWith(
           'gRPC fallback: Coordinator data retrieved',
           expect.objectContaining({
             category: 'payment',
@@ -460,7 +460,7 @@ describe('gRPC Fallback Service', () => {
           // userId not provided
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith(
+        expect(jest.mocked(callCoordinatorRoute)).toHaveBeenCalledWith(
           expect.objectContaining({
             user_id: 'anonymous',
           })
@@ -489,7 +489,7 @@ describe('gRPC Fallback Service', () => {
           ],
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith(
+        expect(jest.mocked(callCoordinatorRoute)).toHaveBeenCalledWith(
           expect.objectContaining({
             metadata: expect.objectContaining({
               vector_results_count: 3,
