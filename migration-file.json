@@ -1,0 +1,710 @@
+{
+  "migrationFile": {
+    "version": "1.0.0",
+    "database": {
+      "tables": [
+        {
+          "name": "tenants",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "name": "varchar NOT NULL",
+            "domain": "varchar UNIQUE NOT NULL",
+            "settings": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()",
+            "deleted_at": "timestamp"
+          }
+        },
+        {
+          "name": "microservices",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "name": "varchar NOT NULL",
+            "service_id": "varchar UNIQUE NOT NULL",
+            "display_name": "varchar NOT NULL",
+            "description": "text",
+            "api_endpoint": "varchar",
+            "version": "varchar DEFAULT '1.0.0'",
+            "is_active": "boolean DEFAULT true",
+            "settings": "jsonb DEFAULT '{}'",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "queries",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar NOT NULL",
+            "session_id": "varchar",
+            "query_text": "text NOT NULL",
+            "answer": "text NOT NULL",
+            "confidence_score": "decimal(3,2) NOT NULL",
+            "processing_time_ms": "integer NOT NULL",
+            "model_version": "varchar NOT NULL",
+            "is_personalized": "boolean DEFAULT false",
+            "is_cached": "boolean DEFAULT false",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "query_sources",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "query_id": "uuid REFERENCES queries(id) ON DELETE CASCADE",
+            "source_id": "varchar NOT NULL",
+            "source_type": "varchar NOT NULL",
+            "source_microservice": "varchar",
+            "title": "varchar NOT NULL",
+            "content_snippet": "text NOT NULL",
+            "source_url": "varchar NOT NULL",
+            "relevance_score": "decimal(3,2) NOT NULL",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "query_recommendations",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "query_id": "uuid REFERENCES queries(id) ON DELETE CASCADE",
+            "recommendation_type": "varchar NOT NULL",
+            "recommendation_id": "varchar NOT NULL",
+            "title": "varchar NOT NULL",
+            "description": "text NOT NULL",
+            "reason": "text NOT NULL",
+            "priority": "integer DEFAULT 0",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "vector_embeddings",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "microservice_id": "uuid REFERENCES microservices(id) ON DELETE SET NULL",
+            "content_id": "varchar NOT NULL",
+            "content_type": "varchar NOT NULL",
+            "embedding": "vector(1536) NOT NULL",
+            "content_text": "text NOT NULL",
+            "chunk_index": "integer DEFAULT 0",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "knowledge_graph_nodes",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "node_id": "varchar UNIQUE NOT NULL",
+            "node_type": "varchar NOT NULL",
+            "properties": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "knowledge_graph_edges",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "source_node_id": "varchar NOT NULL",
+            "target_node_id": "varchar NOT NULL",
+            "edge_type": "varchar NOT NULL",
+            "weight": "decimal(3,2)",
+            "properties": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "access_control_rules",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "rule_type": "varchar NOT NULL",
+            "subject_type": "varchar NOT NULL",
+            "subject_id": "varchar NOT NULL",
+            "resource_type": "varchar NOT NULL",
+            "resource_id": "varchar",
+            "permission": "varchar NOT NULL",
+            "conditions": "jsonb DEFAULT '{}'",
+            "is_active": "boolean DEFAULT true",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "user_profiles",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar UNIQUE NOT NULL",
+            "role": "varchar NOT NULL",
+            "department": "varchar",
+            "region": "varchar",
+            "skill_gaps": "jsonb DEFAULT '[]'",
+            "learning_progress": "jsonb DEFAULT '{}'",
+            "preferences": "jsonb DEFAULT '{}'",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "audit_logs",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar",
+            "action": "varchar NOT NULL",
+            "resource_type": "varchar",
+            "resource_id": "varchar",
+            "ip_address": "varchar",
+            "user_agent": "varchar",
+            "details": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "cache_entries",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "cache_key": "varchar UNIQUE NOT NULL",
+            "query_hash": "varchar NOT NULL",
+            "response_data": "jsonb NOT NULL",
+            "expires_at": "timestamp NOT NULL",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        }
+      ],
+      "migrations": []
+    },
+    "api": {
+      "endpoints": [
+        {
+          "path": "/api/v1/query",
+          "method": "POST",
+          "description": "Process a RAG query and return AI-generated answer with sources",
+          "requestSchema": {
+            "type": "object",
+            "required": ["query", "tenant_id"],
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Natural language question"
+              },
+              "tenant_id": {
+                "type": "string",
+                "description": "Tenant identifier"
+              },
+              "user_id": {
+                "type": "string",
+                "description": "User identifier for personalization"
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Session identifier"
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "max_results": {
+                    "type": "integer",
+                    "default": 5
+                  },
+                  "min_confidence": {
+                    "type": "number",
+                    "default": 0.7
+                  },
+                  "include_metadata": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "answer": {
+                "type": "string",
+                "description": "Generated answer"
+              },
+              "confidence": {
+                "type": "number",
+                "description": "Confidence score (0-1)"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "content_snippet": {
+                      "type": "string"
+                    },
+                    "source_type": {
+                      "type": "string"
+                    },
+                    "source_url": {
+                      "type": "string"
+                    },
+                    "relevance_score": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/assessment/support",
+          "method": "POST",
+          "description": "Provide assessment support and hints for questions",
+          "requestSchema": {
+            "type": "object",
+            "required": ["assessment_id", "question_id", "tenant_id", "user_id"],
+            "properties": {
+              "assessment_id": {
+                "type": "string"
+              },
+              "question_id": {
+                "type": "string"
+              },
+              "tenant_id": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "string"
+              },
+              "user_answer": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string",
+                "enum": ["subtle", "moderate", "detailed"]
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "hint": {
+                "type": "string"
+              },
+              "concept_references": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "related_content": {
+                "type": "array"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/devlab/support",
+          "method": "POST",
+          "description": "Provide technical support for DevLab coding exercises",
+          "requestSchema": {
+            "type": "object",
+            "required": ["exercise_id", "tenant_id", "user_id", "language", "type"],
+            "properties": {
+              "exercise_id": {
+                "type": "string"
+              },
+              "tenant_id": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "error_message": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["error_explanation", "code_review", "best_practices", "concept_explanation"]
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "explanation": {
+                "type": "string"
+              },
+              "examples": {
+                "type": "array"
+              },
+              "best_practices": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "related_resources": {
+                "type": "array"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/v1/personalized/recommendations/:userId",
+          "method": "GET",
+          "description": "Get personalized learning recommendations for a user",
+          "requestSchema": {
+            "type": "object",
+            "required": ["userId"],
+            "properties": {
+              "userId": {
+                "type": "string",
+                "description": "Path parameter: User identifier"
+              },
+              "tenant_id": {
+                "type": "string",
+                "description": "Query parameter: Tenant identifier"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Query parameter: Maximum number of recommendations"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "recommendations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/v1/knowledge/progress/user/:userId/skill/:skillId",
+          "method": "GET",
+          "description": "Get user's knowledge progress for a specific skill",
+          "requestSchema": {
+            "type": "object",
+            "required": ["userId", "skillId"],
+            "properties": {
+              "userId": {
+                "type": "string",
+                "description": "Path parameter: User identifier"
+              },
+              "skillId": {
+                "type": "string",
+                "description": "Path parameter: Skill identifier"
+              },
+              "tenant_id": {
+                "type": "string",
+                "description": "Query parameter: Tenant identifier"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "skill_id": {
+                    "type": "string"
+                  },
+                  "mastery_level": {
+                    "type": "number"
+                  },
+                  "related_concepts": {
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/debug/embeddings-status",
+          "method": "GET",
+          "description": "Check embeddings status in database",
+          "requestSchema": {
+            "type": "object",
+            "properties": {
+              "tenant_id": {
+                "type": "string",
+                "description": "Query parameter: Tenant identifier"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "total_embeddings": {
+                    "type": "integer"
+                  },
+                  "by_type": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/debug/test-vector-search",
+          "method": "GET",
+          "description": "Test vector search with a sample query",
+          "requestSchema": {
+            "type": "object",
+            "required": ["query"],
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Query parameter: Search query"
+              },
+              "tenant_id": {
+                "type": "string",
+                "description": "Query parameter: Tenant identifier"
+              },
+              "threshold": {
+                "type": "number",
+                "description": "Query parameter: Similarity threshold (default: 0.3)"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "results": {
+                "type": "array"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/debug/add-content",
+          "method": "POST",
+          "description": "Add single content item to knowledge base",
+          "requestSchema": {
+            "type": "object",
+            "required": ["content", "tenant_id"],
+            "properties": {
+              "content": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                }
+              },
+              "tenant_id": {
+                "type": "string"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "content_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/debug/add-js-prerequisites",
+          "method": "POST",
+          "description": "Add JavaScript prerequisites content (convenience endpoint)",
+          "requestSchema": {
+            "type": "object",
+            "required": ["tenant_id"],
+            "properties": {
+              "tenant_id": {
+                "type": "string"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "path": "/api/fill-content-metrics/",
+          "method": "POST",
+          "description": "Unified proxy endpoint for inter-service communication. Handles RAG queries, content processing, and knowledge graph operations.",
+          "requestSchema": {
+            "type": "object",
+            "required": ["requester_service", "response"],
+            "properties": {
+              "requester_service": {
+                "type": "string",
+                "description": "Name of the service making the request"
+              },
+              "payload": {
+                "type": "object",
+                "description": "Service-specific data. Can include: action (rag_query, add_content, get_recommendations, etc.), query, tenant_id, user_id, and other relevant fields"
+              },
+              "response": {
+                "type": "object",
+                "description": "Template defining expected response structure with field names"
+              }
+            }
+          },
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "data": {
+                "type": "object",
+                "description": "Response data mapped to match the response template"
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "routed_to": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  },
+                  "requester": {
+                    "type": "string"
+                  },
+                  "processing_time_ms": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "path": "/health",
+          "method": "GET",
+          "description": "Health check endpoint",
+          "requestSchema": {},
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "service": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "dependencies": [],
+    "events": {
+      "publishes": [
+        "rag.query.processed",
+        "rag.content.added",
+        "rag.embedding.created",
+        "rag.recommendation.generated",
+        "rag.knowledge.progress.updated"
+      ],
+      "subscribes": [
+        "content.updated",
+        "user.profile.updated",
+        "assessment.question.answered",
+        "devlab.exercise.completed"
+      ]
+    }
+  }
+}
+

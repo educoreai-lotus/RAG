@@ -1,0 +1,11 @@
+# פקודת cURL להעלאת קובץ ה-Migration
+
+# עדכן את YOUR_COORDINATOR_DOMAIN ב-DOMAIN המדויק של ה-COORDINATOR שלך
+# דוגמאות:
+#   - localhost: http://localhost:3000
+#   - production: https://coordinator-production-e0a0.up.railway.app
+
+curl -X POST "YOUR_COORDINATOR_DOMAIN/register/b75b5a42-3b19-404e-819b-262001c4c38d/migration" \
+  -H "Content-Type: application/json" \
+  -d @migration-file.json
+
