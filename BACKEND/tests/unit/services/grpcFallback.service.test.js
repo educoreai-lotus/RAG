@@ -85,7 +85,7 @@ describe('gRPC Fallback Service', () => {
 
       it('should proceed if GRPC_ENABLED is true', async () => {
         process.env.GRPC_ENABLED = 'true';
-shouldCallCoordinator).mockReturnValue(false);
+        shouldCallCoordinator.mockReturnValue(false);
 
         await grpcFetchByCategory('payment', {
           query: 'test query',
