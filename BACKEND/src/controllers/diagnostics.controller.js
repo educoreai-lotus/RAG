@@ -483,7 +483,7 @@ export async function testVectorSearch(req, res, next) {
     // Validate JSON before sending
     try {
       // Test for circular references using JSON.parse(JSON.stringify())
-      JSON.parse(JSON.stringify(response));
+      const _testJson = JSON.parse(JSON.stringify(response));
       res.json(response);
     } catch (jsonError) {
       

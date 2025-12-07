@@ -12,10 +12,10 @@ import { getOrCreateTenant } from './tenant.service.js';
 import { getOrCreateUserProfile, getUserSkillGaps } from './userProfile.service.js';
 import { isEducoreQuery } from '../utils/query-classifier.util.js';
 import { grpcFetchByCategory } from './grpcFallback.service.js';
-import { mergeResults, createContextBundle, handleFallbacks } from '../communication/routingEngine.service.js';
+import { mergeResults } from '../communication/routingEngine.service.js';
 import { generatePersonalizedRecommendations } from './recommendations.service.js';
 import { validateAndFixTenantId, getCorrectTenantId } from '../utils/tenant-validation.util.js';
-import { MESSAGES, validateMessages } from '../config/messages.js';
+import { MESSAGES } from '../config/messages.js';
 import { formatBotResponse, formatErrorMessage, formatRecommendations } from '../utils/responseFormatter.util.js';
 import {
   findRelatedNodes,
