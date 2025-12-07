@@ -1,7 +1,5 @@
--- Note: pgvector extension must be enabled BEFORE running this migration
--- Run in Supabase SQL Editor: CREATE EXTENSION IF NOT EXISTS vector;
--- This migration does NOT create the extension to avoid prepared statement errors
--- with Supabase connection pooling
+-- Enable pgvector extension (required for vector columns)
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- CreateTable
 CREATE TABLE "tenants" (
