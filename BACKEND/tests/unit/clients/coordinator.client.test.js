@@ -3,6 +3,7 @@
  * Tests for gRPC client initialization, connection handling, and Route() method calls
  */
 
+import { jest } from '@jest/globals';
 import { routeRequest, getMetrics, isCoordinatorAvailable, resetClient, resetMetrics } from '../../../src/clients/coordinator.client.js';
 import { createGrpcClient, grpcCall } from '../../../src/clients/grpcClient.util.js';
 import * as grpc from '@grpc/grpc-js';

@@ -2,6 +2,7 @@
  * Cache utility tests
  */
 
+import { jest } from '@jest/globals';
 import { get, set, del, exists } from '../../../src/utils/cache.util.js';
 
 // Mock Redis

@@ -3,6 +3,7 @@
  * Tests for RAG pipeline integration with Coordinator
  */
 
+import { jest } from '@jest/globals';
 import { grpcFetchByCategory } from '../../../src/services/grpcFallback.service.js';
 import {
   shouldCallCoordinator,

@@ -3,6 +3,7 @@
  * Tests for parsing RouteResponse, extracting business data, and handling all scenarios
  */
 
+import { jest } from '@jest/globals';
 import {
   parseRouteResponse,
   extractBusinessData,

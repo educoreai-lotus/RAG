@@ -2,6 +2,7 @@
  * Error handler middleware tests
  */
 
+import { jest } from '@jest/globals';
 import { errorHandler, notFoundHandler } from '../../../src/middleware/error-handler.middleware.js';
 
 describe('Error Handler Middleware', () => {

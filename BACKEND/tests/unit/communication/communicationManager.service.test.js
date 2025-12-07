@@ -3,6 +3,7 @@
  * Tests for decision logic, Coordinator integration, and response processing
  */
 
+import { jest } from '@jest/globals';
 import {
   shouldCallCoordinator,
   callCoordinatorRoute,
