@@ -112,8 +112,6 @@ export async function updateUserProfile(userId, updateData) {
  */
 export async function updateLearningProgress(userId, progress) {
   try {
-    const prisma = await getPrismaClient();
-
     // Get current profile
     const currentProfile = await getUserProfile(userId);
     if (!currentProfile) {

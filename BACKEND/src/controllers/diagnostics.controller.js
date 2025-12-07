@@ -13,7 +13,7 @@ import { validateAndFixTenantId } from '../utils/tenant-validation.util.js';
  * GET /api/debug/embeddings-status
  * Check embeddings status in database
  */
-export async function getEmbeddingsStatus(req, res, next) {
+export async function getEmbeddingsStatus(req, res, _next) {
   // CRITICAL: Validate and fix tenant_id (declare outside try for error handling)
   let tenantDomainOrId = req.query.tenant_id || 'default.local';
   let tenant = null;
@@ -279,7 +279,7 @@ export async function getEmbeddingsStatus(req, res, next) {
     // Validate JSON before sending
     try {
       // Test for circular references using JSON.parse(JSON.stringify())
-      const testJson = JSON.parse(JSON.stringify(response));
+      JSON.parse(JSON.stringify(response));
       res.json(response);
     } catch (jsonError) {
       
@@ -330,7 +330,7 @@ export async function getEmbeddingsStatus(req, res, next) {
  * It shows raw vector search results to help diagnose issues.
  * The production endpoint (/api/v1/query) applies RBAC filtering.
  */
-export async function testVectorSearch(req, res, next) {
+export async function testVectorSearch(req, res, _next) {
   // CRITICAL: Validate and fix tenant_id (declare outside try for error handling)
   const { query: testQuery, tenant_id, threshold = 0.3 } = req.query || {};
   let tenantDomainOrId = tenant_id || 'default.local';
@@ -483,7 +483,7 @@ export async function testVectorSearch(req, res, next) {
     // Validate JSON before sending
     try {
       // Test for circular references using JSON.parse(JSON.stringify())
-      const _testJson = JSON.parse(JSON.stringify(response));
+      JSON.parse(JSON.stringify(response));
       res.json(response);
     } catch (jsonError) {
       

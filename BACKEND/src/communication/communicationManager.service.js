@@ -105,7 +105,7 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       'content': ['course', 'lesson', 'module', 'content', 'material', 'resource'],
     };
 
-    const requiresMicroservice = Object.entries(microserviceKeywords).some(([service, keywords]) => {
+    const requiresMicroservice = Object.entries(microserviceKeywords).some(([_service, keywords]) => {
       return keywords.some(keyword => queryLower.includes(keyword));
     });
 

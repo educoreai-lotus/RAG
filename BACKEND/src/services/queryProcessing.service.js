@@ -47,8 +47,6 @@ function generateNoResultsMessage(userQuery, filteringContext) {
   const isAuthenticated = filteringContext?.isAuthenticated || false;
   const userProfilesFound = filteringContext?.userProfilesFound || 0;
   const userProfilesRemoved = filteringContext?.userProfilesRemoved || 0;
-  const hasSpecificUserName = filteringContext?.hasSpecificUserName || false;
-  const matchedName = filteringContext?.matchedName || '';
   
   
   
@@ -128,7 +126,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   const { user_id, session_id } = context;
   const {
     max_results = 5,
-    min_confidence = 0.25, // Lowered from 0.5 to 0.25 to match test endpoint behavior (test uses 0.3)
     include_metadata = true,
   } = options;
 
@@ -233,7 +230,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         if (cached) {
           logger.info('Query cache hit', { query, tenant_id: actualTenantId, user_id });
           const cachedResponse = JSON.parse(cached);
-          isCached = true;
           
           // Still save query to database for analytics
           await saveQueryToDatabase({
@@ -656,8 +652,6 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       // 🔑 Check user role source
       // Priority: context.role (from header/body) > userProfile.role (from DB) > anonymous
       // This allows overriding DB role with explicit header/context role
-      const userRoleFromProfile = userProfile?.role;
-      const userRoleFromContext = context?.role;
       // Use filteringContext.userRole if it was set (from context.role), otherwise fall back
       const userRole = filteringContext.userRole || context?.role || userProfile?.role || 'anonymous';
       
