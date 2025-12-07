@@ -98,7 +98,7 @@ describe('gRPC Fallback Service', () => {
 
     describe('Decision Logic', () => {
       it('should skip Coordinator if internal data is sufficient', async () => {
-shouldCallCoordinator).mockReturnValue(false);
+        shouldCallCoordinator.mockReturnValue(false);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -118,13 +118,13 @@ shouldCallCoordinator).mockReturnValue(false);
       });
 
       it('should call Coordinator if internal data is insufficient', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({
           target_services: ['payment-service'],
           normalized_fields: { successful_service: 'payment-service' },
         });
 
-processCoordinatorResponse).mockReturnValue({
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: ['payment-service'],
@@ -154,9 +154,9 @@ processCoordinatorResponse).mockReturnValue({
 
     describe('Coordinator Integration', () => {
       it('should call Coordinator with correct parameters', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -186,8 +186,8 @@ processCoordinatorResponse).mockReturnValue({
       });
 
       it('should handle null Coordinator response', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue(null);
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue(null);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -202,9 +202,9 @@ callCoordinatorRoute).mockResolvedValue(null);
       });
 
       it('should handle failed response processing', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue(null);
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue(null);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -221,8 +221,8 @@ processCoordinatorResponse).mockReturnValue(null);
 
     describe('Response Processing', () => {
       it('should convert Coordinator response to content items', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
 
         const mockProcessed = {
           status: 'success_primary',
@@ -251,7 +251,7 @@ callCoordinatorRoute).mockResolvedValue({});
           ],
         };
 
-processCoordinatorResponse).mockReturnValue(mockProcessed);
+        processCoordinatorResponse.mockReturnValue(mockProcessed);
         interpretNormalizedFields.mockReturnValue(mockInterpreted);
         createStructuredFields.mockReturnValue(mockStructured);
 
@@ -287,9 +287,9 @@ processCoordinatorResponse).mockReturnValue(mockProcessed);
       });
 
       it('should use category as contentType if sourceType is missing', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -314,9 +314,9 @@ processCoordinatorResponse).mockReturnValue({
       });
 
       it('should handle empty sources', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -344,8 +344,8 @@ processCoordinatorResponse).mockReturnValue({
 
     describe('Error Handling', () => {
       it('should handle errors gracefully and return empty array', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockRejectedValue(new Error('Network error'));
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockRejectedValue(new Error('Network error'));
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -362,9 +362,9 @@ callCoordinatorRoute).mockRejectedValue(new Error('Network error'));
       });
 
       it('should handle processing errors', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockImplementation(() => {
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockImplementation(() => {
           throw new Error('Processing error');
         });
 
@@ -380,9 +380,9 @@ processCoordinatorResponse).mockImplementation(() => {
 
     describe('Logging', () => {
       it('should log when calling Coordinator', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -408,9 +408,9 @@ processCoordinatorResponse).mockReturnValue({
       });
 
       it('should log successful data retrieval', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: ['payment-service'],
@@ -443,9 +443,9 @@ processCoordinatorResponse).mockReturnValue({
 
     describe('Parameter Handling', () => {
       it('should use default userId if not provided', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -468,9 +468,9 @@ processCoordinatorResponse).mockReturnValue({
       });
 
       it('should pass vectorResults count in metadata', async () => {
-shouldCallCoordinator).mockReturnValue(true);
-callCoordinatorRoute).mockResolvedValue({});
-processCoordinatorResponse).mockReturnValue({
+        shouldCallCoordinator.mockReturnValue(true);
+        callCoordinatorRoute.mockResolvedValue({});
+        processCoordinatorResponse.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
