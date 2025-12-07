@@ -126,11 +126,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   const { user_id, session_id } = context;
   const {
     max_results = 5,
-    include_metadata = true,
+    min_confidence = 0.25,
   } = options;
 
   let queryRecord = null;
-  let isCached = false;
 
   try {
     // CRITICAL: Validate and fix tenant_id FIRST

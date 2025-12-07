@@ -10,6 +10,62 @@ import { getOrCreateTenant } from '../services/tenant.service.js';
 import { validateAndFixTenantId } from '../utils/tenant-validation.util.js';
 
 /**
+ * Helper function to safely serialize data for JSON
+ * Handles BigInt, circular references, undefined values, and Prisma objects
+ */
+function safeSerialize(data, seen = new WeakSet()) {
+  // Handle null/undefined
+  if (data === null || data === undefined) return null;
+  
+  // Handle BigInt - convert to string or number
+  if (typeof data === 'bigint') {
+    return Number(data);
+  }
+  
+  // Handle circular references
+  if (typeof data === 'object') {
+    if (seen.has(data)) {
+      return '[Circular Reference]';
+    }
+    seen.add(data);
+    
+    // Handle arrays
+    if (Array.isArray(data)) {
+      return data.map(item => safeSerialize(item, seen));
+    }
+    
+    // Handle Date objects
+    if (data instanceof Date) {
+      return data.toISOString();
+    }
+    
+    // Handle plain objects
+    const cleaned = {};
+    for (const [key, value] of Object.entries(data)) {
+      try {
+        // Skip undefined values
+        if (value === undefined) {
+          continue;
+        }
+        cleaned[key] = safeSerialize(value, seen);
+      } catch (e) {
+        // If serialization fails, convert to string
+        cleaned[key] = String(value);
+      }
+    }
+    return cleaned;
+  }
+  
+  // Handle strings - clean up whitespace
+  if (typeof data === 'string') {
+    return data.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ').trim();
+  }
+  
+  // Handle other primitives
+  return data;
+}
+
+/**
  * GET /api/debug/embeddings-status
  * Check embeddings status in database
  */
@@ -122,60 +178,6 @@ export async function getEmbeddingsStatus(req, res, _next) {
         LIMIT 5
       `
     ).catch(() => []);
-
-    // Helper function to safely serialize data for JSON
-    // Handles BigInt, circular references, undefined values, and Prisma objects
-    const safeSerialize = (data, seen = new WeakSet()) => {
-      // Handle null/undefined
-      if (data === null || data === undefined) return null;
-      
-      // Handle BigInt - convert to string or number
-      if (typeof data === 'bigint') {
-        return Number(data);
-      }
-      
-      // Handle circular references
-      if (typeof data === 'object') {
-        if (seen.has(data)) {
-          return '[Circular Reference]';
-        }
-        seen.add(data);
-        
-        // Handle arrays
-        if (Array.isArray(data)) {
-          return data.map(item => safeSerialize(item, seen));
-        }
-        
-        // Handle Date objects
-        if (data instanceof Date) {
-          return data.toISOString();
-        }
-        
-        // Handle plain objects
-        const cleaned = {};
-        for (const [key, value] of Object.entries(data)) {
-          try {
-            // Skip undefined values
-            if (value === undefined) {
-              continue;
-            }
-            cleaned[key] = safeSerialize(value, seen);
-          } catch (e) {
-            // If serialization fails, convert to string
-            cleaned[key] = String(value);
-          }
-        }
-        return cleaned;
-      }
-      
-      // Handle strings - clean up whitespace
-      if (typeof data === 'string') {
-        return data.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ').trim();
-      }
-      
-      // Handle other primitives
-      return data;
-    };
 
     const response = {
       status: 'ok',
@@ -383,60 +385,6 @@ export async function testVectorSearch(req, res, _next) {
       limit: 20,
       threshold: 0.0, // No threshold
     });
-
-    // Helper function to safely serialize data for JSON
-    // Handles BigInt, circular references, undefined values, and Prisma objects
-    const safeSerialize = (data, seen = new WeakSet()) => {
-      // Handle null/undefined
-      if (data === null || data === undefined) return null;
-      
-      // Handle BigInt - convert to string or number
-      if (typeof data === 'bigint') {
-        return Number(data);
-      }
-      
-      // Handle circular references
-      if (typeof data === 'object') {
-        if (seen.has(data)) {
-          return '[Circular Reference]';
-        }
-        seen.add(data);
-        
-        // Handle arrays
-        if (Array.isArray(data)) {
-          return data.map(item => safeSerialize(item, seen));
-        }
-        
-        // Handle Date objects
-        if (data instanceof Date) {
-          return data.toISOString();
-        }
-        
-        // Handle plain objects
-        const cleaned = {};
-        for (const [key, value] of Object.entries(data)) {
-          try {
-            // Skip undefined values
-            if (value === undefined) {
-              continue;
-            }
-            cleaned[key] = safeSerialize(value, seen);
-          } catch (e) {
-            // If serialization fails, convert to string
-            cleaned[key] = String(value);
-          }
-        }
-        return cleaned;
-      }
-      
-      // Handle strings - clean up whitespace
-      if (typeof data === 'string') {
-        return data.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ').trim();
-      }
-      
-      // Handle other primitives
-      return data;
-    };
 
     const response = {
       status: 'ok',
