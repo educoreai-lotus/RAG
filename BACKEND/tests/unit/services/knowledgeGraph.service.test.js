@@ -15,18 +15,33 @@ import { KG_CONFIG } from '../../../src/config/knowledgeGraph.config.js';
 import { getOrCreateTenant } from '../../../src/services/tenant.service.js';
 
 describe('Knowledge Graph Integration', () => {
-  const testTenantId = 'test-tenant-123';
+  const testTenantDomain = 'test-tenant-123.local';
   const testUserId = 'test-user-456';
   let prisma;
+  let testTenantId; // Will be set in beforeAll
 
   beforeAll(async () => {
     prisma = await getPrismaClient();
     
     // Setup: Create test tenant first (required for foreign key constraint)
     try {
-      await getOrCreateTenant(testTenantId);
+      const tenant = await getOrCreateTenant(testTenantDomain);
+      testTenantId = tenant.id; // Use the actual tenant ID returned
     } catch (error) {
       console.warn('Test tenant creation failed (may already exist):', error.message);
+      // Try to get existing tenant
+      try {
+        const tenant = await prisma.tenant.findFirst({
+          where: { domain: testTenantDomain }
+        });
+        if (tenant) {
+          testTenantId = tenant.id;
+        } else {
+          throw new Error('Could not create or find test tenant');
+        }
+      } catch (e) {
+        throw new Error(`Failed to set up test tenant: ${e.message}`);
+      }
     }
     
     // Setup: Create test KG data
@@ -111,15 +126,17 @@ describe('Knowledge Graph Integration', () => {
 
   afterAll(async () => {
     // Cleanup test data
-    try {
-      await prisma.knowledgeGraphEdge.deleteMany({
-        where: { tenantId: testTenantId }
-      });
-      await prisma.knowledgeGraphNode.deleteMany({
-        where: { tenantId: testTenantId }
-      });
-    } catch (error) {
-      console.warn('Test cleanup failed:', error.message);
+    if (testTenantId) {
+      try {
+        await prisma.knowledgeGraphEdge.deleteMany({
+          where: { tenantId: testTenantId }
+        });
+        await prisma.knowledgeGraphNode.deleteMany({
+          where: { tenantId: testTenantId }
+        });
+      } catch (error) {
+        console.warn('Test cleanup failed:', error.message);
+      }
     }
   });
 

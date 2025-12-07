@@ -49,7 +49,12 @@ describe('Error Handler Middleware', () => {
 
   describe('notFoundHandler', () => {
     it('should return 404 response', () => {
-      const req = { path: '/not-found' };
+      const req = { 
+        path: '/not-found',
+        url: '/not-found',
+        query: {},
+        get: jest.fn().mockReturnValue('test-agent'),
+      };
       const res = {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),

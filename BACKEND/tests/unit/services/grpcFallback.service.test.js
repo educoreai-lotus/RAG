@@ -4,6 +4,27 @@
  */
 
 import { jest } from '@jest/globals';
+
+// Mock dependencies BEFORE imports
+jest.mock('../../../src/communication/communicationManager.service.js', () => ({
+  shouldCallCoordinator: jest.fn(),
+  callCoordinatorRoute: jest.fn(),
+  processCoordinatorResponse: jest.fn(),
+}));
+jest.mock('../../../src/communication/schemaInterpreter.service.js', () => ({
+  interpretNormalizedFields: jest.fn(),
+  createStructuredFields: jest.fn(),
+}));
+jest.mock('../../../src/utils/logger.util.js', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+// Import AFTER mocks are set up
 import { grpcFetchByCategory } from '../../../src/services/grpcFallback.service.js';
 import {
   shouldCallCoordinator,
@@ -15,18 +36,6 @@ import {
   createStructuredFields,
 } from '../../../src/communication/schemaInterpreter.service.js';
 import { logger } from '../../../src/utils/logger.util.js';
-
-// Mock dependencies
-jest.mock('../../../src/communication/communicationManager.service.js');
-jest.mock('../../../src/communication/schemaInterpreter.service.js');
-jest.mock('../../../src/utils/logger.util.js', () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
 
 describe('gRPC Fallback Service', () => {
   beforeEach(() => {

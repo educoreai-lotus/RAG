@@ -4,15 +4,6 @@
  */
 
 import { jest } from '@jest/globals';
-import {
-  parseRouteResponse,
-  extractBusinessData,
-  getRoutingSummary,
-  isAllFailed,
-  isFallbackUsed,
-  getQualityAssessment,
-} from '../../../src/services/coordinatorResponseParser.service.js';
-import { logger } from '../../../src/utils/logger.util.js';
 
 // Mock logger
 jest.mock('../../../src/utils/logger.util.js', () => ({
@@ -22,6 +13,16 @@ jest.mock('../../../src/utils/logger.util.js', () => ({
     error: jest.fn(),
   },
 }));
+
+import {
+  parseRouteResponse,
+  extractBusinessData,
+  getRoutingSummary,
+  isAllFailed,
+  isFallbackUsed,
+  getQualityAssessment,
+} from '../../../src/services/coordinatorResponseParser.service.js';
+import { logger } from '../../../src/utils/logger.util.js';
 
 describe('Coordinator Response Parser', () => {
   beforeEach(() => {

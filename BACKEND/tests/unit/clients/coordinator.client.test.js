@@ -4,13 +4,12 @@
  */
 
 import { jest } from '@jest/globals';
-import { routeRequest, getMetrics, isCoordinatorAvailable, resetClient, resetMetrics } from '../../../src/clients/coordinator.client.js';
-import { createGrpcClient, grpcCall } from '../../../src/clients/grpcClient.util.js';
-import * as grpc from '@grpc/grpc-js';
-import { logger } from '../../../src/utils/logger.util.js';
 
-// Mock dependencies
-jest.mock('../../../src/clients/grpcClient.util.js');
+// Mock dependencies BEFORE imports
+jest.mock('../../../src/clients/grpcClient.util.js', () => ({
+  createGrpcClient: jest.fn(),
+  grpcCall: jest.fn(),
+}));
 jest.mock('../../../src/utils/logger.util.js', () => ({
   logger: {
     info: jest.fn(),
@@ -19,6 +18,12 @@ jest.mock('../../../src/utils/logger.util.js', () => ({
     debug: jest.fn(),
   },
 }));
+
+// Import AFTER mocks are set up
+import { routeRequest, getMetrics, isCoordinatorAvailable, resetClient, resetMetrics } from '../../../src/clients/coordinator.client.js';
+import { createGrpcClient, grpcCall } from '../../../src/clients/grpcClient.util.js';
+import { logger } from '../../../src/utils/logger.util.js';
+import * as grpc from '@grpc/grpc-js';
 
 describe('Coordinator Client', () => {
   let mockClient;

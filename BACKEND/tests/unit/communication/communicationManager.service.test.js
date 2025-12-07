@@ -4,6 +4,26 @@
  */
 
 import { jest } from '@jest/globals';
+
+// Mock dependencies BEFORE imports
+jest.mock('../../../src/clients/coordinator.client.js', () => ({
+  routeRequest: jest.fn(),
+}));
+jest.mock('../../../src/services/coordinatorResponseParser.service.js', () => ({
+  parseRouteResponse: jest.fn(),
+  extractBusinessData: jest.fn(),
+  getRoutingSummary: jest.fn(),
+}));
+jest.mock('../../../src/utils/logger.util.js', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+// Import AFTER mocks are set up
 import {
   shouldCallCoordinator,
   callCoordinatorRoute,
@@ -16,18 +36,6 @@ import {
   getRoutingSummary,
 } from '../../../src/services/coordinatorResponseParser.service.js';
 import { logger } from '../../../src/utils/logger.util.js';
-
-// Mock dependencies
-jest.mock('../../../src/clients/coordinator.client.js');
-jest.mock('../../../src/services/coordinatorResponseParser.service.js');
-jest.mock('../../../src/utils/logger.util.js', () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
 
 describe('Communication Manager', () => {
   beforeEach(() => {
@@ -116,8 +124,8 @@ describe('Communication Manager', () => {
       });
 
       it('should return false on error (fail-safe)', () => {
-        // Force an error by passing invalid data
-        const result = shouldCallCoordinator(null, null, null);
+        // Force an error by passing null query (will cause substring error)
+        const result = shouldCallCoordinator(null, [], {});
 
         expect(result).toBe(false);
         expect(logger.error).toHaveBeenCalled();
