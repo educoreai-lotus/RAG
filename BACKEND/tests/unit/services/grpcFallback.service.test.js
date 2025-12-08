@@ -110,7 +110,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.debug)).toHaveBeenCalledWith(
+        expect(logger.debug).toHaveBeenCalledWith(
           'gRPC fallback skipped: Internal data is sufficient',
           expect.any(Object)
         );
@@ -148,7 +148,7 @@ describe('gRPC Fallback Service', () => {
           [],
           {}
         );
-        expect(callCoordinatorRoute)).toHaveBeenCalled();
+        expect(callCoordinatorRoute).toHaveBeenCalled();
       });
     });
 
@@ -173,7 +173,7 @@ describe('gRPC Fallback Service', () => {
           internalData: { test: 'data' },
         });
 
-        expect(callCoordinatorRoute)).toHaveBeenCalledWith({
+        expect(callCoordinatorRoute).toHaveBeenCalledWith({
           tenant_id: 'org-123',
           user_id: 'user-456',
           query_text: 'show me payments',
@@ -195,7 +195,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn)).toHaveBeenCalledWith(
+        expect(logger.warn).toHaveBeenCalledWith(
           'Coordinator route returned no response',
           expect.any(Object)
         );
@@ -212,7 +212,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn)).toHaveBeenCalledWith(
+        expect(logger.warn).toHaveBeenCalledWith(
           'Failed to process Coordinator response',
           expect.any(Object)
         );
@@ -261,7 +261,7 @@ describe('gRPC Fallback Service', () => {
           userId: 'user-456',
         });
 
-        expect(processCoordinatorResponse)).toHaveBeenCalled();
+        expect(processCoordinatorResponse).toHaveBeenCalled();
         expect(interpretNormalizedFields).toHaveBeenCalledWith(
           mockProcessed.normalized_fields
         );
@@ -333,7 +333,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.info)).toHaveBeenCalledWith(
+        expect(logger.info).toHaveBeenCalledWith(
           'gRPC fallback: Coordinator data retrieved',
           expect.objectContaining({
             items_count: 0,
@@ -353,7 +353,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn)).toHaveBeenCalledWith(
+        expect(logger.warn).toHaveBeenCalledWith(
           'gRPC fallback failed',
           expect.objectContaining({
             error: 'Network error',
@@ -374,7 +374,7 @@ describe('gRPC Fallback Service', () => {
         });
 
         expect(result).toEqual([]);
-        expect(logger.warn)).toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalled();
       });
     });
 
@@ -397,7 +397,7 @@ describe('gRPC Fallback Service', () => {
           userId: 'user-456',
         });
 
-        expect(logger.info)).toHaveBeenCalledWith(
+        expect(logger.info).toHaveBeenCalledWith(
           'gRPC fallback: Calling Coordinator',
           expect.objectContaining({
             category: 'payment',
@@ -429,7 +429,7 @@ describe('gRPC Fallback Service', () => {
           tenantId: 'org-123',
         });
 
-        expect(logger.info)).toHaveBeenCalledWith(
+        expect(logger.info).toHaveBeenCalledWith(
           'gRPC fallback: Coordinator data retrieved',
           expect.objectContaining({
             category: 'payment',
