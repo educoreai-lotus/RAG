@@ -4,32 +4,10 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// For ES modules, use require() to access jest in factory functions
-jest.mock('../../../src/clients/coordinator.client.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    routeRequest: jest.fn(),
-  };
-});
-jest.mock('../../../src/services/coordinatorResponseParser.service.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    parseRouteResponse: jest.fn(),
-    extractBusinessData: jest.fn(),
-    getRoutingSummary: jest.fn(),
-  };
-});
-jest.mock('../../../src/utils/logger.util.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    logger: {
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn(),
-    },
-  };
-});
+// Use manual mocks from __mocks__ directories
+jest.mock('../../../src/clients/coordinator.client.js');
+jest.mock('../../../src/services/coordinatorResponseParser.service.js');
+jest.mock('../../../src/utils/logger.util.js');
 
 import { jest } from '@jest/globals';
 
@@ -50,15 +28,6 @@ import { logger } from '../../../src/utils/logger.util.js';
 describe('Communication Manager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mocks are already jest.fn() from factory, reset them directly
-    routeRequest.mockReset();
-    parseRouteResponse.mockReset();
-    extractBusinessData.mockReset();
-    getRoutingSummary.mockReset();
-    logger.info.mockReset();
-    logger.warn.mockReset();
-    logger.error.mockReset();
-    logger.debug.mockReset();
   });
 
   describe('shouldCallCoordinator', () => {

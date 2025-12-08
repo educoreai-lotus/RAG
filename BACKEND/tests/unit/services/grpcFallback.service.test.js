@@ -4,33 +4,10 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// For ES modules, use require() to access jest in factory functions
-jest.mock('../../../src/communication/communicationManager.service.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    shouldCallCoordinator: jest.fn(),
-    callCoordinatorRoute: jest.fn(),
-    processCoordinatorResponse: jest.fn(),
-  };
-});
-jest.mock('../../../src/communication/schemaInterpreter.service.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    interpretNormalizedFields: jest.fn(),
-    createStructuredFields: jest.fn(),
-  };
-});
-jest.mock('../../../src/utils/logger.util.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    logger: {
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn(),
-    },
-  };
-});
+// Use manual mocks from __mocks__ directories
+jest.mock('../../../src/communication/communicationManager.service.js');
+jest.mock('../../../src/communication/schemaInterpreter.service.js');
+jest.mock('../../../src/utils/logger.util.js');
 
 import { jest } from '@jest/globals';
 
@@ -49,18 +26,8 @@ import { logger } from '../../../src/utils/logger.util.js';
 
 describe('gRPC Fallback Service', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
     process.env.GRPC_ENABLED = 'true';
-    // Mocks are already jest.fn() from factory, reset them directly
-    shouldCallCoordinator.mockReset();
-    callCoordinatorRoute.mockReset();
-    processCoordinatorResponse.mockReset();
-    interpretNormalizedFields.mockReset();
-    createStructuredFields.mockReset();
-    logger.info.mockReset();
-    logger.warn.mockReset();
-    logger.error.mockReset();
-    logger.debug.mockReset();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {

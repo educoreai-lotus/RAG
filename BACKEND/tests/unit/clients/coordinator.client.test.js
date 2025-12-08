@@ -4,25 +4,9 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// For ES modules, use jest.createMockFromModule in factory functions
-jest.mock('../../../src/clients/grpcClient.util.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    createGrpcClient: jest.fn(),
-    grpcCall: jest.fn(),
-  };
-});
-jest.mock('../../../src/utils/logger.util.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    logger: {
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn(),
-    },
-  };
-});
+// Use manual mocks from __mocks__ directories
+jest.mock('../../../src/clients/grpcClient.util.js');
+jest.mock('../../../src/utils/logger.util.js');
 
 import { jest } from '@jest/globals';
 
@@ -46,31 +30,10 @@ describe('Coordinator Client', () => {
       close: jest.fn(),
     };
 
-    // Reset and set up mocks - they are already jest.fn() from factory
-    // Use them directly without jest.mocked() wrapper
-    if (createGrpcClient && typeof createGrpcClient.mockReset === 'function') {
-      createGrpcClient.mockReset();
-    }
-    if (grpcCall && typeof grpcCall.mockReset === 'function') {
-      grpcCall.mockReset();
-    }
-    if (createGrpcClient && typeof createGrpcClient.mockReturnValue === 'function') {
-      createGrpcClient.mockReturnValue(mockClient);
-    }
-    
-    // Reset logger mocks
-    if (logger.info && typeof logger.info.mockReset === 'function') {
-      logger.info.mockReset();
-    }
-    if (logger.warn && typeof logger.warn.mockReset === 'function') {
-      logger.warn.mockReset();
-    }
-    if (logger.error && typeof logger.error.mockReset === 'function') {
-      logger.error.mockReset();
-    }
-    if (logger.debug && typeof logger.debug.mockReset === 'function') {
-      logger.debug.mockReset();
-    }
+    // Reset and set up mocks - manual mocks are already jest.fn() instances
+    createGrpcClient.mockReset();
+    grpcCall.mockReset();
+    createGrpcClient.mockReturnValue(mockClient);
 
     // Reset environment variables
     delete process.env.COORDINATOR_ENABLED;

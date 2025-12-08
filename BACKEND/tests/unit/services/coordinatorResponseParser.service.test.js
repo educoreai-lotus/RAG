@@ -4,17 +4,8 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// For ES modules, use require() to access jest in factory functions
-jest.mock('../../../src/utils/logger.util.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    logger: {
-      debug: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    },
-  };
-});
+// Use manual mock from __mocks__ directory
+jest.mock('../../../src/utils/logger.util.js');
 
 import { jest } from '@jest/globals';
 
@@ -31,10 +22,6 @@ import { logger } from '../../../src/utils/logger.util.js';
 describe('Coordinator Response Parser', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mocks are already jest.fn() from factory, reset them directly
-    logger.debug.mockReset();
-    logger.warn.mockReset();
-    logger.error.mockReset();
   });
 
   describe('parseRouteResponse', () => {

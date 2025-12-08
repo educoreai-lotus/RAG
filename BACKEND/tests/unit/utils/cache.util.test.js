@@ -3,18 +3,8 @@
  */
 
 // MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// For ES modules, use require() to access jest in factory functions
-jest.mock('../../../src/config/redis.config.js', () => {
-  const { jest } = require('@jest/globals');
-  return {
-    redis: {
-      get: jest.fn(),
-      setex: jest.fn(),
-      del: jest.fn(),
-      exists: jest.fn(),
-    },
-  };
-});
+// Use manual mock from __mocks__ directory
+jest.mock('../../../src/config/redis.config.js');
 
 import { jest } from '@jest/globals';
 import { get, set, del, exists } from '../../../src/utils/cache.util.js';
@@ -23,11 +13,7 @@ import { redis } from '../../../src/config/redis.config.js';
 describe('Cache Utility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mocks are already jest.fn() from factory, reset them directly
-    redis.get.mockReset();
-    redis.setex.mockReset();
-    redis.del.mockReset();
-    redis.exists.mockReset();
+    // mockReset not needed - clearAllMocks handles it
   });
 
   describe('get', () => {
