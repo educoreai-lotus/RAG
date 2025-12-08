@@ -92,7 +92,7 @@ describe('gRPC Fallback Service', () => {
           tenantId: 'org-123',
         });
 
-        expect(shouldCallCoordinator)).toHaveBeenCalled();
+        expect(shouldCallCoordinator).toHaveBeenCalled();
       });
     });
 
