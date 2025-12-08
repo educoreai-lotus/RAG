@@ -460,7 +460,7 @@ describe('gRPC Fallback Service', () => {
           // userId not provided
         });
 
-        expect(callCoordinatorRoute)).toHaveBeenCalledWith(
+        expect(callCoordinatorRoute).toHaveBeenCalledWith(
           expect.objectContaining({
             user_id: 'anonymous',
           })
@@ -489,7 +489,7 @@ describe('gRPC Fallback Service', () => {
           ],
         });
 
-        expect(callCoordinatorRoute)).toHaveBeenCalledWith(
+        expect(callCoordinatorRoute).toHaveBeenCalledWith(
           expect.objectContaining({
             metadata: expect.objectContaining({
               vector_results_count: 3,
