@@ -273,10 +273,19 @@ async function runEmbeddingsIfNeeded() {
 async function startServer() {
   try {
     log.info('Starting server...');
+    log.info(`PORT: ${process.env.PORT || 'not set (will use default 3000)'}`);
+    log.info(`HOST: ${process.env.HOST || 'not set (will use default 0.0.0.0)'}`);
+    log.info(`NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+    
     const serverPath = join(backendRoot, 'src', 'index.js');
+    
+    // Import the server - this will start the Express app
     await import(serverPath);
+    
+    log.info('✅ Server module loaded successfully');
+    // Note: The server.listen() is called inside index.js, so we don't need to do anything else here
   } catch (error) {
-    log.error('Server start failed:', error.message);
+    log.error('❌ Server start failed:', error.message);
     log.error('Stack:', error.stack);
     process.exit(1);
   }

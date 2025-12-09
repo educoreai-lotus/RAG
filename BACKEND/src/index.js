@@ -17,6 +17,7 @@ import recommendationsRoutes from './routes/recommendations.routes.js';
 import knowledgeGraphRoutes from './routes/knowledgeGraph.routes.js';
 import diagnosticsRoutes from './routes/diagnostics.routes.js';
 import contentRoutes from './routes/content.routes.js';
+import authRoutes from './routes/auth.routes.js';
 
 // Get directory paths for serving static files
 const __filename = fileURLToPath(import.meta.url);
@@ -36,10 +37,16 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:5174',
+  'http://localhost:8080',
   process.env.FRONTEND_URL,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
   process.env.FRONTEND_VERCEL_URL,
+  // Add common Vercel patterns
+  process.env.VERCEL ? `https://${process.env.VERCEL}` : null,
 ].filter(Boolean); // Remove null/undefined values
+
+// Check if we should allow all Vercel deployments
+const allowAllVercel = process.env.ALLOW_ALL_VERCEL === 'true';
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -51,17 +58,23 @@ const corsOptions = {
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
+    } else if (allowAllVercel && /^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      // Allow any Vercel deployment if ALLOW_ALL_VERCEL is set
+      logger.info('CORS: Allowing Vercel origin (ALLOW_ALL_VERCEL enabled):', origin);
+      callback(null, true);
     } else {
       // Log for debugging
       logger.warn('CORS blocked origin:', origin);
       logger.info('Allowed origins:', allowedOrigins);
+      logger.info('💡 To allow this origin, set FRONTEND_URL or FRONTEND_VERCEL_URL in Railway');
+      logger.info('💡 Or set ALLOW_ALL_VERCEL=true to allow all Vercel deployments');
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'X-Tenant-Id', 'X-Source', 'X-Embed-Secret'],
 };
 
 // Middleware
@@ -77,6 +90,7 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       health: '/health',
+      auth: '/auth/me',
       query: '/api/v1/query',
       assessmentSupport: '/api/assessment/support',
       devlabSupport: '/api/devlab/support',
@@ -172,26 +186,80 @@ app.use('/api/v1', knowledgeGraphRoutes);
 app.use('/api', microserviceSupportRoutes);
 app.use('/api/debug', diagnosticsRoutes);
 app.use('/api/debug', contentRoutes);
+app.use('/auth', authRoutes);
 
 // Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info(`Root endpoint: http://localhost:${PORT}/`);
-  logger.info(`Health check: http://localhost:${PORT}/health`);
-  logger.info(`Query endpoint: http://localhost:${PORT}/api/v1/query`);
-  logger.info(`Assessment support: http://localhost:${PORT}/api/assessment/support`);
-  logger.info(`DevLab support: http://localhost:${PORT}/api/devlab/support`);
-  logger.info(`Recommendations: http://localhost:${PORT}/api/v1/personalized/recommendations/:userId`);
-  logger.info(`Skill progress: http://localhost:${PORT}/api/v1/knowledge/progress/user/:userId/skill/:skillId?tenant_id=dev.educore.local`);
-  logger.info(`Diagnostics: http://localhost:${PORT}/api/debug/embeddings-status`);
-  logger.info(`Vector search test: http://localhost:${PORT}/api/debug/test-vector-search?query=test`);
-  logger.info(`Embed widget: http://localhost:${PORT}/embed/bot.js`);
-  logger.info(`Embed bundle: http://localhost:${PORT}/embed/bot-bundle.js`);
-  logger.info(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+// Start server - bind to 0.0.0.0 for Railway/cloud deployments
+const HOST = process.env.HOST || '0.0.0.0';
+
+// Error handling for server startup
+const server = app.listen(PORT, HOST, () => {
+  logger.info(`✅ Server running on ${HOST}:${PORT}`);
+  logger.info(`Root endpoint: http://${HOST}:${PORT}/`);
+  logger.info(`Health check: http://${HOST}:${PORT}/health`);
+  logger.info(`Query endpoint: http://${HOST}:${PORT}/api/v1/query`);
+  logger.info(`Auth endpoint: http://${HOST}:${PORT}/auth/me`);
+  logger.info(`Assessment support: http://${HOST}:${PORT}/api/assessment/support`);
+  logger.info(`DevLab support: http://${HOST}:${PORT}/api/devlab/support`);
+  logger.info(`Recommendations: http://${HOST}:${PORT}/api/v1/personalized/recommendations/:userId`);
+  logger.info(`Skill progress: http://${HOST}:${PORT}/api/v1/knowledge/progress/user/:userId/skill/:skillId?tenant_id=dev.educore.local`);
+  logger.info(`Diagnostics: http://${HOST}:${PORT}/api/debug/embeddings-status`);
+  logger.info(`Vector search test: http://${HOST}:${PORT}/api/debug/test-vector-search?query=test`);
+  logger.info(`Embed widget: http://${HOST}:${PORT}/embed/bot.js`);
+  logger.info(`Embed bundle: http://${HOST}:${PORT}/embed/bot-bundle.js`);
+  logger.info(`CORS allowed origins: ${allowedOrigins.join(', ') || 'none configured'}`);
+  logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Signal that server is ready (for Railway health checks)
+  if (process.send) {
+    process.send('ready');
+  }
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    logger.error(`❌ Port ${PORT} is already in use`);
+    logger.error('💡 Try changing the PORT environment variable');
+  } else {
+    logger.error('❌ Server error:', error);
+  }
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit in production - let the server continue running
+  if (process.env.NODE_ENV === 'development') {
+    process.exit(1);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });
 
 
