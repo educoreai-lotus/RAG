@@ -22,7 +22,6 @@ jest.mock('../../../src/config/redis.config.js', () => ({
 }));
 
 import { get, set, del, exists } from '../../../src/utils/cache.util.js';
-import { redis, isRedisAvailable } from '../../../src/config/redis.config.js';
 
 describe('Cache Utility', () => {
   let getSpy, setexSpy, delSpy, existsSpy;
