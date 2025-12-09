@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware.js';
 import { logger } from './utils/logger.util.js';
 import { isCoordinatorAvailable } from './clients/coordinator.client.js';
@@ -24,6 +24,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '../..');
 const frontendDistPath = path.join(rootDir, 'FRONTEND', 'dist');
+
+// Log build information for debugging
+logger.info('🔍 Checking frontend build files...');
+logger.info(`   Root directory: ${rootDir}`);
+logger.info(`   Frontend dist path: ${frontendDistPath}`);
+logger.info(`   Frontend dist exists: ${existsSync(frontendDistPath)}`);
 
 // Load environment variables
 dotenv.config();
@@ -217,6 +223,16 @@ if (embedDirExists && (botJsExists || botBundleExists)) {
   logger.info('✅ Embed files serving enabled from:', embedPath);
   logger.info(`   bot.js: ${botJsExists ? '✅' : '❌'} (${botJsPath})`);
   logger.info(`   bot-bundle.js: ${botBundleExists ? '✅' : '❌'} (${botBundlePath})`);
+  
+  // List all files in embed directory for debugging
+  if (embedDirExists) {
+    try {
+      const files = readdirSync(embedPath);
+      logger.info(`   Files in embed directory: ${files.join(', ') || 'none'}`);
+    } catch (err) {
+      logger.warn('   Could not list embed directory files:', err.message);
+    }
+  }
 } else {
   logger.warn('⚠️  Embed files directory or files not found');
   logger.warn('   Directory exists:', embedDirExists, '(', embedPath, ')');
