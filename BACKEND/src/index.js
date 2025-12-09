@@ -151,7 +151,16 @@ app.get('/robots.txt', (req, res) => {
 // Serve embed files (bot.js and bot-bundle.js) for widget integration
 // This allows the widget to be embedded in other microservices
 const embedPath = path.join(frontendDistPath, 'embed');
-if (existsSync(embedPath)) {
+const botJsPath = path.join(embedPath, 'bot.js');
+const botBundlePath = path.join(embedPath, 'bot-bundle.js');
+
+// Check if embed directory and files exist
+const embedDirExists = existsSync(embedPath);
+const botJsExists = existsSync(botJsPath);
+const botBundleExists = existsSync(botBundlePath);
+
+if (embedDirExists && (botJsExists || botBundleExists)) {
+  // Serve static files with error handling
   app.use('/embed', express.static(embedPath, {
     setHeaders: (res, filePath) => {
       // Set proper MIME types
@@ -162,18 +171,79 @@ if (existsSync(embedPath)) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     },
+    // Add error handling for missing files
+    onError: (err, req, res, next) => {
+      logger.error('Error serving embed file:', {
+        path: req.path,
+        error: err.message,
+      });
+      next(err);
+    },
   }));
+  
+  // Add specific route handlers with better error messages
+  app.get('/embed/bot.js', (req, res, next) => {
+    if (!botJsExists) {
+      logger.error('bot.js not found at:', botJsPath);
+      return res.status(500).json({
+        error: {
+          message: 'bot.js file not found',
+          statusCode: 500,
+          hint: 'Make sure FRONTEND/dist/embed/bot.js exists. Run: cd FRONTEND && npm run build',
+          path: botJsPath,
+        },
+      });
+    }
+    next();
+  });
+
+  app.get('/embed/bot-bundle.js', (req, res, next) => {
+    if (!botBundleExists) {
+      logger.error('bot-bundle.js not found at:', botBundlePath);
+      return res.status(500).json({
+        error: {
+          message: 'bot-bundle.js file not found',
+          statusCode: 500,
+          hint: 'Make sure FRONTEND/dist/embed/bot-bundle.js exists. Run: cd FRONTEND && npm run build',
+          path: botBundlePath,
+        },
+      });
+    }
+    next();
+  });
+
   logger.info('✅ Embed files serving enabled from:', embedPath);
+  logger.info(`   bot.js: ${botJsExists ? '✅' : '❌'} (${botJsPath})`);
+  logger.info(`   bot-bundle.js: ${botBundleExists ? '✅' : '❌'} (${botBundlePath})`);
 } else {
-  logger.warn('⚠️  Embed files directory not found:', embedPath);
+  logger.warn('⚠️  Embed files directory or files not found');
+  logger.warn('   Directory exists:', embedDirExists, '(', embedPath, ')');
+  logger.warn('   bot.js exists:', botJsExists, '(', botJsPath, ')');
+  logger.warn('   bot-bundle.js exists:', botBundleExists, '(', botBundlePath, ')');
   logger.warn('   Make sure to build the frontend: cd FRONTEND && npm run build');
-  // Add a helpful 404 handler for embed routes
+  
+  // Add a helpful error handler for embed routes
   app.use('/embed', (req, res) => {
-    res.status(404).json({
+    const requestedFile = req.path === '/bot.js' ? 'bot.js' : req.path === '/bot-bundle.js' ? 'bot-bundle.js' : 'file';
+    logger.error(`Embed ${requestedFile} requested but not found:`, {
+      path: req.path,
+      embedDirExists,
+      botJsExists,
+      botBundleExists,
+      embedPath,
+    });
+    
+    res.status(500).json({
       error: {
-        message: 'Embed files not found. Please build the frontend first.',
-        statusCode: 404,
-        hint: 'Run: cd FRONTEND && npm run build',
+        message: `Embed ${requestedFile} not found`,
+        statusCode: 500,
+        hint: 'Make sure to build the frontend: cd FRONTEND && npm run build',
+        details: {
+          embedDirectory: embedPath,
+          embedDirectoryExists: embedDirExists,
+          botJsExists,
+          botBundleExists,
+        },
       },
     });
   });
