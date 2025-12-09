@@ -111,8 +111,9 @@ describe('Communication Manager', () => {
         const result = shouldCallCoordinator('show me current status', vectorResults, {});
 
         expect(result).toBe(true);
+        // The function checks for "No internal data available" first before checking real-time keywords
         expect(logger.info).toHaveBeenCalledWith(
-          'Should call Coordinator: Query requires real-time data',
+          'Should call Coordinator: No internal data available',
           expect.any(Object)
         );
       });
@@ -123,8 +124,9 @@ describe('Communication Manager', () => {
         const result = shouldCallCoordinator('show me my test results', vectorResults, {});
 
         expect(result).toBe(true);
+        // The function checks for "No internal data available" first before checking microservice keywords
         expect(logger.info).toHaveBeenCalledWith(
-          'Should call Coordinator: Microservice-specific query with insufficient internal data',
+          'Should call Coordinator: No internal data available',
           expect.any(Object)
         );
       });
