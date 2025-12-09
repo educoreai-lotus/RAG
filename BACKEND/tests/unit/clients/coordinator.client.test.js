@@ -55,11 +55,15 @@ describe('Coordinator Client', () => {
     vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
     // Reset environment variables
-    delete process.env.COORDINATOR_ENABLED;
+    // CRITICAL: Set COORDINATOR_ENABLED to false to prevent real initialization
+    process.env.COORDINATOR_ENABLED = 'false';
     delete process.env.COORDINATOR_URL;
     delete process.env.COORDINATOR_GRPC_PORT;
     delete process.env.COORDINATOR_GRPC_URL;
     delete process.env.GRPC_TIMEOUT;
+    
+    // Provide required env vars to prevent errors
+    process.env.RAG_PRIVATE_KEY = process.env.RAG_PRIVATE_KEY || 'test-key';
   });
 
   afterEach(() => {

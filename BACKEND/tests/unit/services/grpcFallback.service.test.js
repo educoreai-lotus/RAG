@@ -5,9 +5,9 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// CRITICAL: Named exports with inline factory functions
+// CRITICAL: Named exports with inline factory functions and default return values
 vi.mock('../../../src/communication/communicationManager.service.js', () => ({
-  shouldCallCoordinator: vi.fn(),
+  shouldCallCoordinator: vi.fn(() => false), // Default return value
   callCoordinatorRoute: vi.fn(),
   processCoordinatorResponse: vi.fn(),
 }));
@@ -42,6 +42,9 @@ describe('gRPC Fallback Service', () => {
     vi.clearAllMocks();
     
     process.env.GRPC_ENABLED = 'true';
+    
+    // Reset to default behavior
+    shouldCallCoordinator.mockReturnValue(false);
     
     // Spy on logger methods (object methods)
     vi.spyOn(logger, 'info').mockImplementation(() => {});
