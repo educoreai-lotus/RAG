@@ -69,7 +69,9 @@
     "js-yaml": "^4.1.1"
   },
   "overrides": {
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.1.1",
+    "esbuild": "^0.25.0",
+    "jws": "^3.2.3"
   },
   "prisma": {
     "seed": "node ../DATABASE/prisma/seed.js"
