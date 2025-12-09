@@ -5,10 +5,26 @@
 
 import { jest } from '@jest/globals';
 
-// Mock modules BEFORE imports (ES modules require this)
-jest.mock('../../../src/communication/communicationManager.service.js');
-jest.mock('../../../src/communication/schemaInterpreter.service.js');
-jest.mock('../../../src/utils/logger.util.js');
+// CRITICAL: Named exports with inline factory functions
+jest.mock('../../../src/communication/communicationManager.service.js', () => ({
+  shouldCallCoordinator: jest.fn(),
+  callCoordinatorRoute: jest.fn(),
+  processCoordinatorResponse: jest.fn(),
+}));
+
+jest.mock('../../../src/communication/schemaInterpreter.service.js', () => ({
+  interpretNormalizedFields: jest.fn(),
+  createStructuredFields: jest.fn(),
+}));
+
+jest.mock('../../../src/utils/logger.util.js', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
 
 // Import AFTER mocks
 import {

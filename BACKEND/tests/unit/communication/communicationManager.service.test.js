@@ -5,10 +5,32 @@
 
 import { jest } from '@jest/globals';
 
-// Mock modules BEFORE imports (ES modules require this)
-jest.mock('../../../src/clients/coordinator.client.js');
-jest.mock('../../../src/services/coordinatorResponseParser.service.js');
-jest.mock('../../../src/utils/logger.util.js');
+// CRITICAL: Named exports with inline factory functions
+jest.mock('../../../src/clients/coordinator.client.js', () => ({
+  routeRequest: jest.fn(),
+  isCoordinatorAvailable: jest.fn(),
+  getMetrics: jest.fn(),
+  resetClient: jest.fn(),
+  resetMetrics: jest.fn(),
+}));
+
+jest.mock('../../../src/services/coordinatorResponseParser.service.js', () => ({
+  parseRouteResponse: jest.fn(),
+  extractBusinessData: jest.fn(),
+  getRoutingSummary: jest.fn(),
+  isAllFailed: jest.fn(),
+  isFallbackUsed: jest.fn(),
+  getQualityAssessment: jest.fn(),
+}));
+
+jest.mock('../../../src/utils/logger.util.js', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
 
 // Import AFTER mocks
 import { routeRequest } from '../../../src/clients/coordinator.client.js';

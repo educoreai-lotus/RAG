@@ -5,9 +5,21 @@
 
 import { jest } from '@jest/globals';
 
-// Mock modules BEFORE imports (ES modules require this)
-jest.mock('../../../src/clients/grpcClient.util.js');
-jest.mock('../../../src/utils/logger.util.js');
+// CRITICAL: Named exports with inline factory functions
+jest.mock('../../../src/clients/grpcClient.util.js', () => ({
+  createGrpcClient: jest.fn(),
+  grpcCall: jest.fn(),
+  loadProto: jest.fn(),
+}));
+
+jest.mock('../../../src/utils/logger.util.js', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
 
 // Import AFTER mocks
 import { createGrpcClient, grpcCall } from '../../../src/clients/grpcClient.util.js';

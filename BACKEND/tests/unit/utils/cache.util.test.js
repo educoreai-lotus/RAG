@@ -4,8 +4,22 @@
 
 import { jest } from '@jest/globals';
 
-// Mock redis.config.js BEFORE imports (ES modules require this)
-jest.mock('../../../src/config/redis.config.js');
+// CRITICAL: Factory function returns named exports
+jest.mock('../../../src/config/redis.config.js', () => {
+  const mockRedis = {
+    get: jest.fn(),
+    setex: jest.fn(),
+    del: jest.fn(),
+    exists: jest.fn(),
+    status: 'ready',
+  };
+  
+  return {
+    redis: mockRedis,
+    isRedisAvailable: jest.fn(() => true),
+    getRedis: jest.fn(() => mockRedis),
+  };
+});
 
 // Import AFTER mocks
 import { redis, isRedisAvailable } from '../../../src/config/redis.config.js';
