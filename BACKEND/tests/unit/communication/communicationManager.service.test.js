@@ -181,7 +181,7 @@ describe('Communication Manager', () => {
         metadata: { category: 'payment' },
       });
 
-      expect(routeRequest).toHaveBeenCalledWith({
+      expect(routeRequestSpy).toHaveBeenCalledWith({
         tenant_id: 'org-123',
         user_id: 'user-456',
         query_text: 'test query',
@@ -244,7 +244,7 @@ describe('Communication Manager', () => {
         metadata: { custom: 'value' },
       });
 
-      expect(routeRequest).toHaveBeenCalledWith({
+      expect(routeRequestSpy).toHaveBeenCalledWith({
         tenant_id: 'org-123',
         user_id: 'user-456',
         query_text: 'test query',
