@@ -2,20 +2,20 @@
  * Retry utility tests
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { retry, sleep } from '../../../src/utils/retry.util.js';
 
 describe('Retry Utility', () => {
   describe('retry', () => {
     it('should succeed on first attempt', async () => {
-      const fn = jest.fn().mockResolvedValue('success');
+      const fn = vi.fn().mockResolvedValue('success');
       const result = await retry(fn);
       expect(result).toBe('success');
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
     it('should retry on failure and succeed', async () => {
-      const fn = jest
+      const fn = vi
         .fn()
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce('success');
@@ -25,14 +25,14 @@ describe('Retry Utility', () => {
     });
 
     it('should throw after max retries', async () => {
-      const fn = jest.fn().mockRejectedValue(new Error('fail'));
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
       await expect(retry(fn, { maxRetries: 2, initialDelay: 10 })).rejects.toThrow('fail');
       expect(fn).toHaveBeenCalledTimes(3); // Initial + 2 retries
     });
 
     it('should respect shouldRetry function', async () => {
-      const fn = jest.fn().mockRejectedValue(new Error('fail'));
-      const shouldRetry = jest.fn().mockReturnValue(false);
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const shouldRetry = vi.fn().mockReturnValue(false);
       await expect(retry(fn, { shouldRetry, initialDelay: 10 })).rejects.toThrow('fail');
       expect(fn).toHaveBeenCalledTimes(1);
       expect(shouldRetry).toHaveBeenCalled();

@@ -2,7 +2,7 @@
  * Error handler middleware tests
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { errorHandler, notFoundHandler } from '../../../src/middleware/error-handler.middleware.js';
 
 describe('Error Handler Middleware', () => {
@@ -17,8 +17,8 @@ describe('Error Handler Middleware', () => {
       };
 
       const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
       };
 
       errorHandler(err, req, res, () => {});
@@ -37,8 +37,8 @@ describe('Error Handler Middleware', () => {
 
       const req = { url: '/test', method: 'GET' };
       const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
       };
 
       errorHandler(err, req, res, () => {});
@@ -53,11 +53,11 @@ describe('Error Handler Middleware', () => {
         path: '/not-found',
         url: '/not-found',
         query: {},
-        get: jest.fn().mockReturnValue('test-agent'),
+        get: vi.fn().mockReturnValue('test-agent'),
       };
       const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
       };
 
       notFoundHandler(req, res, () => {});

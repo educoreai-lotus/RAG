@@ -2,22 +2,22 @@
  * Cache utility tests
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // CRITICAL: Factory function returns named exports
-jest.mock('../../../src/config/redis.config.js', () => {
+vi.mock('../../../src/config/redis.config.js', () => {
   const mockRedis = {
-    get: jest.fn(),
-    setex: jest.fn(),
-    del: jest.fn(),
-    exists: jest.fn(),
+    get: vi.fn(),
+    setex: vi.fn(),
+    del: vi.fn(),
+    exists: vi.fn(),
     status: 'ready',
   };
   
   return {
     redis: mockRedis,
-    isRedisAvailable: jest.fn(() => true),
-    getRedis: jest.fn(() => mockRedis),
+    isRedisAvailable: vi.fn(() => true),
+    getRedis: vi.fn(() => mockRedis),
   };
 });
 
@@ -28,7 +28,7 @@ import { get, set, del, exists } from '../../../src/utils/cache.util.js';
 describe('Cache Utility', () => {
   beforeEach(() => {
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Setup default mock return values
     redis.get.mockResolvedValue(null);

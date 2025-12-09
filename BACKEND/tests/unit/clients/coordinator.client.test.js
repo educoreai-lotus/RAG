@@ -3,21 +3,21 @@
  * Tests for gRPC client initialization, connection handling, and Route() method calls
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // CRITICAL: Named exports with inline factory functions
-jest.mock('../../../src/clients/grpcClient.util.js', () => ({
-  createGrpcClient: jest.fn(),
-  grpcCall: jest.fn(),
-  loadProto: jest.fn(),
+vi.mock('../../../src/clients/grpcClient.util.js', () => ({
+  createGrpcClient: vi.fn(),
+  grpcCall: vi.fn(),
+  loadProto: vi.fn(),
 }));
 
-jest.mock('../../../src/utils/logger.util.js', () => ({
+vi.mock('../../../src/utils/logger.util.js', () => ({
   logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -32,7 +32,7 @@ describe('Coordinator Client', () => {
 
   beforeEach(() => {
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Reset client state
     resetClient();
@@ -40,8 +40,8 @@ describe('Coordinator Client', () => {
 
     // Mock gRPC client
     mockClient = {
-      Route: jest.fn(),
-      close: jest.fn(),
+      Route: vi.fn(),
+      close: vi.fn(),
     };
 
     // Setup default mock returns
@@ -49,10 +49,10 @@ describe('Coordinator Client', () => {
     grpcCall.mockResolvedValue({});
 
     // Spy on logger methods
-    jest.spyOn(logger, 'info').mockImplementation(() => {});
-    jest.spyOn(logger, 'warn').mockImplementation(() => {});
-    jest.spyOn(logger, 'error').mockImplementation(() => {});
-    jest.spyOn(logger, 'debug').mockImplementation(() => {});
+    vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
     // Reset environment variables
     delete process.env.COORDINATOR_ENABLED;
@@ -63,7 +63,7 @@ describe('Coordinator Client', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     resetClient();
     resetMetrics();
   });

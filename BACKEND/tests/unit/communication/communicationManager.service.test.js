@@ -3,32 +3,32 @@
  * Tests for decision logic, Coordinator integration, and response processing
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // CRITICAL: Named exports with inline factory functions
-jest.mock('../../../src/clients/coordinator.client.js', () => ({
-  routeRequest: jest.fn(),
-  isCoordinatorAvailable: jest.fn(),
-  getMetrics: jest.fn(),
-  resetClient: jest.fn(),
-  resetMetrics: jest.fn(),
+vi.mock('../../../src/clients/coordinator.client.js', () => ({
+  routeRequest: vi.fn(),
+  isCoordinatorAvailable: vi.fn(),
+  getMetrics: vi.fn(),
+  resetClient: vi.fn(),
+  resetMetrics: vi.fn(),
 }));
 
-jest.mock('../../../src/services/coordinatorResponseParser.service.js', () => ({
-  parseRouteResponse: jest.fn(),
-  extractBusinessData: jest.fn(),
-  getRoutingSummary: jest.fn(),
-  isAllFailed: jest.fn(),
-  isFallbackUsed: jest.fn(),
-  getQualityAssessment: jest.fn(),
+vi.mock('../../../src/services/coordinatorResponseParser.service.js', () => ({
+  parseRouteResponse: vi.fn(),
+  extractBusinessData: vi.fn(),
+  getRoutingSummary: vi.fn(),
+  isAllFailed: vi.fn(),
+  isFallbackUsed: vi.fn(),
+  getQualityAssessment: vi.fn(),
 }));
 
-jest.mock('../../../src/utils/logger.util.js', () => ({
+vi.mock('../../../src/utils/logger.util.js', () => ({
   logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -49,17 +49,17 @@ import {
 describe('Communication Manager', () => {
   beforeEach(() => {
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Spy on logger methods (object methods)
-    jest.spyOn(logger, 'info').mockImplementation(() => {});
-    jest.spyOn(logger, 'warn').mockImplementation(() => {});
-    jest.spyOn(logger, 'error').mockImplementation(() => {});
-    jest.spyOn(logger, 'debug').mockImplementation(() => {});
+    vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(logger, 'debug').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('shouldCallCoordinator', () => {

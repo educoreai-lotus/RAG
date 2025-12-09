@@ -2,7 +2,7 @@
  * Logger utility tests
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { logger } from '../../../src/utils/logger.util.js';
 
 describe('Logger Utility', () => {
@@ -14,14 +14,14 @@ describe('Logger Utility', () => {
   });
 
   it('should log info message', () => {
-    const spy = jest.spyOn(logger, 'info');
+    const spy = vi.spyOn(logger, 'info');
     logger.info('Test message');
     expect(spy).toHaveBeenCalledWith('Test message');
     spy.mockRestore();
   });
 
   it('should log error message', () => {
-    const spy = jest.spyOn(logger, 'error');
+    const spy = vi.spyOn(logger, 'error');
     logger.error('Error message');
     expect(spy).toHaveBeenCalledWith('Error message');
     spy.mockRestore();

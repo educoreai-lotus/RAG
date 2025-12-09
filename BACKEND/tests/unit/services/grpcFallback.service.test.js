@@ -3,26 +3,26 @@
  * Tests for RAG pipeline integration with Coordinator
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // CRITICAL: Named exports with inline factory functions
-jest.mock('../../../src/communication/communicationManager.service.js', () => ({
-  shouldCallCoordinator: jest.fn(),
-  callCoordinatorRoute: jest.fn(),
-  processCoordinatorResponse: jest.fn(),
+vi.mock('../../../src/communication/communicationManager.service.js', () => ({
+  shouldCallCoordinator: vi.fn(),
+  callCoordinatorRoute: vi.fn(),
+  processCoordinatorResponse: vi.fn(),
 }));
 
-jest.mock('../../../src/communication/schemaInterpreter.service.js', () => ({
-  interpretNormalizedFields: jest.fn(),
-  createStructuredFields: jest.fn(),
+vi.mock('../../../src/communication/schemaInterpreter.service.js', () => ({
+  interpretNormalizedFields: vi.fn(),
+  createStructuredFields: vi.fn(),
 }));
 
-jest.mock('../../../src/utils/logger.util.js', () => ({
+vi.mock('../../../src/utils/logger.util.js', () => ({
   logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -39,15 +39,15 @@ import { grpcFetchByCategory } from '../../../src/services/grpcFallback.service.
 describe('gRPC Fallback Service', () => {
   beforeEach(() => {
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     process.env.GRPC_ENABLED = 'true';
     
     // Spy on logger methods (object methods)
-    jest.spyOn(logger, 'info').mockImplementation(() => {});
-    jest.spyOn(logger, 'warn').mockImplementation(() => {});
-    jest.spyOn(logger, 'error').mockImplementation(() => {});
-    jest.spyOn(logger, 'debug').mockImplementation(() => {});
+    vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(logger, 'debug').mockImplementation(() => {});
   });
 
   afterEach(() => {

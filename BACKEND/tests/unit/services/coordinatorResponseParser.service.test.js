@@ -3,7 +3,7 @@
  * Tests for parsing RouteResponse, extracting business data, and handling all scenarios
  */
 
-import { vi as jest } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import {
   parseRouteResponse,
@@ -17,14 +17,14 @@ import { logger } from '../../../src/utils/logger.util.js';
 
 describe('Coordinator Response Parser', () => {
   beforeEach(() => {
-    jest.spyOn(logger, 'debug').mockImplementation(() => {});
-    jest.spyOn(logger, 'warn').mockImplementation(() => {});
-    jest.spyOn(logger, 'error').mockImplementation(() => {});
-    jest.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(logger, 'info').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('parseRouteResponse', () => {
