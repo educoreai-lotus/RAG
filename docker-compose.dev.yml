@@ -44,7 +44,7 @@ services:
       - '2181:2181'
 
   kafka:
-    image: bitnami/kafka:3.6
+    image: bitnami/kafka:3.6.0
     container_name: rag_kafka_dev
     restart: unless-stopped
     ports:
