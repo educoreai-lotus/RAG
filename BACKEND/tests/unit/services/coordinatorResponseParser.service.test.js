@@ -3,10 +3,6 @@
  * Tests for parsing RouteResponse, extracting business data, and handling all scenarios
  */
 
-// MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// Use manual mock from __mocks__ directory
-jest.mock('../../../src/utils/logger.util.js');
-
 import { jest } from '@jest/globals';
 
 import {
@@ -21,7 +17,14 @@ import { logger } from '../../../src/utils/logger.util.js';
 
 describe('Coordinator Response Parser', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.spyOn(logger, 'debug').mockImplementation(() => {});
+    jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    jest.spyOn(logger, 'error').mockImplementation(() => {});
+    jest.spyOn(logger, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('parseRouteResponse', () => {

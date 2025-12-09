@@ -3,31 +3,33 @@
  * Tests for RAG pipeline integration with Coordinator
  */
 
-// MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// Use manual mocks from __mocks__ directories
-jest.mock('../../../src/communication/communicationManager.service.js');
-jest.mock('../../../src/communication/schemaInterpreter.service.js');
-jest.mock('../../../src/utils/logger.util.js');
-
 import { jest } from '@jest/globals';
 
-// Import AFTER mocks are set up
+// Import modules to spy on
+import * as communicationManager from '../../../src/communication/communicationManager.service.js';
+import * as schemaInterpreter from '../../../src/communication/schemaInterpreter.service.js';
 import { grpcFetchByCategory } from '../../../src/services/grpcFallback.service.js';
-import {
-  shouldCallCoordinator,
-  callCoordinatorRoute,
-  processCoordinatorResponse,
-} from '../../../src/communication/communicationManager.service.js';
-import {
-  interpretNormalizedFields,
-  createStructuredFields,
-} from '../../../src/communication/schemaInterpreter.service.js';
 import { logger } from '../../../src/utils/logger.util.js';
 
 describe('gRPC Fallback Service', () => {
+  let shouldCallCoordinatorSpy, callCoordinatorRouteSpy, processCoordinatorResponseSpy;
+  let interpretNormalizedFieldsSpy, createStructuredFieldsSpy;
+
   beforeEach(() => {
     process.env.GRPC_ENABLED = 'true';
-    jest.clearAllMocks();
+    
+    // Spy on module exports (named exports)
+    shouldCallCoordinatorSpy = jest.spyOn(communicationManager, 'shouldCallCoordinator').mockReturnValue(false);
+    callCoordinatorRouteSpy = jest.spyOn(communicationManager, 'callCoordinatorRoute').mockResolvedValue({});
+    processCoordinatorResponseSpy = jest.spyOn(communicationManager, 'processCoordinatorResponse').mockReturnValue({});
+    interpretNormalizedFieldsSpy = jest.spyOn(schemaInterpreter, 'interpretNormalizedFields').mockReturnValue({});
+    createStructuredFieldsSpy = jest.spyOn(schemaInterpreter, 'createStructuredFields').mockReturnValue({});
+    
+    // Spy on logger methods (object methods)
+    jest.spyOn(logger, 'info').mockImplementation(() => {});
+    jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    jest.spyOn(logger, 'error').mockImplementation(() => {});
+    jest.spyOn(logger, 'debug').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -47,25 +49,25 @@ describe('gRPC Fallback Service', () => {
 
         expect(result).toEqual([]);
         expect(logger.debug).toHaveBeenCalledWith('gRPC fallback disabled');
-        expect(shouldCallCoordinator).not.toHaveBeenCalled();
+        expect(shouldCallCoordinatorSpy).not.toHaveBeenCalled();
       });
 
       it('should proceed if GRPC_ENABLED is true', async () => {
         process.env.GRPC_ENABLED = 'true';
-        shouldCallCoordinator.mockReturnValue(false);
+        shouldCallCoordinatorSpy.mockReturnValue(false);
 
         await grpcFetchByCategory('payment', {
           query: 'test query',
           tenantId: 'org-123',
         });
 
-        expect(shouldCallCoordinator).toHaveBeenCalled();
+        expect(shouldCallCoordinatorSpy).toHaveBeenCalled();
       });
     });
 
     describe('Decision Logic', () => {
       it('should skip Coordinator if internal data is sufficient', async () => {
-        shouldCallCoordinator.mockReturnValue(false);
+        shouldCallCoordinatorSpy.mockReturnValue(false);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -85,13 +87,13 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should call Coordinator if internal data is insufficient', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({
           target_services: ['payment-service'],
           normalized_fields: { successful_service: 'payment-service' },
         });
 
-        processCoordinatorResponse.mockReturnValue({
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: ['payment-service'],
@@ -110,20 +112,20 @@ describe('gRPC Fallback Service', () => {
           vectorResults: [],
         });
 
-        expect(shouldCallCoordinator).toHaveBeenCalledWith(
+        expect(shouldCallCoordinatorSpy).toHaveBeenCalledWith(
           'test query',
           [],
           {}
         );
-        expect(callCoordinatorRoute).toHaveBeenCalled();
+        expect(callCoordinatorRouteSpy).toHaveBeenCalled();
       });
     });
 
     describe('Coordinator Integration', () => {
       it('should call Coordinator with correct parameters', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -140,7 +142,7 @@ describe('gRPC Fallback Service', () => {
           internalData: { test: 'data' },
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith({
+        expect(callCoordinatorRouteSpy).toHaveBeenCalledWith({
           tenant_id: 'org-123',
           user_id: 'user-456',
           query_text: 'show me payments',
@@ -153,8 +155,8 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should handle null Coordinator response', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue(null);
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue(null);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -169,9 +171,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should handle failed response processing', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue(null);
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue(null);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -188,8 +190,8 @@ describe('gRPC Fallback Service', () => {
 
     describe('Response Processing', () => {
       it('should convert Coordinator response to content items', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
 
         const mockProcessed = {
           status: 'success_primary',
@@ -218,7 +220,7 @@ describe('gRPC Fallback Service', () => {
           ],
         };
 
-        processCoordinatorResponse.mockReturnValue(mockProcessed);
+        processCoordinatorResponseSpy.mockReturnValue(mockProcessed);
         interpretNormalizedFields.mockReturnValue(mockInterpreted);
         createStructuredFields.mockReturnValue(mockStructured);
 
@@ -228,7 +230,7 @@ describe('gRPC Fallback Service', () => {
           userId: 'user-456',
         });
 
-        expect(processCoordinatorResponse).toHaveBeenCalled();
+        expect(processCoordinatorResponseSpy).toHaveBeenCalled();
         expect(interpretNormalizedFields).toHaveBeenCalledWith(
           mockProcessed.normalized_fields
         );
@@ -254,9 +256,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should use category as contentType if sourceType is missing', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -281,9 +283,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should handle empty sources', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -311,8 +313,8 @@ describe('gRPC Fallback Service', () => {
 
     describe('Error Handling', () => {
       it('should handle errors gracefully and return empty array', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockRejectedValue(new Error('Network error'));
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockRejectedValue(new Error('Network error'));
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -329,9 +331,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should handle processing errors', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockImplementation(() => {
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockImplementation(() => {
           throw new Error('Processing error');
         });
 
@@ -347,9 +349,9 @@ describe('gRPC Fallback Service', () => {
 
     describe('Logging', () => {
       it('should log when calling Coordinator', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -375,9 +377,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should log successful data retrieval', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: ['payment-service'],
@@ -410,9 +412,9 @@ describe('gRPC Fallback Service', () => {
 
     describe('Parameter Handling', () => {
       it('should use default userId if not provided', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -427,7 +429,7 @@ describe('gRPC Fallback Service', () => {
           // userId not provided
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith(
+        expect(callCoordinatorRouteSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             user_id: 'anonymous',
           })
@@ -435,9 +437,9 @@ describe('gRPC Fallback Service', () => {
       });
 
       it('should pass vectorResults count in metadata', async () => {
-        shouldCallCoordinator.mockReturnValue(true);
-        callCoordinatorRoute.mockResolvedValue({});
-        processCoordinatorResponse.mockReturnValue({
+        shouldCallCoordinatorSpy.mockReturnValue(true);
+        callCoordinatorRouteSpy.mockResolvedValue({});
+        processCoordinatorResponseSpy.mockReturnValue({
           status: 'success_primary',
           success: true,
           target_services: [],
@@ -456,7 +458,7 @@ describe('gRPC Fallback Service', () => {
           ],
         });
 
-        expect(callCoordinatorRoute).toHaveBeenCalledWith(
+        expect(callCoordinatorRouteSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             metadata: expect.objectContaining({
               vector_results_count: 3,

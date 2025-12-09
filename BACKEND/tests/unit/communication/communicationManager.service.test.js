@@ -3,31 +3,37 @@
  * Tests for decision logic, Coordinator integration, and response processing
  */
 
-// MOCKS MUST BE FIRST - before any imports (Jest hoists these)
-// Use manual mocks from __mocks__ directories
-jest.mock('../../../src/clients/coordinator.client.js');
-jest.mock('../../../src/services/coordinatorResponseParser.service.js');
-jest.mock('../../../src/utils/logger.util.js');
-
 import { jest } from '@jest/globals';
 
-// Import AFTER mocks are set up
+// Import modules to spy on
+import * as coordinatorClient from '../../../src/clients/coordinator.client.js';
+import * as coordinatorResponseParser from '../../../src/services/coordinatorResponseParser.service.js';
 import {
   shouldCallCoordinator,
   callCoordinatorRoute,
   processCoordinatorResponse,
 } from '../../../src/communication/communicationManager.service.js';
-import { routeRequest } from '../../../src/clients/coordinator.client.js';
-import {
-  parseRouteResponse,
-  extractBusinessData,
-  getRoutingSummary,
-} from '../../../src/services/coordinatorResponseParser.service.js';
 import { logger } from '../../../src/utils/logger.util.js';
 
 describe('Communication Manager', () => {
+  let routeRequestSpy, parseRouteResponseSpy, extractBusinessDataSpy, getRoutingSummarySpy;
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Spy on module exports (named exports)
+    routeRequestSpy = jest.spyOn(coordinatorClient, 'routeRequest').mockResolvedValue({});
+    parseRouteResponseSpy = jest.spyOn(coordinatorResponseParser, 'parseRouteResponse').mockReturnValue({});
+    extractBusinessDataSpy = jest.spyOn(coordinatorResponseParser, 'extractBusinessData').mockReturnValue({});
+    getRoutingSummarySpy = jest.spyOn(coordinatorResponseParser, 'getRoutingSummary').mockReturnValue({});
+    
+    // Spy on logger methods (object methods)
+    jest.spyOn(logger, 'info').mockImplementation(() => {});
+    jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    jest.spyOn(logger, 'error').mockImplementation(() => {});
+    jest.spyOn(logger, 'debug').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('shouldCallCoordinator', () => {
@@ -211,7 +217,7 @@ describe('Communication Manager', () => {
 
     it('should handle errors gracefully', async () => {
       const error = new Error('Network error');
-      routeRequest.mockRejectedValue(error);
+      routeRequestSpy.mockRejectedValue(error);
 
       const result = await callCoordinatorRoute({
         tenant_id: 'org-123',
@@ -298,9 +304,9 @@ describe('Communication Manager', () => {
       };
 
       beforeEach(() => {
-        parseRouteResponse.mockReturnValue(mockParsedResponse);
-        extractBusinessData.mockReturnValue(mockBusinessData);
-        getRoutingSummary.mockReturnValue(mockRoutingSummary);
+        parseRouteResponseSpy.mockReturnValue(mockParsedResponse);
+        extractBusinessDataSpy.mockReturnValue(mockBusinessData);
+        getRoutingSummarySpy.mockReturnValue(mockRoutingSummary);
       });
 
       it('should process successful primary response', () => {
@@ -365,9 +371,9 @@ describe('Communication Manager', () => {
       };
 
       beforeEach(() => {
-        parseRouteResponse.mockReturnValue(mockParsedResponse);
-        extractBusinessData.mockReturnValue(mockBusinessData);
-        getRoutingSummary.mockReturnValue({
+        parseRouteResponseSpy.mockReturnValue(mockParsedResponse);
+        extractBusinessDataSpy.mockReturnValue(mockBusinessData);
+        getRoutingSummarySpy.mockReturnValue({
           status: 'success_fallback',
           message: 'Success at fallback service',
         });
@@ -413,9 +419,9 @@ describe('Communication Manager', () => {
       };
 
       beforeEach(() => {
-        parseRouteResponse.mockReturnValue(mockParsedResponse);
-        extractBusinessData.mockReturnValue(mockBusinessData);
-        getRoutingSummary.mockReturnValue({
+        parseRouteResponseSpy.mockReturnValue(mockParsedResponse);
+        extractBusinessDataSpy.mockReturnValue(mockBusinessData);
+        getRoutingSummarySpy.mockReturnValue({
           status: 'all_failed',
           message: 'All services failed',
         });
@@ -439,7 +445,7 @@ describe('Communication Manager', () => {
       });
 
       it('should return null if parsing fails', () => {
-        parseRouteResponse.mockReturnValue(null);
+        parseRouteResponseSpy.mockReturnValue(null);
 
         const processed = processCoordinatorResponse({});
 
@@ -450,7 +456,7 @@ describe('Communication Manager', () => {
       });
 
       it('should handle processing errors gracefully', () => {
-        parseRouteResponse.mockImplementation(() => {
+        parseRouteResponseSpy.mockImplementation(() => {
           throw new Error('Parse error');
         });
 
@@ -491,9 +497,9 @@ describe('Communication Manager', () => {
           message: 'Success',
         };
 
-        parseRouteResponse.mockReturnValue(mockParsed);
-        extractBusinessData.mockReturnValue(mockBusinessData);
-        getRoutingSummary.mockReturnValue(mockSummary);
+        parseRouteResponseSpy.mockReturnValue(mockParsed);
+        extractBusinessDataSpy.mockReturnValue(mockBusinessData);
+        getRoutingSummarySpy.mockReturnValue(mockSummary);
 
         const processed = processCoordinatorResponse({});
 
