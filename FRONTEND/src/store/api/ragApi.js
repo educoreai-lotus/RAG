@@ -4,7 +4,17 @@
 
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// API Base URL - uses environment variable in production, defaults to localhost:8080 for development
+const getBaseUrl = () => {
+  // In production, VITE_API_BASE_URL should be set (e.g., Railway backend URL)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // Development default
+  return 'http://localhost:8080';
+};
+
+const baseUrl = getBaseUrl();
 
 export const ragApi = createApi({
   reducerPath: 'ragApi',

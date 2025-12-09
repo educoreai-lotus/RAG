@@ -10,8 +10,18 @@
 import axios from 'axios';
 import { store } from '../store/store.js';
 
+// API Base URL - uses environment variable in production, defaults to localhost:8080 for development
+const getApiBaseUrl = () => {
+  // In production, VITE_API_BASE_URL should be set (e.g., Railway backend URL)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // Development default
+  return 'http://localhost:8080';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
