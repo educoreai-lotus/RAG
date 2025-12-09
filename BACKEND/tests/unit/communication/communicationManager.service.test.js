@@ -11,7 +11,7 @@ jest.mock('../../../src/services/coordinatorResponseParser.service.js');
 jest.mock('../../../src/utils/logger.util.js');
 
 // Import AFTER mocks
-import { routeRequest, isCoordinatorAvailable } from '../../../src/clients/coordinator.client.js';
+import { routeRequest } from '../../../src/clients/coordinator.client.js';
 import {
   parseRouteResponse,
   extractBusinessData,
