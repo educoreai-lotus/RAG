@@ -83,7 +83,7 @@ describe('gRPC Fallback Service', () => {
           'gRPC fallback skipped: Internal data is sufficient',
           expect.any(Object)
         );
-        expect(callCoordinatorRoute).not.toHaveBeenCalled();
+        expect(callCoordinatorRouteSpy).not.toHaveBeenCalled();
       });
 
       it('should call Coordinator if internal data is insufficient', async () => {
@@ -100,8 +100,8 @@ describe('gRPC Fallback Service', () => {
           normalized_fields: {},
         });
 
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({
           sources: [],
         });
 
@@ -131,8 +131,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({ sources: [] });
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({ sources: [] });
 
         await grpcFetchByCategory('payment', {
           query: 'show me payments',
@@ -221,8 +221,8 @@ describe('gRPC Fallback Service', () => {
         };
 
         processCoordinatorResponseSpy.mockReturnValue(mockProcessed);
-        interpretNormalizedFields.mockReturnValue(mockInterpreted);
-        createStructuredFields.mockReturnValue(mockStructured);
+        interpretNormalizedFieldsSpy.mockReturnValue(mockInterpreted);
+        createStructuredFieldsSpy.mockReturnValue(mockStructured);
 
         const result = await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -264,8 +264,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({
           sources: [
             {
               sourceId: 'src-1',
@@ -291,8 +291,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({
           sources: [],
         });
 
@@ -357,8 +357,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({ sources: [] });
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({ sources: [] });
 
         await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -385,8 +385,8 @@ describe('gRPC Fallback Service', () => {
           target_services: ['payment-service'],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({
           sources: [
             { sourceId: '1', contentSnippet: 'Content' },
             { sourceId: '2', contentSnippet: 'Content 2' },
@@ -420,8 +420,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({ sources: [] });
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({ sources: [] });
 
         await grpcFetchByCategory('payment', {
           query: 'test query',
@@ -445,8 +445,8 @@ describe('gRPC Fallback Service', () => {
           target_services: [],
           normalized_fields: {},
         });
-        interpretNormalizedFields.mockReturnValue({});
-        createStructuredFields.mockReturnValue({ sources: [] });
+        interpretNormalizedFieldsSpy.mockReturnValue({});
+        createStructuredFieldsSpy.mockReturnValue({ sources: [] });
 
         await grpcFetchByCategory('payment', {
           query: 'test query',

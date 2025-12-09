@@ -172,7 +172,7 @@ describe('Communication Manager', () => {
         normalized_fields: { successful_service: 'payment-service' },
       };
 
-      routeRequest.mockResolvedValue(mockResponse);
+      routeRequestSpy.mockResolvedValue(mockResponse);
 
       const result = await callCoordinatorRoute({
         tenant_id: 'org-123',
@@ -200,7 +200,7 @@ describe('Communication Manager', () => {
     });
 
     it('should handle null response', async () => {
-      routeRequest.mockResolvedValue(null);
+      routeRequestSpy.mockResolvedValue(null);
 
       const result = await callCoordinatorRoute({
         tenant_id: 'org-123',
@@ -235,7 +235,7 @@ describe('Communication Manager', () => {
     });
 
     it('should add timestamp and source to metadata', async () => {
-      routeRequest.mockResolvedValue({});
+      routeRequestSpy.mockResolvedValue({});
 
       await callCoordinatorRoute({
         tenant_id: 'org-123',
@@ -312,9 +312,9 @@ describe('Communication Manager', () => {
       it('should process successful primary response', () => {
         const processed = processCoordinatorResponse(mockCoordinatorResponse);
 
-        expect(parseRouteResponse).toHaveBeenCalledWith(mockCoordinatorResponse);
-        expect(extractBusinessData).toHaveBeenCalledWith(mockParsedResponse);
-        expect(getRoutingSummary).toHaveBeenCalledWith(mockParsedResponse);
+        expect(parseRouteResponseSpy).toHaveBeenCalledWith(mockCoordinatorResponse);
+        expect(extractBusinessDataSpy).toHaveBeenCalledWith(mockParsedResponse);
+        expect(getRoutingSummarySpy).toHaveBeenCalledWith(mockParsedResponse);
 
         expect(processed).toBeDefined();
         expect(processed.status).toBe('success_primary');
