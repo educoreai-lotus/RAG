@@ -99,6 +99,7 @@ async function runMigrations() {
     }
     
     if (hasMigrations) {
+      log.info('Found migrations, attempting to deploy...');
       // If migrations exist, try to deploy them
       try {
         log.info('Found migrations, attempting to deploy...');
@@ -137,12 +138,13 @@ async function runMigrations() {
         try {
           // Run migrate deploy and capture output
           // Note: Prisma migrate deploy returns success even when no migrations are pending
+          log.info('⏳ Running migrate deploy (this may take a while)...');
           execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
             stdio: 'inherit',
             env: env,
             cwd: projectRoot,
             shell: true,
-            timeout: 600000, // 10 minute timeout for migrations
+            timeout: 300000, // 5 minute timeout for migrations (reduced from 10)
             maxBuffer: 10 * 1024 * 1024, // 10MB buffer for output
           });
           
@@ -151,6 +153,15 @@ async function runMigrations() {
           log.info('💡 If you saw "No pending migrations", that means your database is already up to date');
           return;
         } catch (migrateError) {
+          if (migrateError.code === 'ETIMEDOUT' || migrateError.signal === 'SIGTERM') {
+            log.error('❌ Migration deploy timed out after 5 minutes');
+            log.error('💡 This is likely due to Supabase connection pooler timeout');
+            log.error('💡 RECOMMENDED: Use Session Mode Pooler or run migrations manually');
+            log.warn('⚠️  Continuing with server start despite migration timeout');
+            log.warn('💡 You can run migrations manually later in Supabase SQL Editor');
+            return; // Continue anyway - don't block server startup
+          }
+          
           log.error('Migration deploy failed:', migrateError.message);
           log.error('Exit code:', migrateError.status || migrateError.code);
           
@@ -280,9 +291,11 @@ async function startServer() {
     const serverPath = join(backendRoot, 'src', 'index.js');
     
     // Import the server - this will start the Express app
+    log.info('📦 Loading server module from:', serverPath);
     await import(serverPath);
     
     log.info('✅ Server module loaded successfully');
+    log.info('💡 Server should be starting now. Check logs for "✅ Server running" message.');
     // Note: The server.listen() is called inside index.js, so we don't need to do anything else here
   } catch (error) {
     log.error('❌ Server start failed:', error.message);
@@ -293,10 +306,17 @@ async function startServer() {
 
 // Run migrations first, then embeddings (if enabled), then start server
 runMigrations()
-  .then(() => runEmbeddingsIfNeeded())
-  .then(() => startServer())
+  .then(() => {
+    log.info('✅ Migrations completed successfully');
+    return runEmbeddingsIfNeeded();
+  })
+  .then(() => {
+    log.info('✅ Embeddings check completed');
+    return startServer();
+  })
   .catch((error) => {
-    log.error('Startup failed:', error);
+    log.error('❌ Startup failed:', error);
+    log.error('Error message:', error.message);
     log.error('Stack:', error.stack);
     process.exit(1);
   });
