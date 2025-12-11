@@ -75,3 +75,8 @@ railway run node DATABASE/VERIFY_SUPABASE_CONNECTION.js
 אם המיגרציות עובדות = בחרת נכון (Session pooler) ✅
 אם המיגרציות נכשלות = בחרת Transaction pooler ❌
 
+
+
+
+
+

@@ -66,3 +66,9 @@ console.log('2. Send public key to coordinator administrator');
 console.log('3. Get coordinator\'s public key from coordinator administrator');
 console.log('4. Store coordinator\'s public key in your service config');
 
+
+
+
+
+
+

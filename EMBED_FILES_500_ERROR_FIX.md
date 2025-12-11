@@ -275,3 +275,8 @@ fetch('https://rag-production-3a4c.up.railway.app/embed/bot.js')
 - [מדריך הטמעת CHATBOT](./DATABASE/CHATBOT_SCRIPT_INTEGRATION_GUIDE.md)
 - [תיקון Railway Deployment](./BACKEND/RAILWAY_DEPLOYMENT_FIX.md)
 
+
+
+
+
+

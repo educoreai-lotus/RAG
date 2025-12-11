@@ -262,3 +262,8 @@ try {
 - [תיקון שגיאת HTTP 500](./EMBED_FILES_500_ERROR_FIX.md)
 - [מדריך משתני סביבה](./CHATBOT_ENV_VARIABLES.md)
 
+
+
+
+
+

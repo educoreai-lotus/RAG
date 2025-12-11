@@ -21,3 +21,9 @@ curl -X POST "$COORDINATOR_DOMAIN/register/$SERVICE_ID/migration" \
 echo ""
 echo "Done!"
 
+
+
+
+
+
+

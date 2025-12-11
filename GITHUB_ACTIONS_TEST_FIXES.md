@@ -234,7 +234,8 @@ The `SKIP_PRISMA: 'true'` environment variable is used in some tests to bypass P
 Both workflows use:
 - **PostgreSQL:** pgvector/pgvector:pg15 (with vector extension)
 - **Redis:** redis:7-alpine (test.yml) or redis:7 (ci-cd.yml)
-- **Kafka:** bitnami/kafka:latest (test.yml only)
+- **Zookeeper:** confluentinc/cp-zookeeper:latest (test.yml only, required for Kafka)
+- **Kafka:** confluentinc/cp-kafka:latest (test.yml only)
 
 ---
 

@@ -162,3 +162,9 @@ curl -X POST https://ragmicroservice-production.up.railway.app/api/v1/query \
 - נסה threshold נמוך יותר בחיפוש (0.2 במקום 0.3)
 
 
+
+
+
+
+
+

@@ -1,0 +1,335 @@
+{
+  "migrationFile": {
+    "version": "1.0.0",
+    "description": "EDUCORE - Contextual Assistant (RAG / Knowledge Graph) Microservice. Provides Retrieval-Augmented Generation capabilities with vector similarity search, knowledge graph operations, personalized recommendations, and support for Assessment/DevLab microservices. Inter-service communication: gRPC server only (Coordinator, Assessment, and DevLab communicate with RAG exclusively via gRPC).",
+    "database": {
+      "tables": [
+        {
+          "name": "tenants",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "name": "varchar NOT NULL",
+            "domain": "varchar UNIQUE NOT NULL",
+            "settings": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()",
+            "deleted_at": "timestamp"
+          }
+        },
+        {
+          "name": "microservices",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "name": "varchar NOT NULL",
+            "service_id": "varchar UNIQUE NOT NULL",
+            "display_name": "varchar NOT NULL",
+            "description": "text",
+            "api_endpoint": "varchar",
+            "version": "varchar DEFAULT '1.0.0'",
+            "is_active": "boolean DEFAULT true",
+            "settings": "jsonb DEFAULT '{}'",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "queries",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar NOT NULL",
+            "session_id": "varchar",
+            "query_text": "text NOT NULL",
+            "answer": "text NOT NULL",
+            "confidence_score": "decimal(3,2) NOT NULL",
+            "processing_time_ms": "integer NOT NULL",
+            "model_version": "varchar NOT NULL",
+            "is_personalized": "boolean DEFAULT false",
+            "is_cached": "boolean DEFAULT false",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "query_sources",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "query_id": "uuid REFERENCES queries(id) ON DELETE CASCADE",
+            "source_id": "varchar NOT NULL",
+            "source_type": "varchar NOT NULL",
+            "source_microservice": "varchar",
+            "title": "varchar NOT NULL",
+            "content_snippet": "text NOT NULL",
+            "source_url": "varchar NOT NULL",
+            "relevance_score": "decimal(3,2) NOT NULL",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "query_recommendations",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "query_id": "uuid REFERENCES queries(id) ON DELETE CASCADE",
+            "recommendation_type": "varchar NOT NULL",
+            "recommendation_id": "varchar NOT NULL",
+            "title": "varchar NOT NULL",
+            "description": "text NOT NULL",
+            "reason": "text NOT NULL",
+            "priority": "integer DEFAULT 0",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "vector_embeddings",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "microservice_id": "uuid REFERENCES microservices(id) ON DELETE SET NULL",
+            "content_id": "varchar NOT NULL",
+            "content_type": "varchar NOT NULL",
+            "embedding": "vector(1536) NOT NULL",
+            "content_text": "text NOT NULL",
+            "chunk_index": "integer DEFAULT 0",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "knowledge_graph_nodes",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "node_id": "varchar UNIQUE NOT NULL",
+            "node_type": "varchar NOT NULL",
+            "properties": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "knowledge_graph_edges",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "source_node_id": "varchar NOT NULL",
+            "target_node_id": "varchar NOT NULL",
+            "edge_type": "varchar NOT NULL",
+            "weight": "decimal(3,2)",
+            "properties": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "access_control_rules",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "rule_type": "varchar NOT NULL",
+            "subject_type": "varchar NOT NULL",
+            "subject_id": "varchar NOT NULL",
+            "resource_type": "varchar NOT NULL",
+            "resource_id": "varchar",
+            "permission": "varchar NOT NULL",
+            "conditions": "jsonb DEFAULT '{}'",
+            "is_active": "boolean DEFAULT true",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "user_profiles",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar UNIQUE NOT NULL",
+            "role": "varchar NOT NULL",
+            "department": "varchar",
+            "region": "varchar",
+            "skill_gaps": "jsonb DEFAULT '[]'",
+            "learning_progress": "jsonb DEFAULT '{}'",
+            "preferences": "jsonb DEFAULT '{}'",
+            "metadata": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()",
+            "updated_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "audit_logs",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "user_id": "varchar",
+            "action": "varchar NOT NULL",
+            "resource_type": "varchar",
+            "resource_id": "varchar",
+            "ip_address": "varchar",
+            "user_agent": "varchar",
+            "details": "jsonb DEFAULT '{}'",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        },
+        {
+          "name": "cache_entries",
+          "schema": {
+            "id": "uuid PRIMARY KEY",
+            "tenant_id": "uuid REFERENCES tenants(id) ON DELETE CASCADE",
+            "cache_key": "varchar UNIQUE NOT NULL",
+            "query_hash": "varchar NOT NULL",
+            "response_data": "jsonb NOT NULL",
+            "expires_at": "timestamp NOT NULL",
+            "created_at": "timestamp DEFAULT now()"
+          }
+        }
+      ],
+      "migrations": [
+        "20250101000000_init",
+        "20250101000001_add_pgvector",
+        "20250101000002_add_hnsw_index",
+        "20250101000003_add_microservices"
+      ]
+    },
+    "api": {
+      "endpoints": [],
+      "grpc": {
+        "description": "gRPC services exposed for Coordinator service and other microservices (Assessment, DevLab). All inter-service communication uses gRPC.",
+        "services": [
+          {
+            "service": "rag.v1.QueryService",
+            "package": "rag.v1",
+            "description": "RAG query processing service",
+            "methods": [
+              {
+                "name": "SubmitQuery",
+                "request": "QueryRequest",
+                "response": "QueryResponse",
+                "description": "Process a RAG query and return AI-generated answer with sources"
+              },
+              {
+                "name": "GetQueryHistory",
+                "request": "QueryHistoryRequest",
+                "response": "QueryHistoryResponse",
+                "description": "Get query history for a user"
+              }
+            ]
+          },
+          {
+            "service": "rag.v1.PersonalizedService",
+            "package": "rag.v1",
+            "description": "Personalized recommendations service",
+            "methods": [
+              {
+                "name": "GetRecommendations",
+                "request": "RecommendationsRequest",
+                "response": "RecommendationsResponse",
+                "description": "Get personalized learning recommendations"
+              },
+              {
+                "name": "UpdateUserProfile",
+                "request": "UserProfileRequest",
+                "response": "UserProfileResponse",
+                "description": "Update user profile for personalization"
+              }
+            ]
+          },
+          {
+            "service": "rag.v1.GraphService",
+            "package": "rag.v1",
+            "description": "Knowledge graph service",
+            "methods": [
+              {
+                "name": "GetGraphData",
+                "request": "GraphRequest",
+                "response": "GraphResponse",
+                "description": "Get knowledge graph data"
+              }
+            ]
+          },
+          {
+            "service": "rag.v1.AssessmentService",
+            "package": "rag.v1",
+            "description": "Assessment support service",
+            "methods": [
+              {
+                "name": "GetAssessmentData",
+                "request": "AssessmentRequest",
+                "response": "AssessmentResponse",
+                "description": "Get assessment data for support mode"
+              }
+            ]
+          },
+          {
+            "service": "rag.v1.DevLabService",
+            "package": "rag.v1",
+            "description": "DevLab support service",
+            "methods": [
+              {
+                "name": "GetDevLabData",
+                "request": "DevLabRequest",
+                "response": "DevLabResponse",
+                "description": "Get DevLab data for support mode"
+              }
+            ]
+          },
+          {
+            "service": "rag.v1.HealthService",
+            "package": "rag.v1",
+            "description": "Health check service",
+            "methods": [
+              {
+                "name": "HealthCheck",
+                "request": "HealthCheckRequest",
+                "response": "HealthCheckResponse",
+                "description": "Health check endpoint for Coordinator and other microservices"
+              }
+            ]
+          }
+        ],
+        "port": 50051,
+        "protocol": "grpc",
+        "consumers": ["coordinator-service", "assessment-service", "devlab-service"]
+      }
+    },
+    "dependencies": [
+      "coordinator-service",
+      "assessment-service",
+      "devlab-service"
+    ],
+    "capabilities": [
+      "rag_query_processing",
+      "vector_similarity_search",
+      "knowledge_graph_operations",
+      "personalized_recommendations",
+      "assessment_support",
+      "devlab_support",
+      "content_embedding",
+      "query_classification",
+      "multi_tenant_support",
+      "access_control_rbac_abac"
+    ],
+    "events": {
+      "publishes": [
+        "rag.query.processed",
+        "rag.content.added",
+        "rag.embedding.created",
+        "rag.recommendation.generated",
+        "rag.knowledge.progress.updated",
+        "rag.assessment.hint.provided",
+        "rag.devlab.support.provided"
+      ],
+      "subscribes": [
+        "content.updated",
+        "user.profile.updated",
+        "assessment.question.answered",
+        "devlab.exercise.completed",
+        "coordinator.route.request"
+      ]
+    }
+  }
+}
+

@@ -365,3 +365,8 @@ VITE_API_BASE_URL=https://rag-production-3a4c.up.railway.app
 
 **שאלות?** בדוק את ה-logs ב-Railway או Vercel, או עיין במדריכי Troubleshooting.
 
+
+
+
+
+

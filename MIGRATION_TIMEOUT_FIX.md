@@ -196,3 +196,8 @@ curl https://rag-production-3a4c.up.railway.app/health
 - [תיקון Build Command](./RAILWAY_BUILD_COMMAND_FIX.md)
 - [תיקון שגיאת HTTP 500](./EMBED_FILES_500_ERROR_FIX.md)
 
+
+
+
+
+

@@ -274,3 +274,8 @@ curl http://localhost:3000/embed/bot.js
 - [מדריך משתני סביבה](./CHATBOT_ENV_VARIABLES.md)
 - [תיקון CORS Preflight](./CORS_PREFLIGHT_FIX.md)
 
+
+
+
+
+

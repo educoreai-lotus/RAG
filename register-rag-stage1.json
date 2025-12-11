@@ -1,0 +1,27 @@
+{
+  "serviceName": "rag-service",
+  "version": "1.0.0",
+  "endpoint": "https://rag-production-3a4c.up.railway.app",
+  "healthCheck": "/health",
+  "description": "EDUCORE - Contextual Assistant (RAG / Knowledge Graph) Microservice. Provides Retrieval-Augmented Generation capabilities with vector similarity search, knowledge graph operations, personalized recommendations, and support for Assessment/DevLab microservices.",
+  "metadata": {
+    "team": "EDUCORE Team",
+    "capabilities": [
+      "rag_query_processing",
+      "vector_similarity_search",
+      "knowledge_graph_operations",
+      "personalized_recommendations",
+      "assessment_support",
+      "devlab_support",
+      "content_embedding",
+      "query_classification",
+      "multi_tenant_support",
+      "access_control_rbac_abac"
+    ]
+  }
+}
+
+
+
+
+

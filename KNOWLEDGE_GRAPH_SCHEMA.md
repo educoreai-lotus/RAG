@@ -747,3 +747,9 @@ const [vectorSearchResults, userLearningContext] = await Promise.all([
 **מבוסס על:** knowledgeGraph.service.js, knowledgeGraph.config.js
 
 
+
+
+
+
+
+

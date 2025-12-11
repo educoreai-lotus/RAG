@@ -211,3 +211,8 @@ fetch('https://rag-production-3a4c.up.railway.app/auth/me', {
 - [תיקון Railway Deployment](./BACKEND/RAILWAY_DEPLOYMENT_FIX.md)
 - [תיקון CORS](./BACKEND/CORS_FIX_INSTRUCTIONS.md)
 
+
+
+
+
+

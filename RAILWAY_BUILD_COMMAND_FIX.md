@@ -187,3 +187,8 @@ ls -la FRONTEND/dist/embed/
 - [תיקון שגיאת Script Load](./EMBED_SCRIPT_LOAD_FAILURE_FIX.md)
 - [תיקון שגיאת HTTP 500](./EMBED_FILES_500_ERROR_FIX.md)
 
+
+
+
+
+

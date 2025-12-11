@@ -240,3 +240,8 @@ If issues persist:
 3. Test endpoints directly with curl to isolate frontend vs backend issues
 4. Check Railway service status and resource limits
 
+
+
+
+
+

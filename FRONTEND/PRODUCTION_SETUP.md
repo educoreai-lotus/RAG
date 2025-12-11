@@ -101,3 +101,8 @@ FRONTEND_VERCEL_URL=https://your-vercel-app.vercel.app
 - **סיבה:** `FRONTEND_VERCEL_URL` לא מוגדר ב-Railway
 - **פתרון:** הוסף את ה-frontend URL ל-Railway Variables
 
+
+
+
+
+

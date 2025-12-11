@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: FRONTEND/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./FRONTEND
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: ./FRONTEND
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: ./FRONTEND
+        run: npm test
+        env:
+          CI: true
+
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: ankane/pgvector:latest
+        env:
+          POSTGRES_DB: rag_test
+          POSTGRES_USER: rag_user
+          POSTGRES_PASSWORD: rag_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: BACKEND/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./BACKEND
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: ./BACKEND
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: ./BACKEND
+        run: npm run test:ci
+        env:
+          CI: true
+          DATABASE_URL: postgresql://rag_user:rag_password@localhost:5432/rag_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
+
+
+
+
+
+
+

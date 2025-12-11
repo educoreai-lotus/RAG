@@ -195,3 +195,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 - [HNSW Algorithm Paper](https://arxiv.org/abs/1603.09320)
 - [Prisma Vector Search Guide](https://www.prisma.io/docs/guides/database/vector-search)
 
+
+
+
+
+

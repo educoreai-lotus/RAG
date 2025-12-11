@@ -51,6 +51,28 @@ async function runMigrations() {
       // Check connection type
       if (dbUrl.includes(':6543')) {
         log.info('Using Supabase connection pooler (port 6543)');
+        
+        // Check for pgbouncer=true (required to disable prepared statements)
+        if (!dbUrl.includes('pgbouncer=true')) {
+          log.error('❌ DATABASE_URL is missing pgbouncer=true parameter!');
+          log.error('💡 This will cause "prepared statement already exists" errors');
+          log.error('💡 Fix: Add &pgbouncer=true (or ?pgbouncer=true) to DATABASE_URL');
+          log.error('💡 Example: ...?sslmode=require&pgbouncer=true');
+          log.error('💡 See: PREPARED_STATEMENT_FIX.md for details');
+          
+          // Try to fix automatically
+          try {
+            const separator = dbUrl.includes('?') ? '&' : '?';
+            const fixedUrl = `${dbUrl}${separator}pgbouncer=true`;
+            process.env.DATABASE_URL = fixedUrl;
+            log.info('✅ Automatically added pgbouncer=true to DATABASE_URL');
+          } catch (error) {
+            log.error('❌ Failed to auto-fix DATABASE_URL:', error.message);
+          }
+        } else {
+          log.info('✅ pgbouncer=true detected - prepared statements disabled');
+        }
+        
         log.warn('⚠️  Transaction Mode Pooler can cause migration timeouts!');
         log.warn('💡 RECOMMENDED: Use Session Mode Pooler for migrations');
         log.warn('💡 In Supabase Dashboard → Settings → Database → Connection string → Session mode');
