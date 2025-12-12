@@ -49,6 +49,12 @@ src/grpc/proto/*.ts
 *.tmp
 .cache/
 
+# Private keys and certificates (security)
+BACKEND/keys/*.pem
+**/keys/*.pem
+*.pem
+!**/node_modules/**/*.pem
+
 
 
 

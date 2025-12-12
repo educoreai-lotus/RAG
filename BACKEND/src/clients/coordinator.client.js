@@ -226,6 +226,7 @@ function createSignedMetadata(request) {
   // Create gRPC metadata
   const metadata = new grpc.Metadata();
   metadata.add('x-signature', signature);
+  metadata.add('x-service-name', 'rag-service');  // ✅ Added per security doc
   metadata.add('x-timestamp', timestamp.toString());
   metadata.add('x-requester-service', 'rag-service');
   
