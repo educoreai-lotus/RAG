@@ -12,6 +12,7 @@ import { generateSignature } from '../utils/signature.js';
 import * as grpc from '@grpc/grpc-js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -54,10 +55,52 @@ const getGrpcUrl = () => {
   return process.env.COORDINATOR_GRPC_URL || 'localhost:50051';
 };
 
+/**
+ * Get proto file path - handles both local development and container environments
+ */
+const getProtoPath = () => {
+  // If explicitly set via env var, use it
+  if (process.env.COORDINATOR_PROTO_PATH) {
+    return process.env.COORDINATOR_PROTO_PATH;
+  }
+
+  // Try multiple possible paths (for different environments)
+  const possiblePaths = [
+    // Local development: DATABASE is sibling to BACKEND
+    join(__dirname, '../../DATABASE/proto/rag/v1/coordinator.proto'),
+    // Container/Docker: If DATABASE is copied to /app (build from repo root)
+    '/app/DATABASE/proto/rag/v1/coordinator.proto',
+    // Container: If BACKEND is at /app and DATABASE is at parent level
+    '/app/../DATABASE/proto/rag/v1/coordinator.proto',
+    // Alternative: If proto is in BACKEND directory
+    join(__dirname, '../proto/rag/v1/coordinator.proto'),
+  ];
+
+  // Check which path exists
+  for (const path of possiblePaths) {
+    try {
+      if (existsSync(path)) {
+        logger.info('[Coordinator] Found proto file', { path });
+        return path;
+      }
+    } catch (error) {
+      // Continue to next path
+    }
+  }
+
+  // Fallback to default (will log error if not found)
+  const defaultPath = join(__dirname, '../../DATABASE/proto/rag/v1/coordinator.proto');
+  logger.warn('[Coordinator] Proto file not found in any expected location, using default path', {
+    defaultPath,
+    checkedPaths: possiblePaths,
+    hint: 'Set COORDINATOR_PROTO_PATH environment variable to specify the correct path',
+  });
+  return defaultPath;
+};
+
 const COORDINATOR_GRPC_URL = getGrpcUrl();
 const COORDINATOR_ENABLED = process.env.COORDINATOR_ENABLED !== 'false'; // Default: enabled
-const COORDINATOR_PROTO_PATH = process.env.COORDINATOR_PROTO_PATH || 
-  join(__dirname, '../../DATABASE/proto/rag/v1/coordinator.proto');
+const COORDINATOR_PROTO_PATH = getProtoPath();
 const COORDINATOR_SERVICE_NAME = process.env.COORDINATOR_SERVICE_NAME || 'rag.v1.CoordinatorService';
 const GRPC_TIMEOUT = parseInt(process.env.GRPC_TIMEOUT || '30', 10) * 1000; // Convert seconds to milliseconds
 
