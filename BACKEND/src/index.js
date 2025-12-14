@@ -11,6 +11,7 @@ import { existsSync, readdirSync } from 'fs';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware.js';
 import { logger } from './utils/logger.util.js';
 import { isCoordinatorAvailable } from './clients/coordinator.client.js';
+import { startScheduledSync } from './jobs/scheduledSync.js';
 import queryRoutes from './routes/query.routes.js';
 import microserviceSupportRoutes from './routes/microserviceSupport.routes.js';
 import recommendationsRoutes from './routes/recommendations.routes.js';
@@ -301,6 +302,17 @@ const server = app.listen(PORT, HOST, () => {
   logger.info(`CORS allowed origins: ${allowedOrigins.join(', ') || 'none configured'}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   
+  // Start scheduled batch sync job
+  try {
+    startScheduledSync();
+    logger.info('✅ Scheduled batch sync job started');
+  } catch (error) {
+    logger.warn('⚠️  Failed to start scheduled batch sync job', {
+      error: error.message,
+      hint: 'Install node-cron: npm install node-cron',
+    });
+  }
+  
   // Signal that server is ready (for Railway health checks)
   if (process.send) {
     process.send('ready');
@@ -336,6 +348,14 @@ process.on('unhandledRejection', (reason, promise) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully...');
+  // Stop scheduled sync job
+  import('./jobs/scheduledSync.js')
+    .then(({ stopScheduledSync }) => {
+      stopScheduledSync();
+    })
+    .catch(() => {
+      // Ignore errors during shutdown
+    });
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -344,6 +364,14 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully...');
+  // Stop scheduled sync job
+  import('./jobs/scheduledSync.js')
+    .then(({ stopScheduledSync }) => {
+      stopScheduledSync();
+    })
+    .catch(() => {
+      // Ignore errors during shutdown
+    });
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);

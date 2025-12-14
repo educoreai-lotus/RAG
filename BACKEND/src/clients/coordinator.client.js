@@ -18,7 +18,16 @@ const __dirname = dirname(__filename);
 
 // gRPC configuration with environment variable support
 const getGrpcUrl = () => {
-  // Priority 1: COORDINATOR_GRPC_URL (full host:port)
+  // Priority 1: COORDINATOR_GRPC_ENDPOINT (explicit endpoint, highest priority)
+  const grpcEndpoint = process.env.COORDINATOR_GRPC_ENDPOINT;
+  if (grpcEndpoint) {
+    // If already in host:port format, use as is
+    if (grpcEndpoint.includes(':')) {
+      return grpcEndpoint;
+    }
+  }
+  
+  // Priority 2: COORDINATOR_GRPC_URL (full host:port)
   const grpcUrl = process.env.COORDINATOR_GRPC_URL;
   if (grpcUrl) {
     // If already in host:port format, use as is
@@ -27,7 +36,7 @@ const getGrpcUrl = () => {
     }
   }
   
-  // Priority 2: COORDINATOR_URL + COORDINATOR_GRPC_PORT
+  // Priority 3: COORDINATOR_URL + COORDINATOR_GRPC_PORT
   const coordinatorHost = process.env.COORDINATOR_URL || process.env.COORDINATOR_SERVICE_URL;
   const coordinatorPort = process.env.COORDINATOR_GRPC_PORT || '50051';
   
@@ -41,7 +50,7 @@ const getGrpcUrl = () => {
     }
   }
   
-  // Priority 3: Default (localhost for dev)
+  // Priority 4: Default (localhost for dev)
   return process.env.COORDINATOR_GRPC_URL || 'localhost:50051';
 };
 
@@ -426,6 +435,181 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
         ...errorDetails,
         tenant_id,
         user_id,
+        url: COORDINATOR_GRPC_URL,
+        processing_time_ms: processingTime,
+      });
+    }
+
+    // Reset client on certain errors to allow reconnection
+    if (error.code === grpc.status.UNAVAILABLE || error.code === grpc.status.DEADLINE_EXCEEDED) {
+      resetClient();
+    }
+
+    return null;
+  }
+}
+
+/**
+ * Batch sync request to Coordinator
+ * Used for scheduled batch synchronization of data from microservices
+ * Coordinator will route directly to the specified target_service (no AI routing)
+ * 
+ * @param {Object} params - Batch sync parameters
+ * @param {string} params.target_service - Target microservice name (e.g., 'payment-service') ⭐ REQUIRED
+ * @param {string} params.sync_type - Sync type (e.g., 'batch', 'daily') ⭐ REQUIRED
+ * @param {number} params.page - Page number for pagination (default: 1)
+ * @param {number} params.limit - Items per page (default: 1000)
+ * @param {string} params.since - ISO date string for incremental sync (optional)
+ * @param {string} params.tenant_id - Tenant identifier (default: 'rag-system')
+ * @param {string} params.user_id - User identifier (default: 'system')
+ * @returns {Promise<Object|null>} RouteResponse or null if disabled/error
+ */
+export async function batchSync({ 
+  target_service, 
+  sync_type = 'batch',
+  page = 1,
+  limit = 1000,
+  since = null,
+  tenant_id = 'rag-system',
+  user_id = 'system'
+}) {
+  const startTime = Date.now();
+  metrics.totalRequests++;
+
+  if (!COORDINATOR_ENABLED) {
+    logger.debug('Coordinator client disabled');
+    return null;
+  }
+
+  // Validate required parameters
+  if (!target_service) {
+    logger.error('Invalid batch sync request: target_service is required', {
+      has_target_service: !!target_service,
+    });
+    metrics.failedRequests++;
+    return null;
+  }
+
+  const client = getGrpcClient();
+  if (!client) {
+    logger.debug('Coordinator gRPC client not available');
+    metrics.failedRequests++;
+    return null;
+  }
+
+  try {
+    // Create query text for batch sync
+    const query_text = `sync_${target_service}_${sync_type}_page_${page}`;
+
+    // Build metadata with batch sync specific fields ⭐ CRITICAL
+    const metadata = {
+      target_service: target_service,        // ⭐ CRITICAL - tells Coordinator where to route
+      sync_type: sync_type,                  // ⭐ CRITICAL - triggers batch mode in Coordinator
+      page: page.toString(),
+      limit: limit.toString(),
+      source: 'rag-batch-sync',
+      timestamp: new Date().toISOString(),
+    };
+
+    // Add since date if provided (for incremental sync)
+    if (since) {
+      metadata.since = since;
+    }
+
+    logger.info('[Coordinator] Batch sync request via gRPC', {
+      target_service,
+      sync_type,
+      page,
+      limit,
+      tenant_id,
+      has_since: !!since,
+    });
+
+    // Create Universal Envelope
+    const envelope = createEnvelope(tenant_id, user_id, query_text, metadata);
+    
+    // Build request with all required fields
+    const request = {
+      tenant_id: tenant_id || '',
+      user_id: user_id || '',
+      query_text: query_text,
+      requester_service: 'rag-service',
+      context: metadata,  // ⭐ CRITICAL - metadata goes in context field
+      envelope_json: JSON.stringify(envelope)
+    };
+
+    // Generate signed metadata
+    const signedMetadata = createSignedMetadata(request);
+
+    // Use longer timeout for batch operations (5 minutes)
+    const BATCH_TIMEOUT = parseInt(process.env.BATCH_SYNC_TIMEOUT || '300', 10) * 1000; // Default 5 minutes
+
+    // Make gRPC call with signature
+    logger.info('[Coordinator] Calling Route RPC for batch sync with signature');
+    const response = await grpcCall(
+      client,
+      'Route',
+      request,
+      signedMetadata,
+      BATCH_TIMEOUT
+    );
+
+    const processingTime = Date.now() - startTime;
+    metrics.totalProcessingTime += processingTime;
+
+    if (response) {
+      metrics.successfulRequests++;
+      
+      // Track which services were used
+      const targetServices = response.target_services || [];
+      targetServices.forEach(service => {
+        metrics.servicesUsed[service] = (metrics.servicesUsed[service] || 0) + 1;
+      });
+
+      logger.info('[Coordinator] Batch sync response received', {
+        target_service,
+        sync_type,
+        page,
+        has_target_services: !!response.target_services,
+        target_count: response.target_services?.length || 0,
+        processing_time_ms: processingTime,
+      });
+    } else {
+      metrics.failedRequests++;
+      logger.warn('Coordinator batch sync returned null response', {
+        target_service,
+        sync_type,
+        page,
+      });
+    }
+
+    return response;
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    metrics.failedRequests++;
+    
+    // Track error by code
+    const errorCode = error.code || 'UNKNOWN';
+    metrics.errorsByCode[errorCode] = (metrics.errorsByCode[errorCode] || 0) + 1;
+
+    const errorDetails = getGrpcErrorDetails(error);
+
+    // Log error with appropriate level
+    if (errorDetails.retryable) {
+      logger.warn('Coordinator batch sync gRPC call error (retryable)', {
+        ...errorDetails,
+        target_service,
+        sync_type,
+        page,
+        url: COORDINATOR_GRPC_URL,
+        processing_time_ms: processingTime,
+      });
+    } else {
+      logger.error('Coordinator batch sync gRPC call error (non-retryable)', {
+        ...errorDetails,
+        target_service,
+        sync_type,
+        page,
         url: COORDINATOR_GRPC_URL,
         processing_time_ms: processingTime,
       });
