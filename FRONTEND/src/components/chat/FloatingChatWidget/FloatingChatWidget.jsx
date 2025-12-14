@@ -24,6 +24,8 @@ import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 const FloatingChatWidget = ({ 
   embedded = false, 
   initialMode = null, 
+  mode = 'chat', // 'support' or 'chat'
+  microservice = null, // Microservice name (e.g., 'ASSESSMENT', 'CONTENT', etc.)
   userId = null, 
   token = null,
   tenantId = null
@@ -82,13 +84,17 @@ const FloatingChatWidget = ({
         dispatch(setAssessmentSupportMode());
       } else if (initialMode === 'DEVLAB_SUPPORT') {
         dispatch(setDevLabSupportMode());
+      } else if (initialMode === 'GENERAL' || mode === 'chat') {
+        // CHAT MODE - use general RAG mode (default, no need to dispatch)
+        // Already in GENERAL mode by default
       }
-      // Show support mode recommendations
+      // Show recommendations based on mode
       setTimeout(() => {
-        setRecommendations(getModeSpecificRecommendations(initialMode, []));
+        const modeForRecs = initialMode || MODES.GENERAL;
+        setRecommendations(getModeSpecificRecommendations(modeForRecs, []));
       }, 500);
     }
-  }, [embedded, initialMode, dispatch]);
+  }, [embedded, initialMode, mode, dispatch]);
 
   // Show initial greeting when widget opens (only in General mode, not in embedded support mode)
   useEffect(() => {
@@ -192,12 +198,17 @@ const FloatingChatWidget = ({
   const handleSendMessage = async (text) => {
     let newMode = null;
     
-    // In embedded mode with support mode, don't allow mode changes (stay in support mode)
+    // In embedded mode:
+    // - SUPPORT MODE (Assessment/DevLab): don't allow mode changes, stay in support mode
+    // - CHAT MODE (other microservices): use RAG API directly, stay in GENERAL mode
     if (embedded && (currentMode === MODES.ASSESSMENT_SUPPORT || currentMode === MODES.DEVLAB_SUPPORT)) {
-      // Stay in support mode, don't detect mode changes
+      // SUPPORT MODE: Stay in support mode, don't detect mode changes
       // Continue to proxy behavior below
+    } else if (embedded && mode === 'chat') {
+      // CHAT MODE: Stay in GENERAL mode, use RAG API directly
+      // No mode detection needed
     } else {
-      // Detect mode change based on message (only in non-embedded or general mode)
+      // Not embedded or in standalone mode: Detect mode change based on message
       newMode = detectModeChange(text, currentMode);
       
       // Switch mode if detected
@@ -212,9 +223,14 @@ const FloatingChatWidget = ({
       }
     }
     
-    // Get the mode to use (in embedded support mode, use currentMode)
+    // Get the mode to use
+    // - Embedded SUPPORT MODE: use currentMode (ASSESSMENT_SUPPORT or DEVLAB_SUPPORT)
+    // - Embedded CHAT MODE: use GENERAL mode (RAG)
+    // - Standalone: use detected mode or currentMode
     const responseMode = embedded && (currentMode === MODES.ASSESSMENT_SUPPORT || currentMode === MODES.DEVLAB_SUPPORT)
       ? currentMode
+      : embedded && mode === 'chat'
+      ? MODES.GENERAL // CHAT MODE uses RAG (GENERAL mode)
       : (newMode || currentMode);
 
     // Add user message
@@ -230,6 +246,8 @@ const FloatingChatWidget = ({
     setRecommendations([]);
     
     // Check if we're in Support Mode (proxy behavior)
+    // Only Assessment and DevLab use SUPPORT MODE (proxy)
+    // All other microservices use CHAT MODE (RAG API directly)
     const isSupportMode = responseMode === MODES.ASSESSMENT_SUPPORT || responseMode === MODES.DEVLAB_SUPPORT;
     
     // Set loading state (combine with query loading if in General Mode)

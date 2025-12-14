@@ -21,18 +21,23 @@ import './index.css';
  * This function is called by bot.js after the bundle loads
  */
 window.EDUCORE_BOT_INIT_REACT = function(options) {
-  const { mountPoint, config, supportMode } = options;
+  const { mountPoint, config, widgetMode, mode } = options;
 
   if (!mountPoint) {
     console.error('EDUCORE Bot: Mount point is required');
     return;
   }
 
-  // Set initial mode based on support mode
-  if (supportMode === 'ASSESSMENT_SUPPORT') {
+  // Set initial mode based on widget mode
+  // SUPPORT MODE: Assessment/DevLab → forward to microservice API
+  // CHAT MODE: All others → use RAG API (GENERAL mode)
+  if (widgetMode === 'ASSESSMENT_SUPPORT') {
     store.dispatch(setAssessmentSupportMode());
-  } else if (supportMode === 'DEVLAB_SUPPORT') {
+  } else if (widgetMode === 'DEVLAB_SUPPORT') {
     store.dispatch(setDevLabSupportMode());
+  } else {
+    // CHAT MODE - use general RAG mode (default)
+    // No need to dispatch - GENERAL is the default mode
   }
 
   // Create React root and render
@@ -44,7 +49,9 @@ window.EDUCORE_BOT_INIT_REACT = function(options) {
           <CssBaseline />
           <FloatingChatWidget 
             embedded={true}
-            initialMode={supportMode}
+            initialMode={widgetMode || 'GENERAL'}
+            mode={mode || 'chat'} // 'support' or 'chat'
+            microservice={config.microservice}
             userId={config.userId}
             token={config.token}
             tenantId={config.tenantId}

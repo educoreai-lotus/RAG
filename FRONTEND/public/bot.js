@@ -28,10 +28,11 @@
   /**
    * Initialize the EDUCORE Bot widget
    * @param {Object} config - Configuration object
-   * @param {string} config.microservice - Microservice identifier ("ASSESSMENT" or "DEVLAB")
+   * @param {string} config.microservice - Microservice identifier (e.g., "ASSESSMENT", "DEVLAB", "CONTENT", etc.)
    * @param {string} config.userId - Authenticated user ID
    * @param {string} config.token - JWT or session token
    * @param {string} config.container - CSS selector for mount point (default: "#edu-bot-container")
+   * @param {string} config.tenantId - Optional tenant ID (default: "default")
    */
   window.initializeEducoreBot = function(config) {
     if (!config) {
@@ -39,7 +40,7 @@
       return;
     }
 
-    const { microservice, userId, token, container = '#edu-bot-container' } = config;
+    const { microservice, userId, token, container = '#edu-bot-container', tenantId = 'default' } = config;
 
     // Validate required parameters
     if (!microservice) {
@@ -57,12 +58,13 @@
       return;
     }
 
-    // Validate microservice value
-    const validMicroservices = ['ASSESSMENT', 'DEVLAB'];
-    if (!validMicroservices.includes(microservice.toUpperCase())) {
-      console.error(`EDUCORE Bot: Invalid microservice "${microservice}". Must be one of: ${validMicroservices.join(', ')}`);
-      return;
-    }
+    // Microservices that use SUPPORT MODE (forward to microservice API)
+    const supportModeMicroservices = ['ASSESSMENT', 'DEVLAB'];
+    
+    // All other microservices use CHAT MODE (RAG - regular chat)
+    // No need to validate specific microservice names - any microservice is allowed
+    // Assessment and DevLab → SUPPORT MODE
+    // All others → CHAT MODE (RAG)
 
     // Locate the mount point
     const mountElement = document.querySelector(container);
@@ -76,6 +78,7 @@
       microservice: microservice.toUpperCase(),
       userId,
       token,
+      tenantId,
       container,
       mountElement,
     };
@@ -84,14 +87,21 @@
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('token', token);
       localStorage.setItem('user_id', userId);
+      if (tenantId) {
+        localStorage.setItem('tenant_id', tenantId);
+      }
     }
 
-    // Start the bot widget in support mode
+    // Determine mode: SUPPORT MODE for Assessment/DevLab, CHAT MODE for others
+    const isSupportMode = supportModeMicroservices.includes(botConfig.microservice);
+    
+    // Start the bot widget
     startBotWidget({
-      mode: 'support',
+      mode: isSupportMode ? 'support' : 'chat',
       microservice: botConfig.microservice,
       userId: botConfig.userId,
       token: botConfig.token,
+      tenantId: botConfig.tenantId,
       mountPoint: mountElement,
     });
   };
@@ -101,14 +111,22 @@
    * @param {Object} options - Widget options
    */
   function startBotWidget(options) {
-    const { mode, microservice, userId, token, mountPoint } = options;
+    const { mode, microservice, userId, token, tenantId, mountPoint } = options;
 
-    // Determine support mode based on microservice
-    let supportMode = null;
-    if (microservice === 'ASSESSMENT') {
-      supportMode = 'ASSESSMENT_SUPPORT';
-    } else if (microservice === 'DEVLAB') {
-      supportMode = 'DEVLAB_SUPPORT';
+    // Determine mode based on microservice
+    // SUPPORT MODE: Assessment, DevLab → forward to microservice API
+    // CHAT MODE: All others → use RAG API directly
+    let widgetMode = null;
+    if (mode === 'support') {
+      // SUPPORT MODE
+      if (microservice === 'ASSESSMENT') {
+        widgetMode = 'ASSESSMENT_SUPPORT';
+      } else if (microservice === 'DEVLAB') {
+        widgetMode = 'DEVLAB_SUPPORT';
+      }
+    } else {
+      // CHAT MODE (RAG) - for all other microservices
+      widgetMode = 'GENERAL'; // Use general RAG mode
     }
 
     // Create a unique ID for this bot instance
@@ -127,7 +145,8 @@
     botInstance = {
       id: botId,
       config: botConfig,
-      supportMode,
+      widgetMode,
+      mode: mode, // 'support' or 'chat'
       mountPoint: mountPoint.querySelector(`#${botId}-root`),
     };
 
@@ -136,7 +155,8 @@
       detail: {
         botId,
         microservice,
-        supportMode,
+        widgetMode,
+        mode: mode,
         userId,
       },
     });
@@ -189,7 +209,8 @@
       window.EDUCORE_BOT_INIT_REACT({
         mountPoint: instance.mountPoint,
         config: instance.config,
-        supportMode: instance.supportMode,
+        widgetMode: instance.widgetMode,
+        mode: instance.mode, // 'support' or 'chat'
       });
     } else {
       console.error('EDUCORE Bot: React initialization function not found. Make sure bot-bundle.js is loaded correctly.');

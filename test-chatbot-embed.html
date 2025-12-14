@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Chatbot Embed - מיקרוסרוויס אחר</title>
+  
+  <!-- שלב 2: טעינת הסקריפט מה-BACKEND של RAG -->
+  <!-- ⚠️ חשוב: BACKEND רץ ב-Railway, FRONTEND רץ ב-Vercel -->
+  <!-- הקבצים embed מוגשים מה-BACKEND (Railway), לא מה-FRONTEND (Vercel)! -->
+  <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script>
+  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .info-box {
+      background: #e3f2fd;
+      border: 2px solid #2196f3;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #e8f5e9;
+      border-color: #4caf50;
+    }
+    .warning {
+      background: #fff3e0;
+      border-color: #ff9800;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 בדיקת הטמעת Chatbot במיקרוסרוויס</h1>
+  
+  <div class="info-box warning">
+    <h3>⚠️ לפני שתמשיך:</h3>
+    <ol>
+      <li><strong>ודא שה-backend של RAG רץ ב-Railway</strong> - בדוק: <code>curl https://rag-production-3a4c.up.railway.app/health</code></li>
+      <li><strong>זכור:</strong> BACKEND רץ ב-Railway, FRONTEND רץ ב-Vercel (אבל לא משתמשים בו להטמעה)</li>
+      <li><strong>ודא ש-Support Mode מופעל</strong> - ב-.env של ה-backend: <code>SUPPORT_MODE_ENABLED=true</code></li>
+      <li><strong>הגדר Origins מורשים</strong> - ב-.env: <code>SUPPORT_ALLOWED_ORIGINS=https://your-microservice.com</code></li>
+      <li><strong>בנה את ה-frontend</strong> - הרץ: <code>cd FRONTEND && npm run build</code></li>
+    </ol>
+  </div>
+  
+  <div class="info-box">
+    <h3>📋 מה קורה כאן:</h3>
+    <ol>
+      <li>הסקריפט נטען מה-backend של RAG: <code>/embed/bot.js</code></li>
+      <li>ה-script טוען אוטומטית את <code>bot-bundle.js</code> (React widget)</li>
+      <li>ה-widget מופיע בדף ומתחבר ל-backend של RAG</li>
+      <li><strong>SUPPORT MODE</strong> (Assessment/DevLab): הודעות נשלחות ל-<code>/api/assessment/support</code> או <code>/api/devlab/support</code></li>
+      <li><strong>CHAT MODE</strong> (כל השאר): הודעות נשלחות ל-<code>/api/v1/query</code> (RAG API)</li>
+    </ol>
+  </div>
+  
+  <h2>תוכן המיקרוסרוויס שלך כאן...</h2>
+  <p>זה יכול להיות כל תוכן של המיקרוסרוויס שלך (Assessment, DevLab, וכו')</p>
+  
+  <!-- שלב 1: ה-container של ה-bot -->
+  <div id="edu-bot-container"></div>
+  
+  <!-- שלב 3: אתחול ה-bot אחרי שהמשתמש התחבר -->
+  <script>
+    // פונקציה לדוגמה - החלף בפונקציית האימות שלך
+    function getCurrentUser() {
+      // בדוגמה זו, נשתמש בערכים סטטיים
+      // בפועל, תקבל את זה מהאימות שלך
+      return {
+        id: "test-user-123",
+        token: "test-token-here", // JWT token אמיתי
+        tenantId: "default"
+      };
+    }
+    
+    function initChatbot() {
+      const user = getCurrentUser();
+      
+      if (user && user.id && user.token) {
+        // בדוק אם הסקריפט נטען
+        if (window.initializeEducoreBot) {
+          console.log('✅ Initializing chatbot...');
+          window.initializeEducoreBot({
+            microservice: "ASSESSMENT",  // SUPPORT MODE: "ASSESSMENT" או "DEVLAB"
+            // CHAT MODE: "DIRECTORY", "COURSE_BUILDER", "CONTENT_STUDIO", "SKILLS_ENGINE", 
+            //            "LEARNER_AI", "LEARNING_ANALYTICS", "HR_MANAGEMENT_REPORTING" או כל שם אחר
+            userId: user.id,
+            token: user.token,
+            tenantId: user.tenantId || "default"
+          });
+          console.log('✅ Chatbot initialized!');
+        } else {
+          // הסקריפט עדיין לא נטען, נסה שוב
+          console.log('⏳ Waiting for script to load...');
+          setTimeout(initChatbot, 100);
+        }
+      } else {
+        console.warn('⚠️ User not authenticated. Chatbot will not initialize.');
+      }
+    }
+    
+    // אתחל כשהדף נטען
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initChatbot);
+    } else {
+      initChatbot();
+    }
+    
+    // בדיקות בקונסול
+    setTimeout(() => {
+      console.log('🔍 Debug Info:');
+      console.log('  - Script loaded:', window.EDUCORE_BOT_LOADED);
+      console.log('  - Init function:', typeof window.initializeEducoreBot);
+      console.log('  - Container exists:', !!document.querySelector('#edu-bot-container'));
+      console.log('  - Bundle loaded:', window.EDUCORE_BOT_BUNDLE_LOADED);
+    }, 2000);
+  </script>
+  
+  <div class="info-box success">
+    <h3>✅ אם הכל עובד:</h3>
+    <ul>
+      <li>תראה כפתור chatbot בפינה הימנית התחתונה</li>
+      <li>לחיצה עליו תפתח את חלון הצ'אט</li>
+      <li>תוכל לשלוח הודעות ולקבל תשובות</li>
+      <li><strong>SUPPORT MODE</strong> (Assessment/DevLab): תשובות מהמיקרוסרוויס ישירות</li>
+      <li><strong>CHAT MODE</strong> (כל השאר): תשובות מ-RAG (OpenAI + Knowledge Base)</li>
+    </ul>
+  </div>
+  
+  <div class="info-box warning">
+    <h3>🐛 אם זה לא עובד:</h3>
+    <ul>
+      <li>פתח את ה-Console בדפדפן (F12) ובדוק שגיאות</li>
+      <li>בדוק ב-Network tab אם <code>bot.js</code> ו-<code>bot-bundle.js</code> נטענו (status 200)</li>
+      <li>ודא שה-backend רץ ומשרת את הקבצים</li>
+      <li>בדוק שגיאות CORS - אולי צריך להוסיף את ה-origin ל-<code>SUPPORT_ALLOWED_ORIGINS</code></li>
+    </ul>
+  </div>
+</body>
+</html>
+
