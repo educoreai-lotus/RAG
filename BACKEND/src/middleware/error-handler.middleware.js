@@ -73,11 +73,22 @@ export function errorHandler(err, req, res, _next) {
  * @param {Function} next - Express next function
  */
 export function notFoundHandler(req, res, _next) {
+  // CRITICAL: Log ALL 404 requests, especially support routes
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('❌ [404 NOT FOUND] Request not found:');
+  console.log('❌ Method:', req.method);
+  console.log('❌ Original URL:', req.originalUrl);
+  console.log('❌ Path:', req.path);
+  console.log('❌ Query:', JSON.stringify(req.query, null, 2));
+  console.log('❌ Body:', JSON.stringify(req.body, null, 2));
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
   // Ignore common browser requests that cause 404 spam
   const ignoredPaths = ['/favicon.ico', '/robots.txt', '/apple-touch-icon.png', '/favicon-32x32.png', '/favicon-16x16.png'];
   
   // Special handling for support routes - check if it's a method issue
   if (req.path.includes('/support') && req.method !== 'POST' && req.method !== 'OPTIONS') {
+    console.error('⚠️ [404] Support route with wrong method!');
     logger.warn('405 Method Not Allowed (from notFoundHandler)', {
       method: req.method,
       path: req.path,

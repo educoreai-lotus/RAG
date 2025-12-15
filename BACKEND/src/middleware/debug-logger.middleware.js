@@ -7,19 +7,56 @@ import { logger } from '../utils/logger.util.js';
 
 export function criticalDebugLogger(req, res, next) {
   // Log EVERY request with full details
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`🔍 [REQUEST] ${req.method} ${req.originalUrl || req.url}`);
-  console.log(`🔍 [PATH] ${req.path}`);
-  console.log(`🔍 [ORIGIN] ${req.headers.origin || 'NO ORIGIN'}`);
-  console.log(`🔍 [USER-AGENT] ${req.headers['user-agent'] || 'NO USER-AGENT'}`);
-  console.log(`🔍 [CONTENT-TYPE] ${req.headers['content-type'] || 'NO CONTENT-TYPE'}`);
-  console.log(`🔍 [AUTHORIZATION] ${req.headers.authorization ? 'PRESENT' : 'MISSING'}`);
-  console.log(`🔍 [X-USER-ID] ${req.headers['x-user-id'] || 'MISSING'}`);
-  console.log(`🔍 [X-TENANT-ID] ${req.headers['x-tenant-id'] || 'MISSING'}`);
-  console.log(`🔍 [X-SOURCE] ${req.headers['x-source'] || 'MISSING'}`);
-  console.log(`🔍 [QUERY] ${JSON.stringify(req.query)}`);
-  console.log(`🔍 [BODY] ${req.method === 'POST' || req.method === 'PUT' ? JSON.stringify(req.body).substring(0, 200) : 'N/A'}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  // CRITICAL: Use console.log for Railway visibility
+  
+  // Special handling for support routes - EXTRA DETAILED LOGGING
+  const isSupportRoute = req.path.includes('/support') || req.path.includes('/devlab') || req.path.includes('/assessment');
+  
+  if (isSupportRoute) {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚨🚨🚨 [CRITICAL DEBUG] SUPPORT ROUTE DETECTED 🚨🚨🚨');
+    console.log(`🚨 [REQUEST] ${req.method} ${req.originalUrl || req.url}`);
+    console.log(`🚨 [PATH] ${req.path}`);
+    console.log(`🚨 [ORIGIN] ${req.headers.origin || 'NO ORIGIN'}`);
+    console.log(`🚨 [USER-AGENT] ${req.headers['user-agent'] || 'NO USER-AGENT'}`);
+    console.log(`🚨 [CONTENT-TYPE] ${req.headers['content-type'] || 'NO CONTENT-TYPE'}`);
+    console.log(`🚨 [AUTHORIZATION] ${req.headers.authorization ? 'PRESENT' : 'MISSING'}`);
+    console.log(`🚨 [X-USER-ID] ${req.headers['x-user-id'] || 'MISSING'}`);
+    console.log(`🚨 [X-TENANT-ID] ${req.headers['x-tenant-id'] || 'MISSING'}`);
+    console.log(`🚨 [X-SOURCE] ${req.headers['x-source'] || 'MISSING'}`);
+    console.log(`🚨 [QUERY] ${JSON.stringify(req.query)}`);
+    console.log(`🚨 [PARAMS] ${JSON.stringify(req.params)}`);
+    console.log(`🚨 [HEADERS FULL] ${JSON.stringify(req.headers, null, 2)}`);
+    
+    // For POST/PUT requests, log full body
+    if (req.method === 'POST' || req.method === 'PUT') {
+      console.log(`🚨 [BODY FULL] ${JSON.stringify(req.body, null, 2)}`);
+    } else {
+      console.log(`🚨 [BODY] N/A (method: ${req.method})`);
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  } else {
+    // Regular logging for non-support routes
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`🔍 [REQUEST] ${req.method} ${req.originalUrl || req.url}`);
+    console.log(`🔍 [PATH] ${req.path}`);
+    console.log(`🔍 [ORIGIN] ${req.headers.origin || 'NO ORIGIN'}`);
+    console.log(`🔍 [USER-AGENT] ${req.headers['user-agent'] || 'NO USER-AGENT'}`);
+    console.log(`🔍 [CONTENT-TYPE] ${req.headers['content-type'] || 'NO CONTENT-TYPE'}`);
+    console.log(`🔍 [AUTHORIZATION] ${req.headers.authorization ? 'PRESENT' : 'MISSING'}`);
+    console.log(`🔍 [X-USER-ID] ${req.headers['x-user-id'] || 'MISSING'}`);
+    console.log(`🔍 [X-TENANT-ID] ${req.headers['x-tenant-id'] || 'MISSING'}`);
+    console.log(`🔍 [X-SOURCE] ${req.headers['x-source'] || 'MISSING'}`);
+    console.log(`🔍 [QUERY] ${JSON.stringify(req.query)}`);
+    
+    // For POST/PUT requests, log truncated body
+    if (req.method === 'POST' || req.method === 'PUT') {
+      console.log(`🔍 [BODY] ${JSON.stringify(req.body).substring(0, 200)}`);
+    } else {
+      console.log(`🔍 [BODY] N/A`);
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
 
   // Also log via Winston logger
   logger.info('🔍 CRITICAL DEBUG - Request details', {

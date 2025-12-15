@@ -546,9 +546,50 @@ app.use('/api/v1', recommendationsRoutes);
 app.use('/api/v1', knowledgeGraphRoutes);
 app.use('/api/debug', diagnosticsRoutes);
 app.use('/api/debug', contentRoutes);
+
 // Support routes must come after /api/v1 and /api/debug to avoid conflicts
+// Add logging middleware BEFORE mounting to see if requests reach here
+app.use('/api', (req, res, next) => {
+  // Only log support-related routes to avoid spam
+  if (req.path.includes('/support') || req.path.includes('/devlab') || req.path.includes('/assessment')) {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🎯 [INDEX.JS] Request reached /api router');
+    console.log('🎯 Method:', req.method);
+    console.log('🎯 Path:', req.path);
+    console.log('🎯 Original URL:', req.originalUrl);
+    console.log('🎯 Full URL:', req.protocol + '://' + req.get('host') + req.originalUrl);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+  next();
+});
+
 app.use('/api', microserviceSupportRoutes);
 app.use('/auth', authRoutes);
+
+// ═══════════════════════════════════════════════════════
+// CATCH-ALL LOGGER - Log all unhandled routes BEFORE 404
+// ═══════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  // Log ALL requests that don't match any route
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('⚠️ [UNHANDLED ROUTE] Request not matched by any route:');
+  console.log('⚠️ Method:', req.method);
+  console.log('⚠️ Original URL:', req.originalUrl);
+  console.log('⚠️ Path:', req.path);
+  console.log('⚠️ Query:', JSON.stringify(req.query, null, 2));
+  console.log('⚠️ Body:', JSON.stringify(req.body, null, 2));
+  console.log('⚠️ Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  logger.warn('Unhandled route', {
+    method: req.method,
+    url: req.originalUrl,
+    path: req.path,
+    query: req.query,
+  });
+  
+  next();
+});
 
 // Error handling middleware chain
 // 1. Method Not Allowed handler (405) - catches requests with wrong HTTP method

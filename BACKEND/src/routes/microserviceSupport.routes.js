@@ -11,6 +11,14 @@ const router = express.Router();
 
 // Log all requests to support routes for debugging
 router.use((req, res, next) => {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📍 [MICROSERVICE SUPPORT ROUTER] Request received');
+  console.log('📍 Method:', req.method);
+  console.log('📍 Path:', req.path);
+  console.log('📍 Original URL:', req.originalUrl);
+  console.log('📍 Full URL:', req.protocol + '://' + req.get('host') + req.originalUrl);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
   logger.debug('Support route request', {
     method: req.method,
     path: req.path,
@@ -108,13 +116,41 @@ router.post('/assessment/support', supportAuthMiddleware, assessmentSupport);
  */
 router.post('/devlab/support', supportAuthMiddleware, (req, res, next) => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📍 [ROUTE] POST /devlab/support route handler called');
-  console.log('📍 [ROUTE] Request body:', JSON.stringify(req.body, null, 2));
-  console.log('📍 [ROUTE] Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('🔥🔥🔥 [DEVLAB SUPPORT] ROUTE HANDLER HIT! 🔥🔥🔥');
+  console.log('🔥 Timestamp:', new Date().toISOString());
+  console.log('🔥 Method:', req.method);
+  console.log('🔥 Original URL:', req.originalUrl);
+  console.log('🔥 Path:', req.path);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
+  console.log('📥 [DEVLAB SUPPORT] Request Details:');
+  console.log('📥 Body:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('📥 Query:', JSON.stringify(req.query, null, 2));
+  console.log('📥 Params:', JSON.stringify(req.params, null, 2));
+  
+  // Extract and log key data
+  const { query, support_mode, session_id, timestamp } = req.body || {};
+  console.log('🔍 [DEVLAB SUPPORT] Extracted Data:');
+  console.log('  - Query:', query);
+  console.log('  - Support Mode:', support_mode);
+  console.log('  - Session ID:', session_id);
+  console.log('  - Timestamp:', timestamp);
+  
   logger.info('POST /devlab/support route handler called');
-  devlabSupport(req, res, next);
+  
+  // Wrap in try-catch to ensure errors are logged
+  try {
+    devlabSupport(req, res, next);
+  } catch (error) {
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ [DEVLAB SUPPORT] ROUTE HANDLER ERROR:');
+    console.error('❌ Error Name:', error.name);
+    console.error('❌ Error Message:', error.message);
+    console.error('❌ Error Stack:', error.stack);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    next(error);
+  }
 });
 
 export default router;
