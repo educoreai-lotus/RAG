@@ -170,6 +170,16 @@ const corsOptions = {
 // This catches ALL requests before anything else
 // ═══════════════════════════════════════════════════════
 app.use((req, res, next) => {
+  console.log('🌍 RAILWAY REQUEST INFO:');
+  console.log('  Original URL:', req.originalUrl);
+  console.log('  Base URL:', req.baseUrl);
+  console.log('  Path:', req.path);
+  console.log('  Method:', req.method);
+  console.log('  Protocol:', req.protocol);
+  console.log('  Hostname:', req.hostname);
+  console.log('  X-Forwarded-For:', req.headers['x-forwarded-for'] || 'N/A');
+  console.log('  X-Forwarded-Proto:', req.headers['x-forwarded-proto'] || 'N/A');
+  console.log('  X-Forwarded-Host:', req.headers['x-forwarded-host'] || 'N/A');
   console.log('🎯 RAW REQUEST:', req.method, req.originalUrl || req.url);
   console.log('🎯 RAW PATH:', req.path);
   console.log('🎯 RAW ORIGIN:', req.headers.origin || 'NO ORIGIN');
