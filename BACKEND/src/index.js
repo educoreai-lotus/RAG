@@ -40,55 +40,88 @@ const PORT = process.env.PORT || 3000;
 
 // CORS configuration
 // Support multiple origins (localhost for dev, Vercel for production)
+
+// Get allowed origins from environment variable or use defaults
+const envAllowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : [];
+
+// Build allowed origins list
 const allowedOrigins = [
+  // Local development
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:5174',
   'http://localhost:8080',
+  // Main Vercel deployment
+  'https://rag-git-main-educoreai-lotus.vercel.app',
+  // Environment variables
   process.env.FRONTEND_URL,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
   process.env.FRONTEND_VERCEL_URL,
-  // Add common Vercel patterns
   process.env.VERCEL ? `https://${process.env.VERCEL}` : null,
+  // From environment variable
+  ...envAllowedOrigins,
 ].filter(Boolean); // Remove null/undefined values
 
-// Check if we should allow all Vercel deployments
-const allowAllVercel = process.env.ALLOW_ALL_VERCEL === 'true';
+// Helper function to check if origin matches a pattern (supports wildcards)
+function matchesPattern(origin, pattern) {
+  if (pattern.includes('*')) {
+    // Handle wildcard (e.g., *.vercel.app)
+    const regexPattern = pattern.replace(/\*/g, '.*').replace(/\./g, '\\.');
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(origin);
+  }
+  return pattern === origin;
+}
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    // Allow requests with no origin (like mobile apps, Postman, curl, etc.)
     if (!origin) {
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else if (allowAllVercel && /^https:\/\/.*\.vercel\.app$/.test(origin)) {
-      // Allow any Vercel deployment if ALLOW_ALL_VERCEL is set
-      logger.info('CORS: Allowing Vercel origin (ALLOW_ALL_VERCEL enabled):', origin);
-      callback(null, true);
-    } else if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
-      // Always allow Vercel deployments (common pattern)
-      logger.info('CORS: Allowing Vercel origin:', origin);
-      callback(null, true);
-    } else {
-      // Log for debugging
-      logger.warn('CORS blocked origin:', origin);
-      logger.info('Allowed origins:', allowedOrigins);
-      logger.info('💡 To allow this origin, set FRONTEND_URL or FRONTEND_VERCEL_URL in Railway');
-      logger.info('💡 Or set ALLOW_ALL_VERCEL=true to allow all Vercel deployments');
-      callback(new Error('Not allowed by CORS'));
+    // Check if origin is in allowed list (exact match)
+    if (allowedOrigins.some(allowed => allowed === origin)) {
+      logger.debug('CORS: Allowing exact match origin:', origin);
+      return callback(null, true);
     }
+    
+    // Check if origin matches any wildcard pattern
+    const matchesWildcard = allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        return matchesPattern(origin, allowed);
+      }
+      return false;
+    });
+    
+    if (matchesWildcard) {
+      logger.info('CORS: Allowing wildcard match origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Always allow Vercel deployments (any *.vercel.app)
+    if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      logger.info('CORS: Allowing Vercel origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Log blocked origin for debugging
+    logger.warn('CORS blocked origin:', origin);
+    logger.info('Allowed origins:', allowedOrigins);
+    logger.info('💡 To allow this origin, add it to ALLOWED_ORIGINS environment variable in Railway');
+    logger.info('💡 Format: ALLOWED_ORIGINS=https://example.com,https://*.example.com');
+    
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'X-Tenant-Id', 'X-Source', 'X-Embed-Secret'],
-  exposedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Type', 'Authorization', 'Content-Range', 'X-Content-Range'],
   preflightContinue: false, // End preflight requests immediately
-  maxAge: 86400, // Cache preflight requests for 24 hours
+  maxAge: 600, // Cache preflight requests for 10 minutes (reduced from 24 hours)
 };
 
 // Middleware
