@@ -108,3 +108,4 @@ git commit -m "Remove private keys from git history"
 1. שנה את המפתחות ב-GitHub Secrets
 2. Push את השינויים
 
+

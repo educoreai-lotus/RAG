@@ -8,12 +8,37 @@
 
 ## Table of Contents
 
-1. [Quick Start (3 Steps)](#quick-start-3-steps)
-2. [The Embed Script](#the-embed-script)
-3. [How to Add to Any Microservice](#how-to-add-to-any-microservice)
-4. [Configuration Options](#configuration-options)
-5. [Examples](#examples)
-6. [Troubleshooting](#troubleshooting)
+1. [Prerequisites](#prerequisites)
+2. [Quick Start (3 Steps)](#quick-start-3-steps)
+3. [The Embed Script](#the-embed-script)
+4. [How to Add to Any Microservice](#how-to-add-to-any-microservice)
+5. [Configuration Options](#configuration-options)
+6. [Examples](#examples)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## Prerequisites
+
+**Before integrating the chatbot, ensure the RAG backend is properly configured:**
+
+1. **RAG Backend is Running:**
+   - Verify the backend is accessible at your production URL
+   - Test: `curl https://rag-production-3a4c.up.railway.app/health`
+
+2. **Embed Files are Available:**
+   - Verify embed files are served: `curl https://rag-production-3a4c.up.railway.app/embed/bot.js`
+   - Should return JavaScript code (not 404)
+
+3. **Support Mode is Enabled (for RAG team):**
+   - `SUPPORT_MODE_ENABLED=true` in RAG backend environment
+   - `SUPPORT_ALLOWED_ORIGINS` includes your microservice domain(s)
+
+4. **CORS is Configured (for RAG team):**
+   - Your microservice origin should be in the allowed origins list
+   - Example: `SUPPORT_ALLOWED_ORIGINS=https://assessment.educore.com,https://devlab.educore.com`
+
+**Note:** If you encounter CORS or "Support mode disabled" errors, contact the RAG team to configure the backend. See [Troubleshooting](#troubleshooting) for details.
 
 ---
 
@@ -38,13 +63,15 @@ Add this in your `<head>` or before `</body>`:
 **⚠️ Important:** Use the **BACKEND domain**, not the frontend domain!
 
 - ✅ **Correct:** `https://rag-backend.educore.com/embed/bot.js` (or your backend URL)
-- ✅ **Production:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
-- ✅ **Production Example:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- ✅ **Production (Railway):** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- ✅ **Production (Vercel):** `https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js`
 - ❌ **Wrong:** `https://rag-frontend.educore.com/embed/bot.js`
 
 The backend serves the embed files from `/embed` route. The script will automatically load `bot-bundle.js` from the same backend domain.
 
-**Production URL:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+**Production URLs:**
+- **Railway:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- **Vercel:** `https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js`
 
 ### Step 3: Initialize After User Login
 
@@ -209,7 +236,8 @@ localStorage.setItem('user_id', userId);
   <title>My Microservice</title>
   
   <!-- Load bot script early - Use BACKEND domain! -->
-  <!-- Production: https://rag-production-3a4c.up.railway.app/embed/bot.js -->
+  <!-- Production (Railway): https://rag-production-3a4c.up.railway.app/embed/bot.js -->
+  <!-- Production (Vercel): https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js -->
   <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script>
 </head>
 <body>
@@ -251,7 +279,8 @@ For React, Vue, Angular, etc., load the script dynamically:
 // React example
 useEffect(() => {
   const script = document.createElement('script');
-  script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js'; // Production URL
+  script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js'; // Production (Railway)
+  // Alternative: https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js (Vercel)
   script.async = true;
   document.head.appendChild(script);
   
@@ -583,7 +612,8 @@ useEffect(() => {
 ### URLs:
 
 - ✅ **Correct:** `https://rag-backend.educore.com/embed/bot.js` (or your backend URL)
-- ✅ **Production:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- ✅ **Production (Railway):** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- ✅ **Production (Vercel):** `https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js`
 - ❌ **Wrong:** `https://rag-frontend.educore.com/embed/bot.js` (לא קיים)
 
 The backend serves:
@@ -592,7 +622,9 @@ The backend serves:
 
 Both files are served from the same backend domain with CORS enabled. The `bot.js` script automatically loads `bot-bundle.js` from the same base URL.
 
-**Current Production URL:** [https://rag-production-3a4c.up.railway.app](https://rag-production-3a4c.up.railway.app/)
+**Production URLs:**
+- **Railway:** [https://rag-production-3a4c.up.railway.app](https://rag-production-3a4c.up.railway.app/)
+- **Vercel:** [https://rag-git-main-educoreai-lotus.vercel.app](https://rag-git-main-educoreai-lotus.vercel.app/)
 
 ## Configuration Options
 
@@ -743,7 +775,8 @@ window.initializeEducoreBot({
   <title>Assessment Dashboard</title>
   
   <!-- Load bot script - Use BACKEND domain! -->
-  <!-- Production: https://rag-production-3a4c.up.railway.app/embed/bot.js -->
+  <!-- Production (Railway): https://rag-production-3a4c.up.railway.app/embed/bot.js -->
+  <!-- Production (Vercel): https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js -->
   <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script>
 </head>
 <body>
@@ -827,7 +860,8 @@ function AssessmentDashboard() {
       }
     } else {
       // Load script first - Use BACKEND domain!
-      // Production: https://rag-production-3a4c.up.railway.app/embed/bot.js
+      // Production (Railway): https://rag-production-3a4c.up.railway.app/embed/bot.js
+      // Production (Vercel): https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js
       const script = document.createElement('script');
       script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js';
       script.async = true;
@@ -911,7 +945,8 @@ export default {
         });
       } else if (!scriptLoaded) {
         // Load script - Use BACKEND domain!
-        // Production: https://rag-production-3a4c.up.railway.app/embed/bot.js
+        // Production (Railway): https://rag-production-3a4c.up.railway.app/embed/bot.js
+        // Production (Vercel): https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js
         const script = document.createElement('script');
         script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js';
         script.async = true;
@@ -974,7 +1009,8 @@ export class ChatbotService {
   private loadScript(): Promise<void> {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js'; // Production URL
+      script.src = 'https://rag-production-3a4c.up.railway.app/embed/bot.js'; // Production (Railway)
+      // Alternative: https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js (Vercel)
       script.async = true;
       script.onload = () => {
         this.scriptLoaded = true;
@@ -1393,13 +1429,18 @@ If you're still stuck:
 1. **Add container:** `<div id="edu-bot-container"></div>`
 2. **Load script (use BACKEND domain!):** 
    ```html
+   <!-- Railway -->
    <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script>
+   <!-- OR Vercel -->
+   <script src="https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js"></script>
    ```
 3. **Initialize:** `window.initializeEducoreBot({ microservice: "ASSESSMENT", userId: "...", token: "..." })`
 
 **⚠️ Important:** Always use the **BACKEND domain**, not the frontend domain!
 
-**Production URL:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+**Production URLs:**
+- **Railway:** `https://rag-production-3a4c.up.railway.app/embed/bot.js`
+- **Vercel:** `https://rag-git-main-educoreai-lotus.vercel.app/embed/bot.js`
 
 ### Key Points
 

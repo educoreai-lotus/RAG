@@ -15,3 +15,4 @@ curl -X POST "YOUR_COORDINATOR_DOMAIN/register/b75b5a42-3b19-404e-819b-262001c4c
 
 
 
+

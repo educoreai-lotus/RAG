@@ -53,19 +53,38 @@ async function runMigrations() {
         log.info('Using Supabase connection pooler (port 6543)');
         
         // Check for pgbouncer=true (required to disable prepared statements)
+        let needsFix = false;
+        let fixedUrl = dbUrl;
+        
         if (!dbUrl.includes('pgbouncer=true')) {
           log.error('❌ DATABASE_URL is missing pgbouncer=true parameter!');
           log.error('💡 This will cause "prepared statement already exists" errors');
           log.error('💡 Fix: Add &pgbouncer=true (or ?pgbouncer=true) to DATABASE_URL');
           log.error('💡 Example: ...?sslmode=require&pgbouncer=true');
           log.error('💡 See: PREPARED_STATEMENT_FIX.md for details');
-          
+          needsFix = true;
+        }
+        
+        // Also check for connection_limit (recommended for pgbouncer)
+        if (!dbUrl.includes('connection_limit=')) {
+          log.warn('⚠️  DATABASE_URL is missing connection_limit parameter');
+          log.warn('💡 Recommended: Add &connection_limit=1 for pgbouncer');
+          needsFix = true;
+        }
+        
+        if (needsFix) {
           // Try to fix automatically
           try {
-            const separator = dbUrl.includes('?') ? '&' : '?';
-            const fixedUrl = `${dbUrl}${separator}pgbouncer=true`;
+            const separator = fixedUrl.includes('?') ? '&' : '?';
+            if (!fixedUrl.includes('pgbouncer=true')) {
+              fixedUrl = `${fixedUrl}${separator}pgbouncer=true`;
+            }
+            if (!fixedUrl.includes('connection_limit=')) {
+              const nextSeparator = fixedUrl.includes('?') ? '&' : '?';
+              fixedUrl = `${fixedUrl}${nextSeparator}connection_limit=1`;
+            }
             process.env.DATABASE_URL = fixedUrl;
-            log.info('✅ Automatically added pgbouncer=true to DATABASE_URL');
+            log.info('✅ Automatically fixed DATABASE_URL with pgbouncer=true and connection_limit=1');
           } catch (error) {
             log.error('❌ Failed to auto-fix DATABASE_URL:', error.message);
           }
@@ -187,12 +206,35 @@ async function runMigrations() {
           log.error('Migration deploy failed:', migrateError.message);
           log.error('Exit code:', migrateError.status || migrateError.code);
           
+          // Check if it's a prepared statement error
+          // Check both message and stderr (if available)
+          const errorMessage = (
+            migrateError.message || 
+            migrateError.stderr?.toString() || 
+            migrateError.stdout?.toString() ||
+            ''
+          ).toLowerCase();
+          
+          if (errorMessage.includes('prepared statement') || 
+              errorMessage.includes('already exists') ||
+              errorMessage.includes('prepared statement "s') ||
+              errorMessage.includes('schema engine error')) {
+            log.error('❌ Prepared statement error detected!');
+            log.error('💡 This is a known issue with Supabase Transaction Mode Pooler');
+            log.error('💡 SOLUTIONS:');
+            log.error('   1. Use Session Mode Pooler URL (recommended for migrations)');
+            log.error('      In Supabase Dashboard → Settings → Database → Connection string → Session mode');
+            log.error('   2. Run migrations manually in Supabase SQL Editor');
+            log.error('   3. Set SKIP_MIGRATIONS=true and run migrations separately');
+            log.warn('⚠️  Continuing with server start - migrations may need to be run manually');
+            log.warn('💡 The database schema might already be up to date');
+            return; // Don't try fallback - it will have the same issue
+          }
+          
           // Check if it's a connection issue
-          if (migrateError.message && (
-            migrateError.message.includes('ECONNREFUSED') ||
-            migrateError.message.includes('timeout') ||
-            migrateError.message.includes('connection')
-          )) {
+          if (errorMessage.includes('ECONNREFUSED') ||
+              errorMessage.includes('timeout') ||
+              errorMessage.includes('connection')) {
             log.error('❌ Database connection failed!');
             log.error('💡 Check DATABASE_URL in Railway environment variables');
             log.error('💡 Make sure Supabase service is linked and DATABASE_URL is set');
@@ -211,8 +253,21 @@ async function runMigrations() {
             log.info('✅ Database schema pushed successfully (fallback)');
             return;
           } catch (pushError) {
+            const pushErrorMessage = pushError.message || pushError.stderr?.toString() || '';
+            
+            // Check if it's also a prepared statement error
+            if (pushErrorMessage.includes('prepared statement') || pushErrorMessage.includes('already exists')) {
+              log.error('❌ Fallback db push also failed with prepared statement error');
+              log.error('💡 This confirms the issue is with Transaction Mode Pooler');
+              log.error('💡 RECOMMENDED: Use Session Mode Pooler or run migrations manually');
+              log.warn('⚠️  Continuing with server start - database schema may need manual setup');
+              return; // Don't throw - let server start
+            }
+            
             log.error('Fallback db push also failed:', pushError.message);
-            throw migrateError; // Throw original migrateError
+            log.warn('⚠️  Continuing with server start despite migration errors');
+            log.warn('💡 Database schema may need manual setup');
+            return; // Don't throw - let server start anyway
           }
         }
       } catch (deployError) {

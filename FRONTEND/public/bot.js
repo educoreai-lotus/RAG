@@ -28,7 +28,10 @@
   /**
    * Initialize the EDUCORE Bot widget
    * @param {Object} config - Configuration object
-   * @param {string} config.microservice - Microservice identifier (e.g., "ASSESSMENT", "DEVLAB", "CONTENT", etc.)
+   * @param {string} config.microservice - Microservice identifier
+   *   SUPPORT MODE: "ASSESSMENT", "DEVLAB"
+   *   CHAT MODE: "DIRECTORY", "COURSE_BUILDER", "CONTENT_STUDIO", "SKILLS_ENGINE", 
+   *              "LEARNER_AI", "LEARNING_ANALYTICS", "HR_MANAGEMENT_REPORTING", or any other name
    * @param {string} config.userId - Authenticated user ID
    * @param {string} config.token - JWT or session token
    * @param {string} config.container - CSS selector for mount point (default: "#edu-bot-container")
@@ -62,7 +65,16 @@
     const supportModeMicroservices = ['ASSESSMENT', 'DEVLAB'];
     
     // All other microservices use CHAT MODE (RAG - regular chat)
-    // No need to validate specific microservice names - any microservice is allowed
+    // Supported CHAT MODE microservices:
+    // - DIRECTORY
+    // - COURSE_BUILDER
+    // - CONTENT_STUDIO
+    // - SKILLS_ENGINE
+    // - LEARNER_AI
+    // - LEARNING_ANALYTICS
+    // - HR_MANAGEMENT_REPORTING
+    // - Any other microservice name (case-insensitive)
+    // 
     // Assessment and DevLab → SUPPORT MODE
     // All others → CHAT MODE (RAG)
 
@@ -123,9 +135,15 @@
         widgetMode = 'ASSESSMENT_SUPPORT';
       } else if (microservice === 'DEVLAB') {
         widgetMode = 'DEVLAB_SUPPORT';
+      } else {
+        // Fallback: if somehow support mode is set for non-support microservice, use CHAT MODE
+        console.warn(`EDUCORE Bot: Microservice "${microservice}" does not support SUPPORT MODE. Using CHAT MODE instead.`);
+        widgetMode = 'GENERAL';
       }
     } else {
       // CHAT MODE (RAG) - for all other microservices
+      // Supports: DIRECTORY, COURSE_BUILDER, CONTENT_STUDIO, SKILLS_ENGINE, 
+      //           LEARNER_AI, LEARNING_ANALYTICS, HR_MANAGEMENT_REPORTING, and any other microservice
       widgetMode = 'GENERAL'; // Use general RAG mode
     }
 

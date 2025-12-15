@@ -241,3 +241,4 @@ console.log('Response:', response);
 - `BACKEND/src/clients/coordinator.client.js` - לקוח Coordinator
 - `BACKEND/src/utils/signature.js` - יצירת חתימות
 
+

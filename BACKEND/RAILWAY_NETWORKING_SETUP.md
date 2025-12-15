@@ -110,3 +110,4 @@ node scripts/test-grpc-only.js
 
 **המלצה:** אם שני השירותים על Railway, השתמש ב-Private Networking עם `coordinator:50051`
 
+

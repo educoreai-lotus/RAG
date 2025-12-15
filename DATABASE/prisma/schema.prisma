@@ -45,7 +45,7 @@ model Tenant {
 model Microservice {
   id          String   @id @default(uuid())
   tenantId    String   @map("tenant_id")
-  name        String   // e.g., "assessment", "devlab", "content", etc.
+  name        String // e.g., "assessment", "devlab", "content", etc.
   serviceId   String   @unique @map("service_id") // Unique identifier across all tenants
   displayName String   @map("display_name")
   description String?  @db.Text
@@ -100,17 +100,17 @@ model Query {
 }
 
 model QuerySource {
-  id                String   @id @default(uuid())
-  queryId           String   @map("query_id")
-  sourceId          String   @map("source_id")
-  sourceType        String   @map("source_type")
-  sourceMicroservice String? @map("source_microservice") // Which microservice provided this source
-  title             String
-  contentSnippet    String   @map("content_snippet") @db.Text
-  sourceUrl         String   @map("source_url")
-  relevanceScore    Decimal  @map("relevance_score") @db.Decimal(3, 2)
-  metadata          Json?    @default("{}")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  queryId            String   @map("query_id")
+  sourceId           String   @map("source_id")
+  sourceType         String   @map("source_type")
+  sourceMicroservice String?  @map("source_microservice") // Which microservice provided this source
+  title              String
+  contentSnippet     String   @map("content_snippet") @db.Text
+  sourceUrl          String   @map("source_url")
+  relevanceScore     Decimal  @map("relevance_score") @db.Decimal(3, 2)
+  metadata           Json?    @default("{}")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   // Relations
   query Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
@@ -149,7 +149,7 @@ model QueryRecommendation {
 model VectorEmbedding {
   id             String                      @id @default(uuid())
   tenantId       String                      @map("tenant_id")
-  microserviceId String?                    @map("microservice_id") // Which microservice this content came from
+  microserviceId String?                     @map("microservice_id") // Which microservice this content came from
   contentId      String                      @map("content_id")
   contentType    String                      @map("content_type") // "document", "chunk", "kg_node", "query", etc.
   embedding      Unsupported("vector(1536)") // pgvector type
@@ -324,33 +324,4 @@ model CacheEntry {
   @@index([cacheKey])
   @@index([expiresAt])
   @@map("cache_entries")
-}
-
-// ============================================
-// MICROSERVICE DATA STORAGE
-// ============================================
-
-model MicroserviceData {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  serviceName String   @map("service_name") @db.VarChar(255)
-  contentId   String   @map("content_id") @db.VarChar(500)
-  contentType String   @map("content_type") @db.VarChar(255)
-  contentData Json     @map("content_data") @db.JsonB
-  metadata    Json?    @default("{}") @db.JsonB
-  timestamp   DateTime @db.Timestamptz
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
-
-  // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([serviceName, contentId])
-  @@index([serviceName])
-  @@index([tenantId])
-  @@index([timestamp(sort: Desc)])
-  @@index([contentType])
-  @@index([contentId])
-  @@index([tenantId, serviceName])
-  @@map("microservice_data")
 }

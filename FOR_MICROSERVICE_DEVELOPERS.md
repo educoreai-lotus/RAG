@@ -1,60 +1,62 @@
-# מדריך הטמעת Chatbot - למפתחי המיקרוסרוויסים
+# Chatbot Integration Guide - For Microservice Developers
 
 **Version:** 2.0  
 **Last Updated:** 2025-01-27
 
-## 📖 מה זה?
+## 📖 What is this?
 
-מדריך קצר להטמעת ה-RAG Chatbot במיקרוסרוויס שלך.  
-**זמן הטמעה:** ~5 דקות  
-**רמת קושי:** קל
+A quick guide for integrating the RAG Chatbot into your microservice.  
+**Integration time:** ~5 minutes  
+**Difficulty level:** Easy
 
-ה-chatbot יופיע ככפתור בפינה הימנית התחתונה של הדף, ויאפשר למשתמשים לשאול שאלות ולקבל תשובות.
+The chatbot will appear as a button in the bottom-right corner of the page, allowing users to ask questions and receive answers.
+
+**Important:** You don't need to configure any environment variables! Just run the script.
 
 ---
 
-## 🚀 Quick Start (3 שלבים)
+## 🚀 Quick Start (3 Steps)
 
-### שלב 1: הוסף Container
+### Step 1: Add Container
 
-הוסף ב-HTML שלך (לפני `</body>`):
+Add to your HTML (before `</body>`):
 
 ```html
 <div id="edu-bot-container"></div>
 ```
 
-### שלב 2: טען את הסקריפט
+### Step 2: Load the Script
 
-הוסף ב-`<head>` או לפני `</body>`:
+Add in `<head>` or before `</body>`:
 
 ```html
 <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script>
 ```
 
-**⚠️ חשוב:** זה ה-BACKEND URL (Railway) - זה ה-URL הנכון!
+**⚠️ Important:** This is the BACKEND URL (Railway) - this is the correct URL!
 
-### שלב 3: אתחל אחרי התחברות
+### Step 3: Initialize After Login
 
 ```html
 <script>
   function initChatbot() {
-    const user = getCurrentUser(); // הפונקציה שלך לאימות
+    const user = getCurrentUser(); // Your authentication function
     
     if (user && user.id && user.token) {
       if (window.initializeEducoreBot) {
         window.initializeEducoreBot({
-          microservice: "YOUR_MICROSERVICE_NAME", // ראה רשימה למטה
+          microservice: "YOUR_MICROSERVICE_NAME", // See list below
           userId: user.id,
           token: user.token,
           tenantId: user.tenantId || "default"
         });
       } else {
-        setTimeout(initChatbot, 100); // נסה שוב אם הסקריפט עדיין לא נטען
+        setTimeout(initChatbot, 100); // Retry if script hasn't loaded yet
       }
     }
   }
   
-  // אתחל כשהדף מוכן
+  // Initialize when page is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initChatbot);
   } else {
@@ -63,17 +65,17 @@
 </script>
 ```
 
-**זה הכל!** ה-widget יופיע בדף שלך.
+**That's it!** The widget will appear on your page.
 
 ---
 
-## 📋 שמות המיקרוסרוויסים
+## 📋 Microservice Names
 
-### SUPPORT MODE (2 מיקרוסרוויסים):
+### SUPPORT MODE (2 microservices):
 - **ASSESSMENT** - Assessment
 - **DEVLAB** - DevLab
 
-### CHAT MODE (7 מיקרוסרוויסים):
+### CHAT MODE (7 microservices):
 - **DIRECTORY** - Directory
 - **COURSE_BUILDER** - Course Builder
 - **CONTENT_STUDIO** - Content Studio
@@ -84,9 +86,9 @@
 
 ---
 
-## 💻 דוגמאות קוד
+## 💻 Code Examples
 
-### HTML פשוט
+### Plain HTML
 
 ```html
 <!DOCTYPE html>
@@ -102,12 +104,12 @@
   
   <script>
     function initChatbot() {
-      const user = getCurrentUser(); // הפונקציה שלך
+      const user = getCurrentUser(); // Your function
       
       if (user && user.id && user.token) {
         if (window.initializeEducoreBot) {
           window.initializeEducoreBot({
-            microservice: "DIRECTORY", // החלף בשם המיקרוסרוויס שלך
+            microservice: "DIRECTORY", // Replace with your microservice name
             userId: user.id,
             token: user.token,
             tenantId: user.tenantId || "default"
@@ -149,7 +151,7 @@ function MyMicroservice() {
       script.onload = () => {
         if (window.initializeEducoreBot) {
           window.initializeEducoreBot({
-            microservice: "DIRECTORY", // החלף בשם המיקרוסרוויס שלך
+            microservice: "DIRECTORY", // Replace with your microservice name
             userId: user.id,
             token: token,
             tenantId: user.tenantId || "default"
@@ -200,7 +202,7 @@ export default {
       
       if (window.initializeEducoreBot) {
         window.initializeEducoreBot({
-          microservice: "DIRECTORY", // החלף בשם המיקרוסרוויס שלך
+          microservice: "DIRECTORY", // Replace with your microservice name
           userId: authStore.user.id,
           token: authStore.token,
           tenantId: authStore.user.tenantId || "default"
@@ -249,7 +251,7 @@ export class MyMicroserviceComponent implements OnInit {
     
     if (window['initializeEducoreBot']) {
       window['initializeEducoreBot']({
-        microservice: "DIRECTORY", // החלף בשם המיקרוסרוויס שלך
+        microservice: "DIRECTORY", // Replace with your microservice name
         userId: user.id,
         token: user.token,
         tenantId: user.tenantId || "default"
@@ -276,83 +278,113 @@ export class MyMicroserviceComponent implements OnInit {
 
 ---
 
-## ⚙️ הפרמטרים
+## ⚙️ Parameters
 
-### חובה:
-- `microservice` (string) - שם המיקרוסרוויס (ראה רשימה למעלה)
-- `userId` (string) - ID המשתמש המחובר
-- `token` (string) - JWT או session token
+### Required:
+- `microservice` (string) - Microservice name (see list above)
+- `userId` (string) - Authenticated user ID
+- `token` (string) - JWT or session token
 
-### אופציונלי:
-- `tenantId` (string) - מזהה tenant (ברירת מחדל: `"default"`)
-- `container` (string) - CSS selector ל-container (ברירת מחדל: `"#edu-bot-container"`)
+### Optional:
+- `tenantId` (string) - Tenant identifier (default: `"default"`)
+- `container` (string) - CSS selector for container (default: `"#edu-bot-container"`)
 
 ---
 
-## 🔍 איך זה עובד?
+## 🔍 How It Works?
 
 ### SUPPORT MODE (Assessment/DevLab):
-- הודעות מועברות ישירות למיקרוסרוויס
-- תשובות מוחזרות כפי שהן מהמיקרוסרוויס
+- Messages are forwarded directly to the microservice
+- Responses are returned verbatim from the microservice
 - Endpoints: `/api/assessment/support`, `/api/devlab/support`
 
-### CHAT MODE (כל השאר):
-- הודעות נשלחות ל-RAG API
-- תשובות מגיעות מ-RAG (OpenAI + Knowledge Base)
+### CHAT MODE (All Others):
+- Messages are sent to RAG API
+- Responses come from RAG (OpenAI + Knowledge Base)
 - Endpoint: `/api/v1/query`
 
 ---
 
-## ⚠️ נקודות חשובות
+## ⚠️ Important Points
 
-1. **URL נכון:**
+1. **No Environment Variables Needed:**
+   - ✅ **You don't need to configure any environment variables in your microservice!**
+   - ✅ Just run the script - that's it!
+   - ⚙️ Environment variables are configured in RAG Backend (by RAG team), not in microservices
+
+2. **Correct URL:**
    - ✅ `https://rag-production-3a4c.up.railway.app/embed/bot.js` (BACKEND - Railway)
-   - ❌ לא משתמשים ב-Vercel URL!
+   - ❌ Don't use Vercel URL!
 
-2. **אתחול:**
-   - אתחל רק אחרי שהמשתמש התחבר
-   - ודא שיש `userId` ו-`token` לפני האתחול
+3. **Initialization:**
+   - Initialize only after user is logged in
+   - Make sure you have `userId` and `token` before initialization
 
-3. **Container:**
-   - ה-container חייב להיות קיים לפני האתחול
-   - ברירת מחדל: `#edu-bot-container`
+4. **Container:**
+   - Container must exist before initialization
+   - Default: `#edu-bot-container`
+
+---
+
+## ⚙️ Environment Variables
+
+### Do I need to configure environment variables?
+
+**No! You don't need to configure any environment variables in your microservice.**
+
+**Just run the script - that's it!**
+
+### What about SUPPORT MODE (Assessment/DevLab)?
+
+**Environment variables are configured in RAG Backend (by RAG team), not in your microservice:**
+
+- `SUPPORT_MODE_ENABLED=true` - Enables SUPPORT MODE
+- `SUPPORT_ALLOWED_ORIGINS=...` - Allows your microservice origin
+
+**Who configures this:**
+- RAG team configures this in RAG Backend (Railway)
+- Not microservice developers!
+
+**If you get CORS errors:**
+- Contact RAG team
+- They will add your origin to `SUPPORT_ALLOWED_ORIGINS`
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Widget לא מופיע:
-- בדוק שה-container קיים: `<div id="edu-bot-container"></div>`
-- בדוק שה-script נטען (Network tab בדפדפן)
-- בדוק את ה-Console לשגיאות
-- ודא שאתה משתמש ב-Railway URL
+### Widget doesn't appear:
+- Check that container exists: `<div id="edu-bot-container"></div>`
+- Check that script is loaded (Network tab in browser)
+- Check Console for errors
+- Make sure you're using Railway URL
 
-### שגיאת CORS:
-- רק רלוונטי ל-Assessment/DevLab (SUPPORT MODE)
-- צור קשר עם צוות RAG להוספת ה-origin שלך
+### CORS error:
+- Only relevant for Assessment/DevLab (SUPPORT MODE)
+- Contact RAG team to add your origin to `SUPPORT_ALLOWED_ORIGINS` in RAG Backend
+- **You don't need to configure anything in your microservice!**
 
 ### "Failed to load bot bundle":
-- ודא שאתה משתמש ב-Railway URL, לא Vercel
-- בדוק שה-BACKEND רץ: `curl https://rag-production-3a4c.up.railway.app/health`
+- Make sure you're using Railway URL, not Vercel
+- Check that BACKEND is running: `curl https://rag-production-3a4c.up.railway.app/health`
 
 ---
 
-## 📞 תמיכה
+## 📞 Support
 
-אם יש בעיות:
-1. בדוק את ה-Console בדפדפן (F12)
-2. בדוק את ה-Network tab (F12 → Network)
-3. צור קשר עם צוות RAG
+If you have issues:
+1. Check Console in browser (F12)
+2. Check Network tab (F12 → Network)
+3. Contact RAG team
 
 ---
 
-## 📚 מסמכים נוספים
+## 📚 Additional Documents
 
-למדריך מפורט יותר, ראה:
-- `EMBED_INTEGRATION_GUIDE.md` - מדריך מלא ומפורט
-- `INTEGRATION_EXAMPLES.md` - דוגמאות נוספות
+For more detailed guide, see:
+- `EMBED_INTEGRATION_GUIDE.md` - Full detailed guide
+- `INTEGRATION_EXAMPLES.md` - Additional examples
 
 ---
 
 **Document Maintained By:** RAG Microservice Team
-

@@ -1,7 +1,7 @@
 /**
- * בדיקה ממוקדת של תקשורת gRPC עם Coordinator
+ * Focused gRPC communication test with Coordinator
  * 
- * שימוש:
+ * Usage:
  *   node scripts/test-grpc-only.js
  */
 
@@ -16,50 +16,54 @@ import { logger } from '../src/utils/logger.util.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-console.log('\n🔌 בדיקת תקשורת gRPC עם Coordinator\n');
+console.log('\n🔌 Testing gRPC communication with Coordinator\n');
 
 // הגדרות
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'coordinator-production-e0a0.up.railway.app';
+// Priority: COORDINATOR_GRPC_ENDPOINT > COORDINATOR_GRPC_URL > COORDINATOR_URL + PORT
+const COORDINATOR_GRPC_ENDPOINT = process.env.COORDINATOR_GRPC_ENDPOINT;
+const COORDINATOR_GRPC_URL = process.env.COORDINATOR_GRPC_URL;
+const COORDINATOR_URL = process.env.COORDINATOR_URL || 'coordinator-production-6004.up.railway.app';
 const COORDINATOR_GRPC_PORT = process.env.COORDINATOR_GRPC_PORT || '50051';
-const COORDINATOR_GRPC_URL = process.env.COORDINATOR_GRPC_URL || `${COORDINATOR_URL}:${COORDINATOR_GRPC_PORT}`;
+const COORDINATOR_GRPC_URL_FINAL = COORDINATOR_GRPC_ENDPOINT || COORDINATOR_GRPC_URL || `${COORDINATOR_URL}:${COORDINATOR_GRPC_PORT}`;
 const COORDINATOR_PROTO_PATH = process.env.COORDINATOR_PROTO_PATH || 
   join(__dirname, '../../DATABASE/proto/rag/v1/coordinator.proto');
 const COORDINATOR_SERVICE_NAME = 'rag.v1.CoordinatorService';
 const GRPC_USE_SSL = process.env.GRPC_USE_SSL === 'true';
 
-console.log('📋 הגדרות:');
-console.log(`   URL: ${COORDINATOR_GRPC_URL}`);
+console.log('📋 Configuration:');
+console.log(`   Endpoint: ${COORDINATOR_GRPC_ENDPOINT || 'Not set'}`);
+console.log(`   URL: ${COORDINATOR_GRPC_URL_FINAL}`);
 console.log(`   Proto: ${COORDINATOR_PROTO_PATH}`);
 console.log(`   SSL: ${GRPC_USE_SSL ? 'Yes' : 'No'}\n`);
 
 async function testGrpcConnection() {
   try {
-    // שלב 1: יצירת gRPC client
-    console.log('1️⃣  יוצר gRPC client...');
+    // Step 1: Create gRPC client
+    console.log('1️⃣  Creating gRPC client...');
     
     // Set GRPC_USE_SSL temporarily
     const originalSSL = process.env.GRPC_USE_SSL;
     process.env.GRPC_USE_SSL = GRPC_USE_SSL ? 'true' : 'false';
     
     const client = createGrpcClient(
-      COORDINATOR_GRPC_URL,
+      COORDINATOR_GRPC_URL_FINAL,
       COORDINATOR_PROTO_PATH,
       COORDINATOR_SERVICE_NAME
     );
     
-    console.log('✅ gRPC client נוצר\n');
+    console.log('✅ gRPC client created\n');
     
-    // שלב 2: בדיקת חיבור
-    console.log('2️⃣  בודק חיבור ל-Coordinator...');
+    // Step 2: Test connection
+    console.log('2️⃣  Testing connection to Coordinator...');
     
     const connected = await new Promise((resolve) => {
-      const deadline = Date.now() + 10000; // 10 שניות timeout
+      const deadline = Date.now() + 10000; // 10 seconds timeout
       client.waitForReady(deadline, (error) => {
         if (error) {
-          console.log(`❌ חיבור נכשל: ${error.message}`);
+          console.log(`❌ Connection failed: ${error.message}`);
           resolve(false);
         } else {
-          console.log('✅ חיבור הצליח!\n');
+          console.log('✅ Connection successful!\n');
           resolve(true);
         }
       });
@@ -67,19 +71,19 @@ async function testGrpcConnection() {
     
     if (!connected) {
       client.close();
-      console.log('\n💡 פתרונות אפשריים:');
-      console.log('   - בדוק ש-Coordinator רץ');
-      console.log('   - בדוק את COORDINATOR_URL');
-      console.log('   - נסה עם GRPC_USE_SSL=true');
-      console.log('   - אם על Railway, נסה עם service name');
+      console.log('\n💡 Possible solutions:');
+      console.log('   - Check that Coordinator is running');
+      console.log('   - Check COORDINATOR_URL');
+      console.log('   - Try with GRPC_USE_SSL=true');
+      console.log('   - If on Railway, try with service name');
       return;
     }
     
-    // שלב 3: יצירת חתימה
-    console.log('3️⃣  יוצר חתימה דיגיטלית...');
+    // Step 3: Generate signature
+    console.log('3️⃣  Generating digital signature...');
     
     if (!process.env.RAG_PRIVATE_KEY) {
-      console.log('❌ RAG_PRIVATE_KEY לא מוגדר');
+      console.log('❌ RAG_PRIVATE_KEY not set');
       client.close();
       return;
     }
@@ -93,8 +97,8 @@ async function testGrpcConnection() {
         throw new Error('Invalid private key format');
       }
     } catch (error) {
-      console.log(`❌ שגיאה בטעינת מפתח פרטי: ${error.message}`);
-      console.log('💡 ודא ש-RAG_PRIVATE_KEY הוא base64 encoded PEM format');
+      console.log(`❌ Error loading private key: ${error.message}`);
+      console.log('💡 Make sure RAG_PRIVATE_KEY is base64 encoded PEM format');
       client.close();
       return;
     }
@@ -120,12 +124,12 @@ async function testGrpcConnection() {
       })
     };
     
-    // יצירת חתימה
+    // Generate signature
     const signature = generateSignature(serviceName, privateKey, requestData);
-    console.log(`✅ חתימה נוצרה: ${signature.substring(0, 50)}...\n`);
+    console.log(`✅ Signature generated: ${signature.substring(0, 50)}...\n`);
     
-    // שלב 4: יצירת gRPC metadata עם חתימה
-    console.log('4️⃣  יוצר gRPC metadata עם חתימה...');
+    // Step 4: Create gRPC metadata with signature
+    console.log('4️⃣  Creating gRPC metadata with signature...');
     
     const metadata = new grpc.Metadata();
     metadata.add('x-signature', signature);
@@ -133,10 +137,10 @@ async function testGrpcConnection() {
     metadata.add('x-timestamp', Date.now().toString());
     metadata.add('x-requester-service', serviceName);
     
-    console.log('✅ Metadata נוצר עם חתימה\n');
+    console.log('✅ Metadata created with signature\n');
     
-    // שלב 5: שליחת בקשה gRPC (שימוש ב-routeRequest מהקוד הקיים)
-    console.log('5️⃣  שולח בקשה gRPC ל-Coordinator...');
+    // Step 5: Send gRPC request (using routeRequest from existing code)
+    console.log('5️⃣  Sending gRPC request to Coordinator...');
     console.log(`   Tenant ID: ${requestData.tenant_id}`);
     console.log(`   User ID: ${requestData.user_id}`);
     console.log(`   Query: ${requestData.query_text}\n`);
@@ -155,15 +159,15 @@ async function testGrpcConnection() {
       const duration = Date.now() - startTime;
       
       if (!response) {
-        console.log(`❌ לא קיבלנו תגובה (${duration}ms)`);
+        console.log(`❌ No response received (${duration}ms)`);
         client.close();
         return;
       }
       
-      console.log(`✅ תגובה התקבלה! (${duration}ms)\n`);
+      console.log(`✅ Response received! (${duration}ms)\n`);
       
-      // שלב 6: הצגת התוצאות
-      console.log('6️⃣  תוצאות:');
+      // Step 6: Display results
+      console.log('6️⃣  Results:');
       console.log(`   Target Services: ${response.target_services?.join(', ') || 'None'}`);
       
       if (response.normalized_fields) {
@@ -180,41 +184,41 @@ async function testGrpcConnection() {
           console.log(`   Envelope Version: ${envelope.version || 'N/A'}`);
           console.log(`   Envelope Timestamp: ${envelope.timestamp || 'N/A'}`);
         } catch (e) {
-          console.log('   Envelope: (לא ניתן לפרסר)');
+          console.log('   Envelope: (cannot parse)');
         }
       }
       
-      console.log('\n✅ בדיקת gRPC הושלמה בהצלחה!');
-      console.log('\n📊 סיכום:');
-      console.log('   ✅ חיבור gRPC עובד');
-      console.log('   ✅ חתימה נשלחה ב-metadata');
-      console.log('   ✅ בקשה נשלחה בהצלחה');
-      console.log('   ✅ תגובה התקבלה');
+      console.log('\n✅ gRPC test completed successfully!');
+      console.log('\n📊 Summary:');
+      console.log('   ✅ gRPC connection works');
+      console.log('   ✅ Signature sent in metadata');
+      console.log('   ✅ Request sent successfully');
+      console.log('   ✅ Response received');
       
       client.close();
       
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.log(`❌ שגיאה בשליחת בקשה (${duration}ms)`);
+      console.log(`❌ Error sending request (${duration}ms)`);
       console.log(`   Error: ${error.message}`);
       
       if (error.code === grpc.status.UNAVAILABLE) {
-        console.log('\n💡 Coordinator לא זמין');
-        console.log('   - בדוק ש-Coordinator רץ');
-        console.log('   - בדוק את הפורט');
+        console.log('\n💡 Coordinator unavailable');
+        console.log('   - Check that Coordinator is running');
+        console.log('   - Check the port');
       } else if (error.code === grpc.status.DEADLINE_EXCEEDED) {
         console.log('\n💡 Timeout');
-        console.log('   - הגדל את GRPC_TIMEOUT');
-        console.log('   - בדוק את הרשת');
+        console.log('   - Increase GRPC_TIMEOUT');
+        console.log('   - Check the network');
       } else if (error.code === grpc.status.UNAUTHENTICATED) {
-        console.log('\n💡 אימות נכשל');
-        console.log('   - בדוק שהחתימה נכונה');
-        console.log('   - בדוק שהמפתח הציבורי רשום ב-Coordinator');
+        console.log('\n💡 Authentication failed');
+        console.log('   - Check that signature is correct');
+        console.log('   - Check that public key is registered in Coordinator');
       } else if (error.code === grpc.status.PERMISSION_DENIED) {
-        console.log('\n💡 הרשאה נדחתה');
-        console.log('   - בדוק שהשירות מורשה');
+        console.log('\n💡 Permission denied');
+        console.log('   - Check that service is authorized');
       } else {
-        console.log(`\n💡 שגיאת gRPC: ${error.code} (${grpc.status[error.code]})`);
+        console.log(`\n💡 gRPC error: ${error.code} (${grpc.status[error.code]})`);
       }
       
       client.close();
@@ -224,7 +228,7 @@ async function testGrpcConnection() {
     process.env.GRPC_USE_SSL = originalSSL;
     
   } catch (error) {
-    console.error('\n❌ שגיאה כללית:', error.message);
+    console.error('\n❌ General error:', error.message);
     console.error(error);
   }
 }

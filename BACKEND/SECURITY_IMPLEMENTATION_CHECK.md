@@ -212,3 +212,4 @@ metadata.add('x-requester-service', 'rag-service');
 
 **התקשורת gRPC עם חתימות עובדת נכון!** ✅
 
+

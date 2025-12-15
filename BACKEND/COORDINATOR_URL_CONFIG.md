@@ -41,3 +41,4 @@ node scripts/test-grpc-only.js
 2. **Public Port**: אם צריך public access, צריך לחשוף את פורט 50051 ב-Railway Dashboard
 3. **gRPC לא זמין דרך HTTP**: Railway לא חושף gRPC דרך ה-HTTP domain אוטומטית
 
+
