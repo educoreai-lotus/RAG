@@ -85,9 +85,21 @@ export const forwardToDevLabMicroservice = async (userMessage) => {
       support_mode: 'DevLab',
     };
 
+    // CRITICAL: Log what we're sending to backend
+    console.log('📤 [FRONTEND] Sending DevLab support request:');
+    console.log('📤 URL: /api/devlab/support');
+    console.log('📤 Method: POST');
+    console.log('📤 Payload:', JSON.stringify(requestPayload, null, 2));
+    console.log('📤 Session ID:', sessionId);
+    console.log('📤 Timestamp:', timestamp);
+
     // Forward to DevLab microservice
     // Note: Headers (Authorization, X-User-Id, X-Tenant-Id) are added automatically by api.js interceptor
     const response = await api.post('/api/devlab/support', requestPayload);
+    
+    console.log('✅ [FRONTEND] DevLab support response received:');
+    console.log('✅ Response status:', response.status);
+    console.log('✅ Response data:', JSON.stringify(response.data, null, 2));
 
     // Return response verbatim (exact text from microservice)
     if (response.data && response.data.response) {
@@ -103,6 +115,14 @@ export const forwardToDevLabMicroservice = async (userMessage) => {
     // Fallback: return the entire response as string
     return JSON.stringify(response.data);
   } catch (error) {
+    // CRITICAL: Log error details
+    console.error('❌ [FRONTEND] DevLab support request failed:');
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error response status:', error.response?.status);
+    console.error('❌ Error response data:', error.response?.data);
+    console.error('❌ Error response headers:', error.response?.headers);
+    console.error('❌ Full error:', error);
+    
     // Return error message verbatim (as if from microservice)
     if (error.response && error.response.data) {
       const errorMessage = error.response.data.message || error.response.data.error || JSON.stringify(error.response.data);

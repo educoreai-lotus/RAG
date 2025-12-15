@@ -1,7 +1,18 @@
 # What Microservices Need to Do - Detailed Explanation
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last Updated:** 2025-01-27
+
+---
+
+## 🎯 IMPORTANT: No Changes Needed After RAG Deployment!
+
+**If you've already embedded the chatbot according to this guide:**
+- ✅ **NO CHANGES NEEDED** in your microservice code!
+- ✅ Just wait for RAG microservice to deploy the update
+- ✅ Everything will work automatically!
+
+**The RAG microservice automatically detects the backend URL** from the `bot.js` script source, so microservices don't need to configure `VITE_API_BASE_URL` or any other environment variables.
 
 ---
 
@@ -12,10 +23,13 @@
 - ❌ Install packages
 - ❌ Add dependencies
 - ❌ Build anything
+- ❌ Configure environment variables (like `VITE_API_BASE_URL`)
+- ❌ Change anything after initial setup
 
 **Microservices only need to:**
 - ✅ Add 2 lines of code to their HTML
 - ✅ Add an initialization function (3-5 lines of code)
+- ✅ That's it! No updates needed when RAG deploys new features
 
 ---
 
@@ -320,6 +334,13 @@ export class AppComponent implements OnInit {
 - Make sure the user is logged in before initialization
 - Need `userId` and `token`
 
+### 5. Automatic Backend URL Detection (No Configuration Needed!)
+- When `bot.js` loads, it automatically detects the backend URL from its own script source
+- Example: If you load `https://rag-backend.com/embed/bot.js`, it knows the backend is `https://rag-backend.com`
+- The backend URL is stored in `window.EDUCORE_BACKEND_URL` automatically
+- All API calls inside the chatbot widget use this URL automatically
+- **You don't need to configure anything!**
+
 ---
 
 ## 📝 Minimal Example
@@ -366,6 +387,15 @@ export class AppComponent implements OnInit {
 
 ### Q: Do I need to build anything?
 **A:** No! Just add code.
+
+### Q: Do I need to configure `VITE_API_BASE_URL` or other environment variables?
+**A:** **NO!** The chatbot automatically detects the backend URL from the `bot.js` script source. Just load `bot.js` and everything works automatically.
+
+### Q: What happens when RAG microservice deploys updates?
+**A:** **Nothing!** Your microservice code doesn't need to change. The updated `bot.js` is automatically loaded from the RAG backend, and all new features work automatically.
+
+### Q: Do I need to update my code when RAG adds new features?
+**A:** **NO!** As long as you've embedded `bot.js` correctly, all updates happen automatically. You only need to update your code if you want to use new initialization options or features.
 
 ---
 

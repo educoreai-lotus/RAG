@@ -26,6 +26,11 @@ router.use((req, res, next) => {
 
 // Middleware: gate support mode by env + optional origin/secret authorization
 function supportAuthMiddleware(req, res, next) {
+  console.log('🔐 [AUTH MIDDLEWARE] supportAuthMiddleware called');
+  console.log('🔐 [AUTH MIDDLEWARE] Method:', req.method);
+  console.log('🔐 [AUTH MIDDLEWARE] Path:', req.path);
+  console.log('🔐 [AUTH MIDDLEWARE] SUPPORT_MODE_ENABLED:', process.env.SUPPORT_MODE_ENABLED);
+  
   logger.debug('supportAuthMiddleware called', {
     method: req.method,
     path: req.path,
@@ -66,9 +71,11 @@ function supportAuthMiddleware(req, res, next) {
   
   // Only check secret if SUPPORT_SHARED_SECRET is explicitly set
   if (sharedSecret && providedSecret !== sharedSecret) {
+    console.error('❌ [AUTH MIDDLEWARE] Invalid secret');
     return res.status(403).json({ error: 'Forbidden', message: 'Invalid support shared secret' });
   }
 
+  console.log('✅ [AUTH MIDDLEWARE] Authentication passed, calling next()');
   next();
 }
 
@@ -100,6 +107,12 @@ router.post('/assessment/support', supportAuthMiddleware, assessmentSupport);
  * Proxy endpoint for DevLab microservice
  */
 router.post('/devlab/support', supportAuthMiddleware, (req, res, next) => {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📍 [ROUTE] POST /devlab/support route handler called');
+  console.log('📍 [ROUTE] Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📍 [ROUTE] Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
   logger.info('POST /devlab/support route handler called');
   devlabSupport(req, res, next);
 });

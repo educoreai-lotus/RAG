@@ -113,6 +113,18 @@ export async function assessmentSupport(req, res, next) {
  */
 export async function devlabSupport(req, res, next) {
   try {
+    // CRITICAL: Comprehensive logging for debugging 500 errors
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 [DEVLAB SUPPORT] Request received');
+    console.log('🔍 Method:', req.method);
+    console.log('🔍 URL:', req.originalUrl);
+    console.log('🔍 Body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('🔍 User ID:', req.headers['x-user-id']);
+    console.log('🔍 Tenant ID:', req.headers['x-tenant-id']);
+    console.log('🔍 Authorization:', req.headers['authorization'] ? 'Present' : 'Missing');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     // Log incoming request for debugging
     logger.debug('DevLab support request received', {
       method: req.method,
@@ -125,14 +137,27 @@ export async function devlabSupport(req, res, next) {
     });
 
     // Validate request
+    console.log('🔍 [DEVLAB SUPPORT] Starting validation...');
+    console.log('🔍 [DEVLAB SUPPORT] Request body type:', typeof req.body);
+    console.log('🔍 [DEVLAB SUPPORT] Request body keys:', Object.keys(req.body || {}));
+    
     const validation = validate(req.body, supportRequestSchema);
+    console.log('🔍 [DEVLAB SUPPORT] Validation result:', {
+      valid: validation.valid,
+      error: validation.error,
+      value: validation.value
+    });
+    
     if (!validation.valid) {
+      console.error('❌ [DEVLAB SUPPORT] Validation failed:', validation.error);
       logger.warn('DevLab support validation failed', { error: validation.error });
       return res.status(400).json({
         error: 'Validation error',
         message: validation.error,
       });
     }
+    
+    console.log('✅ [DEVLAB SUPPORT] Validation passed');
 
     const { query, session_id, metadata = {}, support_mode } = validation.value;
 
@@ -174,14 +199,26 @@ export async function devlabSupport(req, res, next) {
     // For now, return a mock response
     // In production, this should forward to the DevLab microservice API
     
+    console.log('🔍 [DEVLAB SUPPORT] Preparing response...');
     const response = {
       response: `DevLab Support: I received your question "${query}". This is a proxy response. In production, this will be forwarded to the DevLab microservice.`,
       timestamp: new Date().toISOString(),
       session_id,
     };
 
+    console.log('✅ [DEVLAB SUPPORT] Sending success response');
+    console.log('✅ [DEVLAB SUPPORT] Response:', JSON.stringify(response, null, 2));
     res.json(response);
   } catch (error) {
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ [DEVLAB SUPPORT] ERROR CAUGHT:');
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
+    console.error('❌ Request headers:', JSON.stringify(req.headers, null, 2));
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     logger.error('DevLab support error', {
       error: error.message,
       stack: error.stack,

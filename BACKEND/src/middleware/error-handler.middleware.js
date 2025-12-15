@@ -13,11 +13,27 @@ import { logger } from '../utils/logger.util.js';
  * @param {Function} next - Express next function
  */
 export function errorHandler(err, req, res, _next) {
+  // CRITICAL: Comprehensive error logging for debugging 500 errors
+  console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.error('🚨 GLOBAL ERROR HANDLER CAUGHT:');
+  console.error('🚨 Error name:', err.name);
+  console.error('🚨 Error message:', err.message);
+  console.error('🚨 Error stack:', err.stack);
+  console.error('🚨 Request method:', req.method);
+  console.error('🚨 Request URL:', req.originalUrl);
+  console.error('🚨 Request path:', req.path);
+  console.error('🚨 Request body:', JSON.stringify(req.body, null, 2));
+  console.error('🚨 Request headers:', JSON.stringify(req.headers, null, 2));
+  console.error('🚨 Error statusCode:', err.statusCode || err.status || 500);
+  console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
   logger.error('Error:', {
     message: err.message,
     stack: err.stack,
     url: req.url,
     method: req.method,
+    name: err.name,
+    statusCode: err.statusCode || err.status,
   });
 
   // Preserve CORS headers if they were set

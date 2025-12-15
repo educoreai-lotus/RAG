@@ -300,7 +300,19 @@ app.use((req, res, next) => {
 // OTHER MIDDLEWARE (AFTER CORS)
 // ═══════════════════════════════════════════════════════
 
-app.use(express.json());
+// Body parsing middleware - CRITICAL for POST requests
+app.use(express.json({
+  limit: '10mb',
+  strict: true,
+  verify: (req, res, buf) => {
+    // Log raw body for debugging
+    if (req.path.includes('/support')) {
+      console.log('🔍 [BODY PARSER] Raw body received for:', req.path);
+      console.log('🔍 [BODY PARSER] Body length:', buf.length);
+      console.log('🔍 [BODY PARSER] Body preview:', buf.toString().substring(0, 200));
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Root endpoint - API information
