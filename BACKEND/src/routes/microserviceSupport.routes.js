@@ -10,12 +10,16 @@ const router = express.Router();
 
 // Middleware: gate support mode by env + optional origin/secret authorization
 function supportAuthMiddleware(req, res, next) {
-  // Allow OPTIONS requests (CORS preflight) to pass through
+  // Handle OPTIONS preflight requests
   if (req.method === 'OPTIONS') {
-    return next();
+    return res.status(200).end();
   }
 
-  const supportEnabled = (process.env.SUPPORT_MODE_ENABLED || '').toLowerCase() === 'true';
+  // If SUPPORT_MODE_ENABLED is not set, allow by default (for backward compatibility)
+  // Set SUPPORT_MODE_ENABLED=false to explicitly disable
+  const supportEnabledEnv = (process.env.SUPPORT_MODE_ENABLED || '').toLowerCase();
+  const supportEnabled = supportEnabledEnv !== 'false'; // Default to true if not explicitly disabled
+  
   if (!supportEnabled) {
     return res.status(403).json({ error: 'Forbidden', message: 'Support mode is disabled' });
   }
@@ -25,12 +29,16 @@ function supportAuthMiddleware(req, res, next) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  
+  // Only check origin if SUPPORT_ALLOWED_ORIGINS is explicitly set
   if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
     return res.status(403).json({ error: 'Forbidden', message: 'Origin not allowed for support mode' });
   }
 
   const sharedSecret = process.env.SUPPORT_SHARED_SECRET || '';
   const providedSecret = (req.headers['x-embed-secret'] || '').toString();
+  
+  // Only check secret if SUPPORT_SHARED_SECRET is explicitly set
   if (sharedSecret && providedSecret !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden', message: 'Invalid support shared secret' });
   }
@@ -50,28 +58,13 @@ router.post('/assessment/support', supportAuthMiddleware, assessmentSupport);
  */
 router.post('/devlab/support', supportAuthMiddleware, devlabSupport);
 
-/**
- * OPTIONS /api/devlab/support
- * Handle CORS preflight requests
- */
-router.options('/devlab/support', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
+// Handle OPTIONS requests for CORS preflight
+router.options('/assessment/support', (req, res) => {
+  res.status(200).end();
 });
 
-/**
- * OPTIONS /api/assessment/support
- * Handle CORS preflight requests
- */
-router.options('/assessment/support', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
+router.options('/devlab/support', (req, res) => {
+  res.status(200).end();
 });
 
 export default router;

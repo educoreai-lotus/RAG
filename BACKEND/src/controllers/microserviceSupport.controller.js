@@ -29,9 +29,21 @@ const supportRequestSchema = Joi.object({
  */
 export async function assessmentSupport(req, res, next) {
   try {
+    // Log incoming request for debugging
+    logger.debug('Assessment support request received', {
+      method: req.method,
+      headers: {
+        'x-source': req.headers['x-source'],
+        'x-microservice-source': req.headers['x-microservice-source'],
+        origin: req.headers.origin,
+      },
+      body: req.body,
+    });
+
     // Validate request
     const validation = validate(req.body, supportRequestSchema);
     if (!validation.valid) {
+      logger.warn('Assessment support validation failed', { error: validation.error });
       return res.status(400).json({
         error: 'Validation error',
         message: validation.error,
@@ -40,19 +52,37 @@ export async function assessmentSupport(req, res, next) {
 
     const { query, session_id, metadata = {}, support_mode } = validation.value;
 
-    // Enforce activation ONLY via explicit source (header or metadata or flag)
+    // Enforce activation via explicit source (header or metadata or flag)
+    // If no source is provided, check if support_mode is 'Assessment' (case-insensitive)
     const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
     const metaSource = (metadata.source || '').toString().toLowerCase();
     const flagSource = (support_mode || '').toString().toLowerCase();
-    const isAssessmentSource = ['assessment'].includes(headerSource) || ['assessment'].includes(metaSource) || ['assessment'].includes(flagSource);
+    
+    // Check if any source indicates Assessment
+    const isAssessmentSource = 
+      ['assessment'].includes(headerSource) || 
+      ['assessment'].includes(metaSource) || 
+      ['assessment'].includes(flagSource) ||
+      support_mode === 'Assessment'; // Also check exact match
+    
     if (!isAssessmentSource) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Support mode not activated. Provide X-Source: assessment.' });
+      logger.warn('Assessment support mode not activated', {
+        headerSource,
+        metaSource,
+        flagSource,
+        support_mode,
+      });
+      return res.status(403).json({ 
+        error: 'Forbidden', 
+        message: 'Support mode not activated. Provide X-Source: assessment or support_mode: Assessment in request body.' 
+      });
     }
 
     logger.info('Assessment support request', {
       query,
       session_id,
-      user_id: metadata.user_id,
+      user_id: metadata.user_id || req.headers['x-user-id'],
+      tenant_id: metadata.tenant_id || req.headers['x-tenant-id'],
       source: 'assessment',
     });
 
@@ -71,6 +101,7 @@ export async function assessmentSupport(req, res, next) {
     logger.error('Assessment support error', {
       error: error.message,
       stack: error.stack,
+      requestBody: req.body,
     });
     next(error);
   }
@@ -82,9 +113,21 @@ export async function assessmentSupport(req, res, next) {
  */
 export async function devlabSupport(req, res, next) {
   try {
+    // Log incoming request for debugging
+    logger.debug('DevLab support request received', {
+      method: req.method,
+      headers: {
+        'x-source': req.headers['x-source'],
+        'x-microservice-source': req.headers['x-microservice-source'],
+        origin: req.headers.origin,
+      },
+      body: req.body,
+    });
+
     // Validate request
     const validation = validate(req.body, supportRequestSchema);
     if (!validation.valid) {
+      logger.warn('DevLab support validation failed', { error: validation.error });
       return res.status(400).json({
         error: 'Validation error',
         message: validation.error,
@@ -93,19 +136,37 @@ export async function devlabSupport(req, res, next) {
 
     const { query, session_id, metadata = {}, support_mode } = validation.value;
 
-    // Enforce activation ONLY via explicit source (header or metadata or flag)
+    // Enforce activation via explicit source (header or metadata or flag)
+    // If no source is provided, check if support_mode is 'DevLab' (case-insensitive)
     const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
     const metaSource = (metadata.source || '').toString().toLowerCase();
     const flagSource = (support_mode || '').toString().toLowerCase();
-    const isDevlabSource = ['devlab'].includes(headerSource) || ['devlab'].includes(metaSource) || ['devlab'].includes(flagSource);
+    
+    // Check if any source indicates DevLab
+    const isDevlabSource = 
+      ['devlab'].includes(headerSource) || 
+      ['devlab'].includes(metaSource) || 
+      ['devlab'].includes(flagSource) ||
+      support_mode === 'DevLab'; // Also check exact match
+    
     if (!isDevlabSource) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Support mode not activated. Provide X-Source: devlab.' });
+      logger.warn('DevLab support mode not activated', {
+        headerSource,
+        metaSource,
+        flagSource,
+        support_mode,
+      });
+      return res.status(403).json({ 
+        error: 'Forbidden', 
+        message: 'Support mode not activated. Provide X-Source: devlab or support_mode: DevLab in request body.' 
+      });
     }
 
     logger.info('DevLab support request', {
       query,
       session_id,
-      user_id: metadata.user_id,
+      user_id: metadata.user_id || req.headers['x-user-id'],
+      tenant_id: metadata.tenant_id || req.headers['x-tenant-id'],
       source: 'devlab',
     });
 
@@ -124,6 +185,7 @@ export async function devlabSupport(req, res, next) {
     logger.error('DevLab support error', {
       error: error.message,
       stack: error.stack,
+      requestBody: req.body,
     });
     next(error);
   }
