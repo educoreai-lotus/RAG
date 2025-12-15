@@ -319,16 +319,29 @@ export class AppComponent implements OnInit {
 - `<div id="edu-bot-container"></div>` - Container
 - `<script src="..."></script>` + initialization - The script
 
-### 3. Microservice name:
-- Assessment → `"ASSESSMENT"`
-- DevLab → `"DEVLAB"`
-- Directory → `"DIRECTORY"`
-- Course Builder → `"COURSE_BUILDER"`
-- Content Studio → `"CONTENT_STUDIO"`
-- Skills Engine → `"SKILLS_ENGINE"`
-- Learner AI → `"LEARNER_AI"`
-- Learning Analytics → `"LEARNING_ANALYTICS"`
-- HR & Management Reporting → `"HR_MANAGEMENT_REPORTING"`
+### 3. Microservice name and Mode Selection:
+
+The chatbot supports **TWO modes** based on the `microservice` parameter:
+
+#### SUPPORT Mode (For DevLab and Assessment)
+- **Assessment** → `"ASSESSMENT"` - Messages forwarded to Assessment microservice API
+- **DevLab** → `"DEVLAB"` - Messages forwarded to DevLab microservice API
+- **Endpoint:** `/api/assessment/support` or `/api/devlab/support`
+- **Use when:** You want microservice-specific support (code execution, assessments, etc.)
+
+#### CHAT Mode (For All Other Microservices)
+- **Directory** → `"DIRECTORY"` - RAG-powered general chat
+- **Course Builder** → `"COURSE_BUILDER"` - RAG-powered general chat
+- **Content Studio** → `"CONTENT_STUDIO"` - RAG-powered general chat
+- **Skills Engine** → `"SKILLS_ENGINE"` - RAG-powered general chat
+- **Learner AI** → `"LEARNER_AI"` - RAG-powered general chat
+- **Learning Analytics** → `"LEARNING_ANALYTICS"` - RAG-powered general chat
+- **HR & Management Reporting** → `"HR_MANAGEMENT_REPORTING"` - RAG-powered general chat
+- **Any other name** → RAG-powered general chat
+- **Endpoint:** `/api/v1/query`
+- **Use when:** You want general RAG-powered chat (knowledge base, Q&A, etc.)
+
+**Important:** The chatbot automatically detects the mode based on the `microservice` name. You don't need to specify the mode explicitly!
 
 ### 4. Initialize only after login:
 - Make sure the user is logged in before initialization
@@ -396,6 +409,16 @@ export class AppComponent implements OnInit {
 
 ### Q: Do I need to update my code when RAG adds new features?
 **A:** **NO!** As long as you've embedded `bot.js` correctly, all updates happen automatically. You only need to update your code if you want to use new initialization options or features.
+
+### Q: What's the difference between SUPPORT mode and CHAT mode?
+**A:** 
+- **SUPPORT mode** (`"ASSESSMENT"` or `"DEVLAB"`): Messages are forwarded to your microservice's own API. Use this when you need microservice-specific functionality.
+- **CHAT mode** (any other microservice name): Messages are processed by RAG (Retrieval-Augmented Generation) for general knowledge base Q&A. Use this for general chat functionality.
+
+The chatbot automatically detects which mode to use based on the `microservice` parameter - you don't need to configure anything!
+
+### Q: Can I use SUPPORT mode for my microservice?
+**A:** SUPPORT mode is currently only available for `"ASSESSMENT"` and `"DEVLAB"`. All other microservices automatically use CHAT mode (RAG). If you need SUPPORT mode for your microservice, contact the RAG team.
 
 ---
 
