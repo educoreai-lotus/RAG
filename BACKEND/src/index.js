@@ -166,7 +166,51 @@ const corsOptions = {
 };
 
 // ═══════════════════════════════════════════════════════
-// CORS CONFIGURATION - MUST BE FIRST!
+// CRITICAL: Raw request logger - VERY FIRST middleware
+// This catches ALL requests before anything else
+// ═══════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  console.log('🎯 RAW REQUEST:', req.method, req.originalUrl || req.url);
+  console.log('🎯 RAW PATH:', req.path);
+  console.log('🎯 RAW ORIGIN:', req.headers.origin || 'NO ORIGIN');
+  next();
+});
+
+// ═══════════════════════════════════════════════════════
+// CRITICAL: Early OPTIONS handler - BEFORE CORS
+// This MUST handle OPTIONS requests before CORS middleware
+// If OPTIONS fails, browser never sends POST!
+// ═══════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    console.log('🚨 OPTIONS REQUEST CAUGHT:', req.path, req.originalUrl);
+    logger.info('🚨 OPTIONS PREFLIGHT REQUEST', {
+      path: req.path,
+      originalUrl: req.originalUrl,
+      origin: req.headers.origin,
+      'access-control-request-method': req.headers['access-control-request-method'],
+      'access-control-request-headers': req.headers['access-control-request-headers'],
+    });
+
+    // Set CORS headers for OPTIONS
+    const origin = req.headers.origin || '*';
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret, X-Requested-With, Accept, Origin'
+    );
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '600');
+
+    console.log('✅ OPTIONS RESPONSE SENT: 204');
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// ═══════════════════════════════════════════════════════
+// CORS CONFIGURATION - MUST BE AFTER EARLY OPTIONS HANDLER
 // ═══════════════════════════════════════════════════════
 
 // Apply CORS middleware
