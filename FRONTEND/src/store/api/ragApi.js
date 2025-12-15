@@ -10,6 +10,13 @@ const getBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
+  
+  // Fallback: In production (not localhost), use current origin
+  // This works when frontend and backend are on the same domain (e.g., Railway)
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return window.location.origin;
+  }
+  
   // Development default
   return 'http://localhost:8080';
 };
