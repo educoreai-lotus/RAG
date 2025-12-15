@@ -325,3 +325,32 @@ model CacheEntry {
   @@index([expiresAt])
   @@map("cache_entries")
 }
+
+// ============================================
+// MICROSERVICE DATA STORAGE
+// ============================================
+
+model MicroserviceData {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  serviceName String   @map("service_name") @db.VarChar(255)
+  contentId   String   @map("content_id") @db.VarChar(500)
+  contentType String   @map("content_type") @db.VarChar(255)
+  contentData Json     @map("content_data") @db.JsonB
+  metadata    Json?    @default("{}") @db.JsonB
+  timestamp   DateTime @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceName, contentId])
+  @@index([serviceName])
+  @@index([tenantId])
+  @@index([timestamp(sort: Desc)])
+  @@index([contentType])
+  @@index([contentId])
+  @@index([tenantId, serviceName])
+  @@map("microservice_data")
+}
