@@ -12,23 +12,38 @@ import { store } from '../store/store.js';
 
 // API Base URL - uses environment variable in production, defaults to localhost:8080 for development
 const getApiBaseUrl = () => {
+  // CRITICAL FIX: Always use backend URL, never frontend URL!
   // In production, VITE_API_BASE_URL should be set (e.g., Railway backend URL)
   // IMPORTANT: VITE_API_BASE_URL should NOT include /api at the end
   // It should be: https://devlab-backend-production-59bb.up.railway.app
   // NOT: https://devlab-backend-production-59bb.up.railway.app/api
+  
+  // Priority 1: VITE_API_BASE_URL environment variable
   if (import.meta.env.VITE_API_BASE_URL) {
     const baseUrl = import.meta.env.VITE_API_BASE_URL;
     console.log('🌐 Using VITE_API_BASE_URL:', baseUrl);
     // Remove trailing /api if present to avoid double /api
-    return baseUrl.replace(/\/api\/?$/, '');
+    const cleanBaseUrl = baseUrl.replace(/\/api\/?$/, '');
+    console.log('🌐 Clean Backend URL:', cleanBaseUrl);
+    return cleanBaseUrl;
   }
   
-  // Fallback: In production (not localhost), use current origin
-  // This works when frontend and backend are on the same domain (e.g., Railway)
+  // Priority 2: VITE_API_URL (alternative env var name)
+  if (import.meta.env.VITE_API_URL) {
+    const baseUrl = import.meta.env.VITE_API_URL;
+    console.log('🌐 Using VITE_API_URL:', baseUrl);
+    const cleanBaseUrl = baseUrl.replace(/\/api\/?$/, '');
+    console.log('🌐 Clean Backend URL:', cleanBaseUrl);
+    return cleanBaseUrl;
+  }
+  
+  // Priority 3: Production default backend URL (Railway)
+  // This ensures requests go to backend even if env vars not set
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    const origin = window.location.origin;
-    console.log('🌐 Using window.location.origin:', origin);
-    return origin;
+    const defaultBackendUrl = 'https://devlab-backend-production-59bb.up.railway.app';
+    console.warn('⚠️ VITE_API_BASE_URL not set! Using default backend URL:', defaultBackendUrl);
+    console.warn('⚠️ Please set VITE_API_BASE_URL in Vercel environment variables');
+    return defaultBackendUrl;
   }
   
   // Development default
