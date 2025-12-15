@@ -92,6 +92,10 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
+
+// Explicitly handle OPTIONS requests for all routes (preflight)
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
