@@ -69,6 +69,10 @@ const corsOptions = {
       // Allow any Vercel deployment if ALLOW_ALL_VERCEL is set
       logger.info('CORS: Allowing Vercel origin (ALLOW_ALL_VERCEL enabled):', origin);
       callback(null, true);
+    } else if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      // Always allow Vercel deployments (common pattern)
+      logger.info('CORS: Allowing Vercel origin:', origin);
+      callback(null, true);
     } else {
       // Log for debugging
       logger.warn('CORS blocked origin:', origin);
