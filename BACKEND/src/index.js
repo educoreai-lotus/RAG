@@ -410,6 +410,53 @@ if (embedDirExists && (botJsExists || botBundleExists)) {
   });
 }
 
+// Serve assets directory for bot-bundle.js dependencies
+// bot-bundle.js imports assets using relative paths (../assets/...)
+// When served from /embed/bot-bundle.js, these resolve to /assets/...
+const assetsPath = path.join(frontendDistPath, 'assets');
+const assetsDirExists = existsSync(assetsPath);
+
+if (assetsDirExists) {
+  // Serve static assets with CORS enabled
+  app.use('/assets', express.static(assetsPath, {
+    setHeaders: (res, filePath) => {
+      // Set proper MIME types
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.map')) {
+        res.setHeader('Content-Type', 'application/json');
+      }
+      // Enable CORS for assets
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    },
+    // Add error handling for missing files
+    onError: (err, req, res, next) => {
+      logger.error('Error serving asset file:', {
+        path: req.path,
+        error: err.message,
+      });
+      next(err);
+    },
+  }));
+  
+  logger.info('✅ Assets directory serving enabled from:', assetsPath);
+  
+  // List some files in assets directory for debugging
+  try {
+    const files = readdirSync(assetsPath);
+    const jsFiles = files.filter(f => f.endsWith('.js')).slice(0, 5);
+    logger.info(`   Sample JS files in assets: ${jsFiles.join(', ') || 'none'}${files.length > 5 ? ` (${files.length} total files)` : ''}`);
+  } catch (err) {
+    logger.warn('   Could not list assets directory files:', err.message);
+  }
+} else {
+  logger.warn('⚠️  Assets directory not found:', assetsPath);
+  logger.warn('   Make sure to build the frontend: cd FRONTEND && npm run build');
+}
+
 // API Routes
 app.use('/api/v1', queryRoutes);
 app.use('/api/v1', recommendationsRoutes);

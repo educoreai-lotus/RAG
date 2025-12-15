@@ -37,6 +37,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // Ensure relative paths for assets when building embed bundle
+    // This allows bot-bundle.js to correctly resolve ../assets/ paths
+    assetsDir: 'assets',
     rollupOptions: {
       input: {
         main: './index.html',
@@ -50,6 +53,10 @@ export default defineConfig({
           }
           return 'assets/[name]-[hash].js';
         },
+        // Use relative paths for chunk imports in embed bundle
+        // This ensures ../assets/ paths work correctly
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           vendor: ['react', 'react-dom'],
           mui: ['@mui/material', '@mui/icons-material'],
