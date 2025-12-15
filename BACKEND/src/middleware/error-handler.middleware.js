@@ -20,6 +20,23 @@ export function errorHandler(err, req, res, _next) {
     method: req.method,
   });
 
+  // Preserve CORS headers if they were set
+  const origin = req.headers.origin;
+  const isVercel = origin && /^https:\/\/.*\.vercel\.app$/.test(origin);
+  const allowedOrigins = [
+    'https://rag-git-main-educoreai-lotus.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ];
+  
+  // Set CORS headers if origin is allowed
+  if (origin && (allowedOrigins.includes(origin) || isVercel)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,X-User-Id,X-Tenant-Id,X-Source,X-Embed-Secret');
+  }
+
   // Default error response
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || 'Internal Server Error';
