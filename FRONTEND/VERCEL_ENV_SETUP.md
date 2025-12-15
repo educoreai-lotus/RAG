@@ -1,12 +1,40 @@
 # Vercel Environment Variables Setup
 
-## Critical: Fix Frontend Calling Itself Instead of Backend
+## Backend URL Configuration
 
-### Problem
-The frontend was using `window.location.origin` (Vercel URL) instead of the backend URL (Railway), causing 405 errors.
+### Good News: VITE_API_BASE_URL is OPTIONAL!
 
-### Solution
-Set `VITE_API_BASE_URL` in Vercel environment variables to point to the Railway backend.
+**If you load `bot.js` script**, it automatically detects the backend URL and sets `window.EDUCORE_BACKEND_URL`.  
+**You DON'T need to set `VITE_API_BASE_URL`** - it works automatically!
+
+### When Do You Need VITE_API_BASE_URL?
+
+Only if:
+- You're NOT loading `bot.js` script
+- You want to override the auto-detected URL
+- You're using a different backend URL than where `bot.js` is hosted
+
+---
+
+## Automatic Detection (Recommended)
+
+When you load `bot.js`:
+```html
+<script src="https://devlab-backend-production-59bb.up.railway.app/embed/bot.js"></script>
+```
+
+The script automatically:
+1. Detects backend URL from script src: `https://devlab-backend-production-59bb.up.railway.app`
+2. Sets `window.EDUCORE_BACKEND_URL` globally
+3. API services use this automatically
+
+**No configuration needed!** ✅
+
+---
+
+## Manual Configuration (Optional)
+
+If you want to set it explicitly or override the auto-detection:
 
 ---
 
