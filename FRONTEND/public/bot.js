@@ -193,6 +193,17 @@
     const scriptSrc = document.currentScript?.src || 
                      document.querySelector('script[src*="bot.js"]')?.src;
     const baseUrl = scriptSrc ? scriptSrc.substring(0, scriptSrc.lastIndexOf('/')) : '';
+    
+    // CRITICAL: Set backend URL globally so microservices can use it
+    // Extract backend URL from script src (e.g., https://rag-backend.com/embed/bot.js -> https://rag-backend.com)
+    if (baseUrl && !window.EDUCORE_BACKEND_URL) {
+      // Remove /embed if present
+      const backendUrl = baseUrl.replace(/\/embed\/?$/, '');
+      window.EDUCORE_BACKEND_URL = backendUrl;
+      console.log('🤖 EDUCORE Bot: Backend URL detected:', backendUrl);
+      console.log('🤖 EDUCORE Bot: Microservices can use window.EDUCORE_BACKEND_URL for API calls');
+    }
+    
     const bundleUrl = `${baseUrl}/bot-bundle.js`;
 
     // Check if bundle is already loaded

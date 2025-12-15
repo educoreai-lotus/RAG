@@ -7,7 +7,10 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 // API Base URL - uses environment variable in production, defaults to localhost:8080 for development
 const getBaseUrl = () => {
   // CRITICAL FIX: Always use backend URL, never frontend URL!
-  // In production, VITE_API_BASE_URL should be set (e.g., Railway backend URL)
+  // Priority order:
+  // 1. VITE_API_BASE_URL env var (explicit configuration)
+  // 2. window.EDUCORE_BACKEND_URL (set by bot.js automatically)
+  // 3. Default Railway backend URL (fallback)
   
   // Priority 1: VITE_API_BASE_URL environment variable
   if (import.meta.env.VITE_API_BASE_URL) {
@@ -22,8 +25,14 @@ const getBaseUrl = () => {
     return baseUrl.replace(/\/api\/?$/, '');
   }
   
-  // Priority 3: Production default backend URL (Railway)
-  // This ensures requests go to backend even if env vars not set
+  // Priority 3: window.EDUCORE_BACKEND_URL (set automatically by bot.js)
+  // This means microservices DON'T need to set VITE_API_BASE_URL if they load bot.js!
+  if (typeof window !== 'undefined' && window.EDUCORE_BACKEND_URL) {
+    return window.EDUCORE_BACKEND_URL;
+  }
+  
+  // Priority 4: Production default backend URL (Railway)
+  // This ensures requests go to backend even if env vars not set and bot.js not loaded
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     // Use default Railway backend URL instead of frontend URL
     return 'https://devlab-backend-production-59bb.up.railway.app';
