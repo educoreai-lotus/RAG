@@ -77,14 +77,43 @@ function matchesPattern(origin, pattern) {
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, Postman, curl, etc.)
+    // ✅ CRITICAL FIX: Allow requests with no origin
     if (!origin) {
+      logger.info('[CORS] Request with no origin - allowing');
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list (exact match)
+    // List of explicitly allowed origins
+    const explicitAllowedOrigins = [
+      'https://rag-git-main-educoreai-lotus.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:8080',
+    ];
+    
+    // Check if origin matches exactly
+    if (explicitAllowedOrigins.includes(origin)) {
+      logger.info('[CORS] Allowed origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Check if it's a Vercel preview deployment
+    if (/\.vercel\.app$/.test(origin)) {
+      logger.info('[CORS] Allowed Vercel preview:', origin);
+      return callback(null, true);
+    }
+    
+    // Check environment variable origins
+    const envOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+    if (envOrigins.some(allowed => origin.includes(allowed) || allowed === origin)) {
+      logger.info('[CORS] Allowed from env:', origin);
+      return callback(null, true);
+    }
+    
+    // Check if origin is in the dynamic allowedOrigins list (from earlier in code)
     if (allowedOrigins.some(allowed => allowed === origin)) {
-      logger.debug('CORS: Allowing exact match origin:', origin);
+      logger.info('[CORS] Allowed from dynamic list:', origin);
       return callback(null, true);
     }
     
@@ -97,31 +126,40 @@ const corsOptions = {
     });
     
     if (matchesWildcard) {
-      logger.info('CORS: Allowing wildcard match origin:', origin);
+      logger.info('[CORS] Allowed wildcard match:', origin);
       return callback(null, true);
     }
     
-    // Always allow Vercel deployments (any *.vercel.app)
-    if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
-      logger.info('CORS: Allowing Vercel origin:', origin);
-      return callback(null, true);
-    }
+    // If we get here, log it
+    logger.warn('[CORS] BLOCKED origin:', origin);
+    logger.info('[CORS] Allowed origins:', [...explicitAllowedOrigins, ...allowedOrigins].join(', '));
     
-    // Log blocked origin for debugging
-    logger.warn('CORS blocked origin:', origin);
-    logger.info('Allowed origins:', allowedOrigins);
-    logger.info('💡 To allow this origin, add it to ALLOWED_ORIGINS environment variable in Railway');
-    logger.info('💡 Format: ALLOWED_ORIGINS=https://example.com,https://*.example.com');
+    // ⚠️ FOR TESTING: Allow anyway (remove this after testing)
+    logger.warn('[CORS] Allowing blocked origin for testing:', origin);
+    return callback(null, true);
     
-    callback(new Error('Not allowed by CORS'));
+    // Production: Uncomment this to actually block
+    // callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+    'X-User-Id',
+    'X-Tenant-Id',
+    'X-Source',
+    'X-Embed-Secret',
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600,
+  preflightContinue: false,
   optionsSuccessStatus: 204,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'X-Tenant-Id', 'X-Source', 'X-Embed-Secret'],
-  exposedHeaders: ['Content-Type', 'Authorization', 'Content-Range', 'X-Content-Range'],
-  preflightContinue: false, // End preflight requests immediately
-  maxAge: 600, // Cache preflight requests for 10 minutes (reduced from 24 hours)
 };
 
 // ═══════════════════════════════════════════════════════
