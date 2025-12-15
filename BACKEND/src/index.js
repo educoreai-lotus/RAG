@@ -139,27 +139,31 @@ app.options('*', cors(corsOptions));
 // ═══════════════════════════════════════════════════════
 
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Allow Vercel origins
-  if (origin && /^https:\/\/.*\.vercel\.app$/.test(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,X-User-Id,X-Tenant-Id,X-Source,X-Embed-Secret,Accept,Origin');
-    res.header('Access-Control-Expose-Headers', 'Content-Range,X-Content-Range');
+  try {
+    const origin = req.headers.origin;
+    
+    // Allow Vercel origins - set headers for all requests
+    if (origin && /^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+      res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,X-User-Id,X-Tenant-Id,X-Source,X-Embed-Secret,Accept,Origin');
+      res.header('Access-Control-Expose-Headers', 'Content-Range,X-Content-Range');
+    }
+    
+    // Handle OPTIONS preflight requests explicitly (only if not handled by routes)
+    if (req.method === 'OPTIONS') {
+      // Let route handlers handle OPTIONS first, but ensure headers are set
+      // Don't return early - let it continue to route handlers
+      // If no route handles it, the explicit app.options('*') will catch it
+    }
+    
+    next();
+  } catch (error) {
+    // If CORS middleware fails, log but don't crash
+    logger.error('[CORS Middleware] Error:', error);
+    next();
   }
-  
-  // Handle OPTIONS preflight requests explicitly
-  if (req.method === 'OPTIONS') {
-    logger.debug('[CORS] OPTIONS preflight request', {
-      path: req.path,
-      origin: origin,
-    });
-    return res.status(204).end();
-  }
-  
-  next();
 });
 
 // ═══════════════════════════════════════════════════════
@@ -167,12 +171,19 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════
 
 app.use((req, res, next) => {
-  if (req.path === '/auth/me' || req.method === 'OPTIONS') {
-    logger.debug(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-      origin: req.headers.origin,
-      'access-control-allow-origin': res.getHeader('access-control-allow-origin'),
-      'access-control-allow-credentials': res.getHeader('access-control-allow-credentials'),
-    });
+  try {
+    if (req.path === '/auth/me' || req.method === 'OPTIONS') {
+      const corsOrigin = res.getHeader('access-control-allow-origin');
+      const corsCreds = res.getHeader('access-control-allow-credentials');
+      logger.debug(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+        origin: req.headers.origin,
+        'access-control-allow-origin': corsOrigin || 'not-set',
+        'access-control-allow-credentials': corsCreds || 'not-set',
+      });
+    }
+  } catch (error) {
+    // If logging fails, don't crash - just continue
+    logger.error('[Debug Middleware] Error:', error);
   }
   next();
 });
@@ -378,39 +389,51 @@ app.use(errorHandler);
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Error handling for server startup
-const server = app.listen(PORT, HOST, () => {
-  logger.info(`✅ Server running on ${HOST}:${PORT}`);
-  logger.info(`Root endpoint: http://${HOST}:${PORT}/`);
-  logger.info(`Health check: http://${HOST}:${PORT}/health`);
-  logger.info(`Query endpoint: http://${HOST}:${PORT}/api/v1/query`);
-  logger.info(`Auth endpoint: http://${HOST}:${PORT}/auth/me`);
-  logger.info(`Assessment support: http://${HOST}:${PORT}/api/assessment/support`);
-  logger.info(`DevLab support: http://${HOST}:${PORT}/api/devlab/support`);
-  logger.info(`Recommendations: http://${HOST}:${PORT}/api/v1/personalized/recommendations/:userId`);
-  logger.info(`Skill progress: http://${HOST}:${PORT}/api/v1/knowledge/progress/user/:userId/skill/:skillId?tenant_id=dev.educore.local`);
-  logger.info(`Diagnostics: http://${HOST}:${PORT}/api/debug/embeddings-status`);
-  logger.info(`Vector search test: http://${HOST}:${PORT}/api/debug/test-vector-search?query=test`);
-  logger.info(`Embed widget: http://${HOST}:${PORT}/embed/bot.js`);
-  logger.info(`Embed bundle: http://${HOST}:${PORT}/embed/bot-bundle.js`);
-  logger.info(`CORS allowed origins: ${allowedOrigins.join(', ') || 'none configured'}`);
-  logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  
-  // Start scheduled batch sync job
-  try {
-    startScheduledSync();
-    logger.info('✅ Scheduled batch sync job started');
-  } catch (error) {
-    logger.warn('⚠️  Failed to start scheduled batch sync job', {
-      error: error.message,
-      hint: 'Install node-cron: npm install node-cron',
-    });
-  }
-  
-  // Signal that server is ready (for Railway health checks)
-  if (process.send) {
-    process.send('ready');
-  }
-});
+let server;
+try {
+  server = app.listen(PORT, HOST, () => {
+    logger.info(`✅ Server running on ${HOST}:${PORT}`);
+    logger.info(`Root endpoint: http://${HOST}:${PORT}/`);
+    logger.info(`Health check: http://${HOST}:${PORT}/health`);
+    logger.info(`Query endpoint: http://${HOST}:${PORT}/api/v1/query`);
+    logger.info(`Auth endpoint: http://${HOST}:${PORT}/auth/me`);
+    logger.info(`Assessment support: http://${HOST}:${PORT}/api/assessment/support`);
+    logger.info(`DevLab support: http://${HOST}:${PORT}/api/devlab/support`);
+    logger.info(`Recommendations: http://${HOST}:${PORT}/api/v1/personalized/recommendations/:userId`);
+    logger.info(`Skill progress: http://${HOST}:${PORT}/api/v1/knowledge/progress/user/:userId/skill/:skillId?tenant_id=dev.educore.local`);
+    logger.info(`Diagnostics: http://${HOST}:${PORT}/api/debug/embeddings-status`);
+    logger.info(`Vector search test: http://${HOST}:${PORT}/api/debug/test-vector-search?query=test`);
+    logger.info(`Embed widget: http://${HOST}:${PORT}/embed/bot.js`);
+    logger.info(`Embed bundle: http://${HOST}:${PORT}/embed/bot-bundle.js`);
+    logger.info(`CORS allowed origins: ${allowedOrigins.join(', ') || 'none configured'}`);
+    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Start scheduled batch sync job
+    try {
+      startScheduledSync();
+      logger.info('✅ Scheduled batch sync job started');
+    } catch (error) {
+      logger.warn('⚠️  Failed to start scheduled batch sync job', {
+        error: error.message,
+        hint: 'Install node-cron: npm install node-cron',
+      });
+    }
+    
+    // Signal that server is ready (for Railway health checks)
+    if (process.send) {
+      process.send('ready');
+    }
+  });
+} catch (error) {
+  logger.error('❌ Failed to start server:', error);
+  logger.error('Error details:', {
+    message: error.message,
+    stack: error.stack,
+    port: PORT,
+    host: HOST,
+  });
+  process.exit(1);
+}
 
 // Handle server errors
 server.on('error', (error) => {
