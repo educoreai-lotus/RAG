@@ -101,9 +101,28 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Check if it's a Vercel preview deployment
-    if (/\.vercel\.app$/.test(origin)) {
-      logger.info('[CORS] Allowed Vercel preview:', origin);
+    // Check if it's a Vercel preview deployment (supports ALL Vercel URLs)
+    // This includes:
+    // - https://*.vercel.app (production deployments)
+    // - https://*-git-*.vercel.app (Git branch deployments)
+    // - https://*-*.vercel.app (preview deployments)
+    if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      logger.info('[CORS] Allowed Vercel deployment:', origin);
+      return callback(null, true);
+    }
+    
+    // Also allow common microservice domains
+    const commonMicroserviceDomains = [
+      'dev-lab-frontend',
+      'dev-lab-three',
+      'assessment-frontend',
+      'course-builder',
+      'student-portal',
+      'analytics-dashboard',
+    ];
+    
+    if (commonMicroserviceDomains.some(domain => origin.includes(domain))) {
+      logger.info('[CORS] Allowed microservice domain:', origin);
       return callback(null, true);
     }
     
@@ -541,14 +560,26 @@ if (assetsDirExists) {
 
 // API Routes
 // IMPORTANT: Order matters! More specific routes should come first
-app.use('/api/v1', queryRoutes);
-app.use('/api/v1', recommendationsRoutes);
-app.use('/api/v1', knowledgeGraphRoutes);
-app.use('/api/debug', diagnosticsRoutes);
-app.use('/api/debug', contentRoutes);
+// 
+// ROUTE MOUNTING ORDER:
+// 1. /api/v1/* - CHAT mode routes (query, recommendations, knowledge graph)
+// 2. /api/debug/* - Debug routes
+// 3. /api/* - SUPPORT mode routes (devlab/support, assessment/support)
+// 4. /auth/* - Authentication routes
+//
+// This ensures:
+// - /api/v1/query works for CHAT mode (all microservices except DevLab/Assessment)
+// - /api/devlab/support works for SUPPORT mode (DevLab)
+// - /api/assessment/support works for SUPPORT mode (Assessment)
+
+app.use('/api/v1', queryRoutes);              // CHAT mode: /api/v1/query
+app.use('/api/v1', recommendationsRoutes);   // CHAT mode: /api/v1/personalized/recommendations/:userId
+app.use('/api/v1', knowledgeGraphRoutes);   // CHAT mode: /api/v1/knowledge/progress/user/:userId/skill/:skillId
+app.use('/api/debug', diagnosticsRoutes);   // Debug: /api/debug/embeddings-status
+app.use('/api/debug', contentRoutes);       // Debug: /api/debug/add-content
 
 // Support routes must come after /api/v1 and /api/debug to avoid conflicts
-// Add logging middleware BEFORE mounting to see if requests reach here
+// SUPPORT mode routes: /api/devlab/support, /api/assessment/support
 app.use('/api', (req, res, next) => {
   // Only log support-related routes to avoid spam
   if (req.path.includes('/support') || req.path.includes('/devlab') || req.path.includes('/assessment')) {
@@ -563,8 +594,14 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use('/api', microserviceSupportRoutes);
-app.use('/auth', authRoutes);
+app.use('/api', microserviceSupportRoutes); // SUPPORT mode: /api/devlab/support, /api/assessment/support
+app.use('/auth', authRoutes);                // Auth: /auth/me
+
+// Log mounted routes for verification
+logger.info('✅ Routes mounted:');
+logger.info('  - /api/v1/query (CHAT mode - all microservices)');
+logger.info('  - /api/devlab/support (SUPPORT mode - DevLab)');
+logger.info('  - /api/assessment/support (SUPPORT mode - Assessment)');
 
 // ═══════════════════════════════════════════════════════
 // CATCH-ALL LOGGER - Log all unhandled routes BEFORE 404
