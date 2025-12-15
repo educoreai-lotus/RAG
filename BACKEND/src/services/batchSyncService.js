@@ -13,11 +13,6 @@ import { logger } from '../utils/logger.util.js';
 import { batchSync } from '../clients/coordinator.client.js';
 import { processCoordinatorResponse } from '../communication/communicationManager.service.js';
 import { getPrismaClient } from '../config/database.config.js';
-import dataStorageService from './dataStorageService.js';
-import vectorizationService from './vectorizationService.js';
-import { updateGraphFromData } from './knowledgeGraph.service.js';
-import { hasSchema } from '../schemas/microserviceSchemas.js';
-import { getOrCreateTenant } from './tenant.service.js';
 
 // Configuration
 const BATCH_SYNC_ENABLED = process.env.BATCH_SYNC_ENABLED !== 'false'; // Default: enabled
@@ -250,112 +245,50 @@ export async function syncService(serviceName, options = {}) {
 
 /**
  * Update internal data store with synced data
- * This is the main orchestrator for data processing pipeline:
- * 1. Store data in Supabase
- * 2. Vectorize data for semantic search
- * 3. Update knowledge graph with relationships
+ * This can be extended to:
+ * - Store in vector DB for embeddings
+ * - Update cache
+ * - Store in database
+ * - Trigger re-indexing
  * 
  * @param {string} serviceName - Name of the microservice
  * @param {Array} data - Array of data items to store
  */
 async function updateDataStore(serviceName, data) {
   try {
-    logger.info('[BatchSync] Starting data store update', {
+    logger.info('[BatchSync] Updating data store', {
       service: serviceName,
       items_count: data.length,
     });
 
-    // Check if schema exists for this service
-    if (!hasSchema(serviceName)) {
-      logger.warn('[BatchSync] No schema found for service - skipping data processing', {
-        service: serviceName,
-        suggestion: 'Add schema to microserviceSchemas.js'
-      });
-      // Could implement generic storage here or throw error
-      throw new Error(`No schema configured for service: ${serviceName}. Please add schema to microserviceSchemas.js`);
-    }
+    // TODO: Implement actual data store update logic
+    // This could involve:
+    // 1. Creating embeddings for vector search
+    // 2. Storing in database
+    // 3. Updating cache
+    // 4. Triggering re-indexing
 
-    // Get tenant ID (use default tenant for now)
-    // In production, this should come from the sync context
-    const defaultTenant = await getOrCreateTenant('default.local');
-    const tenantId = defaultTenant.id;
-
-    // Step 1: Store data in Supabase
-    logger.info('[BatchSync] Step 1/3: Storing data in Supabase', {
+    // For now, just log the update
+    logger.debug('[BatchSync] Data store update placeholder', {
       service: serviceName,
-      tenantId
-    });
-    
-    const storageResult = await dataStorageService.storeData(serviceName, data, { tenantId });
-    
-    logger.info('[BatchSync] Data storage complete', {
-      service: serviceName,
-      stored: storageResult.stored,
-      errors: storageResult.errors
+      sample_item: data[0] || null,
     });
 
-    // Step 2: Vectorize data
-    logger.info('[BatchSync] Step 2/3: Vectorizing data', {
-      service: serviceName
-    });
-    
-    const vectorizationResult = await vectorizationService.vectorizeData(
-      serviceName, 
-      data,
-      { tenantId }
-    );
-    
-    logger.info('[BatchSync] Vectorization complete', {
-      service: serviceName,
-      vectorized: vectorizationResult.vectorized,
-      errors: vectorizationResult.errors
-    });
-
-    // Step 3: Update knowledge graph
-    logger.info('[BatchSync] Step 3/3: Updating knowledge graph', {
-      service: serviceName
-    });
-    
-    const graphResult = await updateGraphFromData(
-      tenantId,
-      serviceName,
-      data
-    );
-    
-    logger.info('[BatchSync] Knowledge graph update complete', {
-      service: serviceName,
-      entities: graphResult.entities,
-      relationships: graphResult.relationships
-    });
-
-    // Summary
-    logger.info('[BatchSync] Data store update complete', {
-      service: serviceName,
-      summary: {
-        items_processed: data.length,
-        stored: storageResult.stored,
-        vectorized: vectorizationResult.vectorized,
-        graph_entities: graphResult.entities,
-        graph_relationships: graphResult.relationships,
-        total_errors: storageResult.errors + vectorizationResult.errors
-      }
-    });
-
-    return {
-      success: true,
-      stored: storageResult.stored,
-      vectorized: vectorizationResult.vectorized,
-      graph_entities: graphResult.entities,
-      graph_relationships: graphResult.relationships,
-      errors: storageResult.errors + vectorizationResult.errors
-    };
+    // Example: Store in database if needed
+    // const prisma = getPrismaClient();
+    // await prisma.syncedData.createMany({
+    //   data: data.map(item => ({
+    //     service: serviceName,
+    //     data: item,
+    //     synced_at: new Date(),
+    //   })),
+    // });
 
   } catch (error) {
     logger.error('[BatchSync] Failed to update data store', {
       service: serviceName,
       error: error.message,
-      stack: error.stack,
-      items_count: data.length
+      items_count: data.length,
     });
     throw error;
   }

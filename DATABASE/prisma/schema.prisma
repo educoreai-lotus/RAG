@@ -34,7 +34,6 @@ model Tenant {
   auditLogs           AuditLog[]
   cacheEntries        CacheEntry[]
   microservices       Microservice[]
-  microserviceData    MicroserviceData[]
 
   @@map("tenants")
 }
