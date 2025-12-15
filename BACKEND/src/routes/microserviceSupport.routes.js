@@ -10,6 +10,11 @@ const router = express.Router();
 
 // Middleware: gate support mode by env + optional origin/secret authorization
 function supportAuthMiddleware(req, res, next) {
+  // Allow OPTIONS requests (CORS preflight) to pass through
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const supportEnabled = (process.env.SUPPORT_MODE_ENABLED || '').toLowerCase() === 'true';
   if (!supportEnabled) {
     return res.status(403).json({ error: 'Forbidden', message: 'Support mode is disabled' });
@@ -44,6 +49,30 @@ router.post('/assessment/support', supportAuthMiddleware, assessmentSupport);
  * Proxy endpoint for DevLab microservice
  */
 router.post('/devlab/support', supportAuthMiddleware, devlabSupport);
+
+/**
+ * OPTIONS /api/devlab/support
+ * Handle CORS preflight requests
+ */
+router.options('/devlab/support', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
+
+/**
+ * OPTIONS /api/assessment/support
+ * Handle CORS preflight requests
+ */
+router.options('/assessment/support', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
 
 export default router;
 
