@@ -29,7 +29,8 @@
     "check:data": "node scripts/check-supabase-data.js",
     "check:data:search": "node scripts/check-supabase-data.js",
     "create:embeddings": "node scripts/create-embeddings-and-insert.js",
-    "add:js-prerequisites": "node scripts/add-js-prerequisites.js"
+    "add:js-prerequisites": "node scripts/add-js-prerequisites.js",
+    "generate-token": "node scripts/generate-test-token.js"
   },
   "keywords": [
     "rag",

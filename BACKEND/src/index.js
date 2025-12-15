@@ -9,6 +9,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readdirSync } from 'fs';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware.js';
+import { methodNotAllowedHandler } from './middleware/405-handler.middleware.js';
+import { globalOptionsHandler, requestLogger } from './middleware/method-handler.middleware.js';
 import { logger } from './utils/logger.util.js';
 import { isCoordinatorAvailable } from './clients/coordinator.client.js';
 import { startScheduledSync } from './jobs/scheduledSync.js';
@@ -169,8 +171,17 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Explicit OPTIONS handler for all routes (preflight)
+// Global OPTIONS handler - handles CORS preflight for all routes
+// This MUST be before routes to catch OPTIONS requests early
+app.use(globalOptionsHandler);
+
+// Explicit OPTIONS handler for all routes (preflight) - fallback
 app.options('*', cors(corsOptions));
+
+// Request logging middleware - log all incoming requests
+if (process.env.LOG_REQUESTS !== 'false') {
+  app.use(requestLogger);
+}
 
 // ═══════════════════════════════════════════════════════
 // ADDITIONAL SAFETY: Manual CORS headers middleware
@@ -468,8 +479,12 @@ app.use('/api/debug', contentRoutes);
 app.use('/api', microserviceSupportRoutes);
 app.use('/auth', authRoutes);
 
-// Error handling
+// Error handling middleware chain
+// 1. Method Not Allowed handler (405) - catches requests with wrong HTTP method
+app.use(methodNotAllowedHandler);
+// 2. Not Found handler (404) - catches requests to non-existent routes
 app.use(notFoundHandler);
+// 3. Error handler (500) - catches all other errors
 app.use(errorHandler);
 
 // Start server - bind to 0.0.0.0 for Railway/cloud deployments

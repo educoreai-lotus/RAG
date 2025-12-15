@@ -9,6 +9,34 @@ import { getEmbeddingsStatus, testVectorSearch } from '../controllers/diagnostic
 const router = express.Router();
 
 /**
+ * OPTIONS /api/debug/embeddings-status
+ * Handle CORS preflight requests
+ */
+router.options('/embeddings-status', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id');
+  }
+  res.status(204).end();
+});
+
+/**
+ * OPTIONS /api/debug/test-vector-search
+ * Handle CORS preflight requests
+ */
+router.options('/test-vector-search', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id');
+  }
+  res.status(204).end();
+});
+
+/**
  * GET /api/debug/embeddings-status
  * Check embeddings status in database
  */
