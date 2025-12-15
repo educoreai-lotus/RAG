@@ -124,11 +124,62 @@ const corsOptions = {
   maxAge: 600, // Cache preflight requests for 10 minutes (reduced from 24 hours)
 };
 
-// Middleware
+// ═══════════════════════════════════════════════════════
+// CORS CONFIGURATION - MUST BE FIRST!
+// ═══════════════════════════════════════════════════════
+
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Explicitly handle OPTIONS requests for all routes (preflight)
+// Explicit OPTIONS handler for all routes (preflight)
 app.options('*', cors(corsOptions));
+
+// ═══════════════════════════════════════════════════════
+// ADDITIONAL SAFETY: Manual CORS headers middleware
+// ═══════════════════════════════════════════════════════
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Allow Vercel origins
+  if (origin && /^https:\/\/.*\.vercel\.app$/.test(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,X-User-Id,X-Tenant-Id,X-Source,X-Embed-Secret,Accept,Origin');
+    res.header('Access-Control-Expose-Headers', 'Content-Range,X-Content-Range');
+  }
+  
+  // Handle OPTIONS preflight requests explicitly
+  if (req.method === 'OPTIONS') {
+    logger.debug('[CORS] OPTIONS preflight request', {
+      path: req.path,
+      origin: origin,
+    });
+    return res.status(204).end();
+  }
+  
+  next();
+});
+
+// ═══════════════════════════════════════════════════════
+// DEBUGGING: Log all requests (for CORS debugging)
+// ═══════════════════════════════════════════════════════
+
+app.use((req, res, next) => {
+  if (req.path === '/auth/me' || req.method === 'OPTIONS') {
+    logger.debug(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+      origin: req.headers.origin,
+      'access-control-allow-origin': res.getHeader('access-control-allow-origin'),
+      'access-control-allow-credentials': res.getHeader('access-control-allow-credentials'),
+    });
+  }
+  next();
+});
+
+// ═══════════════════════════════════════════════════════
+// OTHER MIDDLEWARE (AFTER CORS)
+// ═══════════════════════════════════════════════════════
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
