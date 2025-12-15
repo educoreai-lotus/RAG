@@ -10,15 +10,17 @@ export default defineConfig({
       name: 'copy-bot-js',
       closeBundle() {
         try {
-          // Copy bot.js to dist/embed/ after build
+          // Copy bot.js and helper to dist/embed/ after build
           const distPath = join(process.cwd(), 'dist', 'embed');
           const publicBotPath = join(process.cwd(), 'public', 'bot.js');
+          const helperPath = join(process.cwd(), 'public', 'chatbot-init-helper.js');
           const targetBotPath = join(distPath, 'bot.js');
+          const targetHelperPath = join(distPath, 'chatbot-init-helper.js');
           
           // Create embed directory if it doesn't exist
           mkdirSync(distPath, { recursive: true });
           
-          // Check if source file exists
+          // Check if source files exist
           if (!existsSync(publicBotPath)) {
             console.error('❌ Source file not found:', publicBotPath);
             throw new Error(`bot.js not found in public directory: ${publicBotPath}`);
@@ -27,8 +29,16 @@ export default defineConfig({
           // Copy bot.js
           copyFileSync(publicBotPath, targetBotPath);
           console.log('✅ Copied bot.js to:', targetBotPath);
+          
+          // Copy helper script if it exists
+          if (existsSync(helperPath)) {
+            copyFileSync(helperPath, targetHelperPath);
+            console.log('✅ Copied chatbot-init-helper.js to:', targetHelperPath);
+          } else {
+            console.warn('⚠️ Helper script not found:', helperPath);
+          }
         } catch (error) {
-          console.error('❌ Error copying bot.js:', error.message);
+          console.error('❌ Error copying bot files:', error.message);
           throw error;
         }
       },
