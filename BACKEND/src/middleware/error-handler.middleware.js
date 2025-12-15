@@ -60,6 +60,35 @@ export function notFoundHandler(req, res, _next) {
   // Ignore common browser requests that cause 404 spam
   const ignoredPaths = ['/favicon.ico', '/robots.txt', '/apple-touch-icon.png', '/favicon-32x32.png', '/favicon-16x16.png'];
   
+  // Special handling for support routes - check if it's a method issue
+  if (req.path.includes('/support') && req.method !== 'POST' && req.method !== 'OPTIONS') {
+    logger.warn('405 Method Not Allowed (from notFoundHandler)', {
+      method: req.method,
+      path: req.path,
+      url: req.url,
+      hint: 'Support routes only accept POST and OPTIONS methods',
+    });
+    
+    // Set CORS headers
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
+    }
+    
+    return res.status(405).json({
+      error: {
+        message: 'Method Not Allowed',
+        statusCode: 405,
+        path: req.path,
+        method: req.method,
+        allowedMethods: ['POST', 'OPTIONS'],
+        hint: 'Support routes only accept POST requests. Use POST method.',
+      },
+    });
+  }
+  
   // Only log 404 for non-ignored paths or in debug mode
   if (!ignoredPaths.includes(req.path)) {
     logger.warn('404 Not Found', {

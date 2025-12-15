@@ -5,13 +5,39 @@
 
 import express from 'express';
 import { assessmentSupport, devlabSupport } from '../controllers/microserviceSupport.controller.js';
+import { logger } from '../utils/logger.util.js';
 
 const router = express.Router();
 
+// Log all requests to support routes for debugging
+router.use((req, res, next) => {
+  logger.debug('Support route request', {
+    method: req.method,
+    path: req.path,
+    originalUrl: req.originalUrl,
+    headers: {
+      'x-source': req.headers['x-source'],
+      'x-microservice-source': req.headers['x-microservice-source'],
+      origin: req.headers.origin,
+    },
+  });
+  next();
+});
+
 // Middleware: gate support mode by env + optional origin/secret authorization
 function supportAuthMiddleware(req, res, next) {
+  logger.debug('supportAuthMiddleware called', {
+    method: req.method,
+    path: req.path,
+    supportModeEnabled: process.env.SUPPORT_MODE_ENABLED,
+  });
+
   // Handle OPTIONS preflight requests
   if (req.method === 'OPTIONS') {
+    logger.debug('Handling OPTIONS preflight request');
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
     return res.status(200).end();
   }
 
@@ -46,6 +72,23 @@ function supportAuthMiddleware(req, res, next) {
   next();
 }
 
+// Handle OPTIONS requests for CORS preflight (must be before POST routes)
+router.options('/assessment/support', (req, res) => {
+  logger.debug('OPTIONS request for /assessment/support');
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
+  res.status(200).end();
+});
+
+router.options('/devlab/support', (req, res) => {
+  logger.debug('OPTIONS request for /devlab/support');
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id, X-Tenant-Id, X-Source, X-Embed-Secret');
+  res.status(200).end();
+});
+
 /**
  * POST /api/assessment/support
  * Proxy endpoint for Assessment microservice
@@ -56,15 +99,9 @@ router.post('/assessment/support', supportAuthMiddleware, assessmentSupport);
  * POST /api/devlab/support
  * Proxy endpoint for DevLab microservice
  */
-router.post('/devlab/support', supportAuthMiddleware, devlabSupport);
-
-// Handle OPTIONS requests for CORS preflight
-router.options('/assessment/support', (req, res) => {
-  res.status(200).end();
-});
-
-router.options('/devlab/support', (req, res) => {
-  res.status(200).end();
+router.post('/devlab/support', supportAuthMiddleware, (req, res, next) => {
+  logger.info('POST /devlab/support route handler called');
+  devlabSupport(req, res, next);
 });
 
 export default router;

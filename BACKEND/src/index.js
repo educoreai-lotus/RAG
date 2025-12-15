@@ -458,12 +458,14 @@ if (assetsDirExists) {
 }
 
 // API Routes
+// IMPORTANT: Order matters! More specific routes should come first
 app.use('/api/v1', queryRoutes);
 app.use('/api/v1', recommendationsRoutes);
 app.use('/api/v1', knowledgeGraphRoutes);
-app.use('/api', microserviceSupportRoutes);
 app.use('/api/debug', diagnosticsRoutes);
 app.use('/api/debug', contentRoutes);
+// Support routes must come after /api/v1 and /api/debug to avoid conflicts
+app.use('/api', microserviceSupportRoutes);
 app.use('/auth', authRoutes);
 
 // Error handling
