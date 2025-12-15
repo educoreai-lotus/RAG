@@ -11,6 +11,7 @@ import { existsSync, readdirSync } from 'fs';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware.js';
 import { methodNotAllowedHandler } from './middleware/405-handler.middleware.js';
 import { globalOptionsHandler, requestLogger } from './middleware/method-handler.middleware.js';
+import { criticalDebugLogger } from './middleware/debug-logger.middleware.js';
 import { logger } from './utils/logger.util.js';
 import { isCoordinatorAvailable } from './clients/coordinator.client.js';
 import { startScheduledSync } from './jobs/scheduledSync.js';
@@ -177,6 +178,10 @@ app.use(globalOptionsHandler);
 
 // Explicit OPTIONS handler for all routes (preflight) - fallback
 app.options('*', cors(corsOptions));
+
+// CRITICAL DEBUG LOGGING - Log EVERY request detail
+// This MUST be enabled to debug 405 errors
+app.use(criticalDebugLogger);
 
 // Request logging middleware - log all incoming requests
 if (process.env.LOG_REQUESTS !== 'false') {
