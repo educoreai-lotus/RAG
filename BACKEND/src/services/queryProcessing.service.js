@@ -946,7 +946,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           filtered_vectors: filteredVectors.length,
           query_for_embedding: queryForEmbedding ? queryForEmbedding.substring(0, 100) : 'N/A',
           original_query: query ? query.substring(0, 100) : 'N/A',
-          translated_query: translatedQuery?.substring(0, 100),
+          translated_query: translatedQuery ? translatedQuery.substring(0, 100) : 'N/A',
           embedding_dimensions: queryEmbedding.length,
           filtering_reason: filteringContext.reason,
         });
@@ -1360,7 +1360,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       } catch (jsonError) {
         logger.error('Response JSON validation failed', {
           error: jsonError.message,
-          answer_preview: cleanAnswer.substring(0, 100),
+          answer_preview: cleanAnswer ? cleanAnswer.substring(0, 100) : 'N/A',
           filtering_reason: filteringContext.reason,
         });
         // Return a safe fallback response
