@@ -46,23 +46,17 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
     const shouldCall = shouldCallCoordinator(query, vectorResults, internalData);
     
     if (!shouldCall) {
-      logger.debug('gRPC fallback skipped: Internal data is sufficient', {
+      logger.info('❌ [GRPC FALLBACK] Skipped: Internal data is sufficient', {
         category,
         tenantId,
+        userId,
+        query: query.substring(0, 100),
         vectorResultsCount: vectorResults.length,
       });
       return []; // Internal data is sufficient, no need for Coordinator
     }
 
-    logger.info('gRPC fallback: Calling Coordinator', {
-      category,
-      tenantId,
-      userId,
-      query: query.substring(0, 100),
-    });
-
-    // Call Coordinator via Communication Manager
-    logger.info('gRPC fallback: Calling Coordinator route', {
+    logger.info('✅ [GRPC FALLBACK] Calling Coordinator', {
       category,
       tenantId,
       userId,
@@ -70,6 +64,7 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       vectorResultsCount: vectorResults.length,
     });
 
+    // Call Coordinator via Communication Manager
     const coordinatorResponse = await callCoordinatorRoute({
       tenant_id: tenantId,
       user_id: userId,
@@ -79,14 +74,6 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
         source: 'rag_fallback',
         vector_results_count: vectorResults.length,
       },
-    });
-
-    logger.info('gRPC fallback: Coordinator response received', {
-      category,
-      tenantId,
-      hasResponse: !!coordinatorResponse,
-      responseType: coordinatorResponse ? typeof coordinatorResponse : 'null',
-      responseKeys: coordinatorResponse ? Object.keys(coordinatorResponse) : [],
     });
 
     if (!coordinatorResponse) {
@@ -128,11 +115,12 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       },
     }));
 
-    logger.info('gRPC fallback: Coordinator data retrieved', {
+    logger.info('✅ [GRPC FALLBACK] Coordinator data retrieved', {
       category,
       tenantId,
       items_count: contentItems.length,
       target_services: processed.target_services || [],
+      query: query.substring(0, 100),
     });
 
     return contentItems;

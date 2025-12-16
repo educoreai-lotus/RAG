@@ -41,6 +41,19 @@ const MIN_REQUIRED_SOURCES = 1; // Minimum number of sources to consider interna
  */
 export function shouldCallCoordinator(query, vectorResults = [], internalData = {}) {
   try {
+    // 🔍 DEBUG: Log decision parameters
+    const avgSimilarity = vectorResults.length > 0
+      ? vectorResults.reduce((sum, r) => sum + (r.similarity || r.relevanceScore || 0), 0) / vectorResults.length
+      : 0;
+    
+    logger.info('🔍 [COORDINATOR DECISION] Checking if should call Coordinator', {
+      query: query.substring(0, 100),
+      vectorResultsCount: vectorResults.length,
+      avgSimilarity: avgSimilarity.toFixed(3),
+      threshold: VECTOR_SIMILARITY_THRESHOLD,
+      hasInternalData: !!(internalData.cachedData || internalData.kgRelations),
+    });
+    
     // If no vector results, check if we have other internal data
     if (vectorResults.length === 0) {
       // Check if we have cached data, KG relations, or other internal sources
@@ -59,13 +72,13 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
 
     // Check vector similarity scores
     if (vectorResults.length > 0) {
-      const avgSimilarity = vectorResults.reduce((sum, r) => sum + (r.similarity || r.relevanceScore || 0), 0) / vectorResults.length;
-      
       // High similarity and sufficient sources - internal data is sufficient
       if (avgSimilarity >= VECTOR_SIMILARITY_THRESHOLD && vectorResults.length >= MIN_REQUIRED_SOURCES) {
-        logger.debug('Should NOT call Coordinator: High similarity and sufficient sources', {
-          avgSimilarity,
+        logger.info('❌ [COORDINATOR DECISION] Should NOT call Coordinator: High similarity and sufficient sources', {
+          avgSimilarity: avgSimilarity.toFixed(3),
+          threshold: VECTOR_SIMILARITY_THRESHOLD,
           sourceCount: vectorResults.length,
+          minRequired: MIN_REQUIRED_SOURCES,
         });
         return false; // Internal data is sufficient
       }
@@ -102,17 +115,35 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       'assessment': ['test', 'exam', 'quiz', 'assessment', 'question', 'answer', 'score'],
       'devlab': ['code', 'programming', 'debug', 'error', 'sandbox', 'execution', 'compile'],
       'analytics': ['report', 'analytics', 'metrics', 'dashboard', 'statistics', 'performance'],
+      'hr-reporting': ['learning performance', 'monthly report', 'hr report', 'performance report', 'conclusions', 'findings'],
       'content': ['course', 'lesson', 'module', 'content', 'material', 'resource'],
-      'hr-reporting': [
-        'hr report', 'hr reporting', 'human resources report',
-        'learning performance', 'monthly report', 'performance report',
-        'employee report', 'management report', 'hr analytics',
-        'conclusions', 'summary report', 'hr dashboard',
-        'monthly learning', 'learning performance report',
-        'monthly learning performance', 'hr & management',
-        'management reporting'
-      ],
     };
+    
+    // Special check for report queries - always check Coordinator for specific reports
+    const reportKeywords = ['report', 'conclusions', 'summary', 'findings', 'results', 'monthly', 'performance'];
+    const isReportQuery = reportKeywords.some(keyword => queryLower.includes(keyword));
+    
+    if (isReportQuery) {
+      logger.info('🔍 [COORDINATOR DECISION] Report query detected', {
+        query: query.substring(0, 100),
+        vectorResultsCount: vectorResults.length,
+        avgSimilarity: avgSimilarity.toFixed(3),
+      });
+      
+      // For report queries, always check Coordinator if:
+      // 1. No vector results, OR
+      // 2. Low similarity (< 0.8 for reports), OR
+      // 3. Less than 3 sources (reports need multiple sources)
+      if (vectorResults.length === 0 || avgSimilarity < 0.8 || vectorResults.length < 3) {
+        logger.info('✅ [COORDINATOR DECISION] Should call Coordinator: Report query with insufficient data', {
+          query: query.substring(0, 100),
+          reason: vectorResults.length === 0 ? 'no_results' : avgSimilarity < 0.8 ? 'low_similarity' : 'insufficient_sources',
+          vectorResultsCount: vectorResults.length,
+          avgSimilarity: avgSimilarity.toFixed(3),
+        });
+        return true;
+      }
+    }
 
     const requiresMicroservice = Object.entries(microserviceKeywords).some(([_service, keywords]) => {
       return keywords.some(keyword => queryLower.includes(keyword));
