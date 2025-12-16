@@ -131,6 +131,17 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
 
   let queryRecord = null;
 
+  // CRITICAL: Log entry point for debugging
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 [PROCESS QUERY SERVICE] Entry point');
+  console.log('🔍 Query:', query);
+  console.log('🔍 Tenant ID:', tenant_id);
+  console.log('🔍 User ID:', user_id);
+  console.log('🔍 Context:', JSON.stringify(context, null, 2));
+  console.log('🔍 Options:', JSON.stringify(options, null, 2));
+  console.log('🔍 Conversation ID:', conversation_id);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
   try {
     // CRITICAL: Validate and fix tenant_id FIRST
     // This ensures we never use the wrong tenant ID
