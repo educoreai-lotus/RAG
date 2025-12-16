@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../utils/logger.util.js';
+import { extractTokenFromHeader } from '../utils/token.util.js';
 
 /**
  * GET /auth/me
@@ -18,10 +19,8 @@ export const getCurrentUser = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     
     // Extract token from Authorization header if present
-    let token = null;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
+    // CRITICAL FIX: Use safe token extraction utility to prevent substring errors
+    const token = extractTokenFromHeader(authHeader);
 
     // If no user information is provided, return anonymous user
     if (!userId && !token) {
