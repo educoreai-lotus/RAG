@@ -49,7 +49,17 @@ export async function submitQuery(req, res, next) {
   try {
     // CRITICAL: Set CORS headers for CHAT MODE (same as SUPPORT MODE)
     const origin = req.headers.origin;
-    if (origin) {
+    
+    // Log request details for debugging
+    logger.info('Query request received', {
+      method: req.method,
+      path: req.path,
+      origin: origin || 'NO ORIGIN',
+      hasBody: !!req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : [],
+    });
+    
+    if (origin && typeof origin === 'string') {
       // Allow all Vercel origins (same as SUPPORT MODE)
       if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
@@ -218,10 +228,40 @@ export async function submitQuery(req, res, next) {
       });
     }
   } catch (error) {
+    // CRITICAL: Comprehensive error logging for debugging 500 errors
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('🚨 [QUERY CONTROLLER] ERROR CAUGHT:');
+    console.error('🚨 Error name:', error.name);
+    console.error('🚨 Error message:', error.message);
+    console.error('🚨 Error stack:', error.stack);
+    console.error('🚨 Request method:', req.method);
+    console.error('🚨 Request URL:', req.originalUrl);
+    console.error('🚨 Request path:', req.path);
+    console.error('🚨 Request origin:', req.headers.origin || 'NO ORIGIN');
+    console.error('🚨 Request body:', JSON.stringify(req.body, null, 2));
+    console.error('🚨 Request headers:', JSON.stringify(req.headers, null, 2));
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     logger.error('Query controller error', {
       error: error.message,
       stack: error.stack,
+      name: error.name,
+      url: req.originalUrl,
+      method: req.method,
+      origin: req.headers.origin,
+      body: req.body,
     });
+
+    // Set CORS headers even on error
+    const errorOrigin = req.headers.origin;
+    if (errorOrigin && typeof errorOrigin === 'string') {
+      if (/^https:\/\/.*\.vercel\.app$/.test(errorOrigin) || 
+          errorOrigin.includes('localhost') || 
+          errorOrigin.includes('127.0.0.1')) {
+        res.setHeader('Access-Control-Allow-Origin', errorOrigin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+    }
 
     next(error);
   }
