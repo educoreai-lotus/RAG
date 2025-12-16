@@ -1169,18 +1169,39 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     // grpcFetchByCategory now includes shouldCallCoordinator() decision internally
     // It will only call Coordinator if internal data is insufficient
     
+    logger.info('🔍 [QUERY PROCESSING] About to call grpcFetchByCategory', {
+      category: category || 'general',
+      query: query.substring(0, 100),
+      tenantId: actualTenantId,
+      userId: user_id,
+      vectorResultsCount: (similarVectors || []).length,
+      internalDataKeys: Object.keys(internalData),
+      grpcEnabled: process.env.GRPC_ENABLED,
+    });
+    
     let coordinatorSources = [];
     const coordinatorErrors = [];
     
     // Attempt Coordinator call (only if internal data is insufficient)
     // Note: grpcFetchByCategory() will check shouldCallCoordinator() internally
     try {
+      logger.info('🔍 [QUERY PROCESSING] Calling grpcFetchByCategory...', {
+        category: category || 'general',
+        query: query.substring(0, 100),
+      });
+      
       const grpcContext = await grpcFetchByCategory(category || 'general', {
         query,
         tenantId: actualTenantId,
         userId: user_id,
         vectorResults: similarVectors || [],
         internalData: internalData,
+      });
+      
+      logger.info('🔍 [QUERY PROCESSING] grpcFetchByCategory returned', {
+        category: category || 'general',
+        itemsCount: grpcContext?.length || 0,
+        hasData: !!(grpcContext && grpcContext.length > 0),
       });
 
       if (grpcContext && grpcContext.length > 0) {

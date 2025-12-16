@@ -35,23 +35,52 @@ const grpcEnabled = process.env.GRPC_ENABLED === 'true';
  * @returns {Promise<Array>} Array of content items
  */
 export async function grpcFetchByCategory(category, { query, tenantId, userId = 'anonymous', vectorResults = [], internalData = {} }) {
+  logger.info('🔍 [GRPC FALLBACK] grpcFetchByCategory called', {
+    category,
+    tenantId,
+    userId,
+    query: query?.substring(0, 100) || 'N/A',
+    grpcEnabled,
+    grpcEnabledEnv: process.env.GRPC_ENABLED,
+  });
+  
   if (!grpcEnabled) {
-    logger.debug('gRPC fallback disabled');
+    logger.warn('❌ [GRPC FALLBACK] gRPC fallback DISABLED - GRPC_ENABLED is not "true"', {
+      category,
+      tenantId,
+      grpcEnabledEnv: process.env.GRPC_ENABLED,
+      hint: 'Set GRPC_ENABLED=true in Railway environment variables to enable',
+    });
     return [];
   }
 
   try {
+    logger.info('🔍 [GRPC FALLBACK] About to check shouldCallCoordinator', {
+      category,
+      tenantId,
+      query: query?.substring(0, 100) || 'N/A',
+      vectorResultsCount: vectorResults?.length || 0,
+      internalDataKeys: internalData ? Object.keys(internalData) : [],
+    });
+    
     // Decision layer: Check if Coordinator should be called
     // This ensures we only call Coordinator when internal data is insufficient
     const shouldCall = shouldCallCoordinator(query, vectorResults, internalData);
+    
+    logger.info('🔍 [GRPC FALLBACK] shouldCallCoordinator result', {
+      category,
+      tenantId,
+      shouldCall,
+      query: query?.substring(0, 100) || 'N/A',
+    });
     
     if (!shouldCall) {
       logger.info('❌ [GRPC FALLBACK] Skipped: Internal data is sufficient', {
         category,
         tenantId,
         userId,
-        query: query.substring(0, 100),
-        vectorResultsCount: vectorResults.length,
+        query: query?.substring(0, 100) || 'N/A',
+        vectorResultsCount: vectorResults?.length || 0,
       });
       return []; // Internal data is sufficient, no need for Coordinator
     }
