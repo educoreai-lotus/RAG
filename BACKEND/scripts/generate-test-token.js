@@ -1,17 +1,16 @@
 /**
  * Generate Test Token Script
  * 
- * Scans Supabase database for tenant_ids and generates test tokens for each tenant
+ * Generates JWT test tokens for tenants without database connection
  * 
- * Usage: node scripts/generate-test-token.js [tenant_id]
+ * Usage: node scripts/generate-test-token.js [tenant_domain]
  * 
  * Examples:
- *   node scripts/generate-test-token.js                    # List all tenants and generate tokens
+ *   node scripts/generate-test-token.js                    # Generate token for dev.educore.local
  *   node scripts/generate-test-token.js dev.educore.local  # Generate token for specific tenant
  */
 
 import jwt from 'jsonwebtoken';
-import { getPrismaClient } from '../src/config/database.config.js';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -21,57 +20,15 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 /**
- * Scan database for all tenant_ids
+ * Default tenants (no database connection needed)
  */
-async function scanTenants() {
-  try {
-    const prisma = await getPrismaClient();
-    
-    console.log('\n🔍 Scanning Supabase database for tenants...\n');
-    
-    // Get all tenants from database
-    const tenants = await prisma.tenant.findMany({
-      where: {
-        deletedAt: null // Only active tenants
-      },
-      select: {
-        id: true,
-        name: true,
-        domain: true,
-      },
-      orderBy: {
-        domain: 'asc'
-      }
-    });
-    
-    if (tenants.length === 0) {
-      console.log('⚠️  No tenants found in database!');
-      console.log('💡 Please run the seed script first:');
-      console.log('   cd DATABASE/prisma && node seed.js');
-      console.log('   OR');
-      console.log('   cd BACKEND && npm run db:seed\n');
-      throw new Error('No tenants found in database. Please seed the database first.');
-    }
-    
-    console.log(`✅ Found ${tenants.length} tenant(s) in database:\n`);
-    tenants.forEach((tenant, idx) => {
-      console.log(`   ${idx + 1}. ${tenant.name}`);
-      console.log(`      ID: ${tenant.id}`);
-      console.log(`      Domain: ${tenant.domain}`);
-      console.log('');
-    });
-    
-    return tenants;
-  } catch (error) {
-    console.error('\n❌ Error scanning database:', error.message);
-    console.error('\n💡 Troubleshooting:');
-    console.error('   1. Check DATABASE_URL is set correctly in .env');
-    console.error('   2. Make sure database is accessible');
-    console.error('   3. Run migrations: npm run db:migrate');
-    console.error('   4. Seed database: npm run db:seed\n');
-    throw error;
+const DEFAULT_TENANTS = [
+  {
+    domain: 'dev.educore.local',
+    name: 'Development Tenant',
+    id: 'dev.educore.local' // Use domain as ID for simplicity
   }
-}
+];
 
 /**
  * Generate token for a specific tenant
@@ -96,78 +53,44 @@ function generateToken(tenantId, tenantDomain, tenantName) {
 /**
  * Main function
  */
-async function main() {
-  const requestedTenant = process.argv[2];
+function main() {
+  const requestedTenant = process.argv[2] || 'dev.educore.local';
   
-  // Scan database for tenants
-  const tenants = await scanTenants();
+  // Use default tenants (no database connection)
+  const tenants = DEFAULT_TENANTS;
   
   console.log('='.repeat(80));
   
-  if (requestedTenant) {
-    // Generate token for specific tenant
-    const tenant = tenants.find(t => 
-      t.domain === requestedTenant || 
-      t.id === requestedTenant ||
-      t.name.toLowerCase() === requestedTenant.toLowerCase()
-    );
-    
-    if (!tenant) {
-      console.error(`\n❌ Tenant "${requestedTenant}" not found in database!`);
-      console.log('\n📋 Available tenants:');
-      tenants.forEach(t => {
-        console.log(`   - ${t.domain} (${t.name})`);
-      });
-      process.exit(1);
-    }
-    
-    const token = generateToken(tenant.id, tenant.domain, tenant.name);
-    
-    console.log(`\n✅ TEST TOKEN GENERATED FOR: ${tenant.name}`);
-    console.log(`   Domain: ${tenant.domain}`);
-    console.log(`   Tenant ID: ${tenant.id}`);
-    console.log('='.repeat(80));
-    console.log('\n📋 COPY THIS TOKEN:\n');
-    console.log(token);
-    console.log('\n' + '='.repeat(80));
-    console.log('\n🔧 PASTE THIS IN BROWSER CONSOLE:\n');
-    console.log(`localStorage.setItem('auth_token', '${token}');`);
-    console.log(`localStorage.setItem('token', '${token}');`);
-    console.log('location.reload();');
-    console.log('\n' + '='.repeat(80) + '\n');
-  } else {
-    // Generate tokens for all tenants
-    console.log('\n✅ GENERATING TOKENS FOR ALL TENANTS\n');
-    console.log('='.repeat(80));
-    
-    tenants.forEach((tenant, idx) => {
-      const token = generateToken(tenant.id, tenant.domain, tenant.name);
-      
-      console.log(`\n${idx + 1}. ${tenant.name} (${tenant.domain})`);
-      console.log('   Tenant ID:', tenant.id);
-      console.log('   Token:', token);
-      console.log('\n   Browser Console Commands:');
-      console.log(`   localStorage.setItem('auth_token', '${token}');`);
-      console.log(`   localStorage.setItem('token', '${token}');`);
-      console.log('   location.reload();');
-      console.log('\n' + '-'.repeat(80));
+  // Find requested tenant
+  const tenant = tenants.find(t => 
+    t.domain === requestedTenant || 
+    t.id === requestedTenant ||
+    t.name.toLowerCase() === requestedTenant.toLowerCase()
+  );
+  
+  if (!tenant) {
+    console.error(`\n❌ Tenant "${requestedTenant}" not found!`);
+    console.log('\n📋 Available tenants:');
+    tenants.forEach(t => {
+      console.log(`   - ${t.domain} (${t.name})`);
     });
-    
-    console.log('\n💡 TIP: Run with tenant domain to generate token for specific tenant:');
-    if (tenants.length > 0) {
-      console.log(`   node scripts/generate-test-token.js ${tenants[0].domain}\n`);
-    } else {
-      console.log('   node scripts/generate-test-token.js <tenant-domain>\n');
-    }
+    process.exit(1);
   }
   
-  // Disconnect from database
-  try {
-    const prisma = await getPrismaClient();
-    await prisma.$disconnect();
-  } catch (error) {
-    // Ignore disconnect errors
-  }
+  const token = generateToken(tenant.id, tenant.domain, tenant.name);
+  
+  console.log(`\n✅ TEST TOKEN GENERATED FOR: ${tenant.name}`);
+  console.log(`   Domain: ${tenant.domain}`);
+  console.log(`   Tenant ID: ${tenant.id}`);
+  console.log('='.repeat(80));
+  console.log('\n📋 COPY THIS TOKEN:\n');
+  console.log(token);
+  console.log('\n' + '='.repeat(80));
+  console.log('\n🔧 PASTE THIS IN BROWSER CONSOLE:\n');
+  console.log(`localStorage.setItem('auth_token', '${token}');`);
+  console.log(`localStorage.setItem('token', '${token}');`);
+  console.log('location.reload();');
+  console.log('\n' + '='.repeat(80) + '\n');
 }
 
 // Run main function
