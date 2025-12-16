@@ -37,8 +37,8 @@ function validate(data, schema) {
  */
 const schemas = {
   tenantId: Joi.string().min(1).default('default'),
-  userId: Joi.string().min(1).required(),
-  query: Joi.string().min(1).max(1000).required(),
+  userId: Joi.string().min(1).default('anonymous'), // CRITICAL FIX: default instead of required, allows 'anonymous'
+  query: Joi.string().min(1).max(2000).required(), // CRITICAL FIX: increased from 1000 to 2000 to match SUPPORT MODE
   sessionId: Joi.string().optional(),
 };
 

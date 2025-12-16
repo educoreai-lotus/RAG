@@ -25,20 +25,20 @@ function generateConversationId() {
  * Query request validation schema
  */
 const queryRequestSchema = Joi.object({
-  query: schemas.query,
+  query: schemas.query, // Now max(2000) instead of max(1000)
   tenant_id: Joi.string().min(1).default('default'),
   conversation_id: Joi.string().optional(), // Optional conversation identifier for multi-turn conversations
   context: Joi.object({
-    user_id: schemas.userId,
+    user_id: schemas.userId, // Now default('anonymous') instead of required
     session_id: schemas.sessionId,
     role: Joi.string().valid('admin', 'administrator', 'hr', 'manager', 'trainer', 'employee', 'user', 'learner', 'anonymous', 'guest').optional(),
     tags: Joi.array().items(Joi.string()).optional(),
-  }).optional(),
+  }).optional().default({}), // CRITICAL FIX: default empty object if not provided
   options: Joi.object({
     max_results: Joi.number().integer().min(1).max(20).default(5),
     min_confidence: Joi.number().min(0).max(1).default(0.7),
     include_metadata: Joi.boolean().default(true),
-  }).optional(),
+  }).optional().default({}), // CRITICAL FIX: default empty object if not provided
 });
 
 /**
