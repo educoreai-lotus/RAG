@@ -52,19 +52,37 @@ export const ragApi = createApi({
       const state = getState();
       const { token, userId, tenantId } = state.auth;
       
-      // Add Authorization header
-      if (token) {
-        headers.set('authorization', `Bearer ${token}`);
+      // CRITICAL FIX: Validate token before adding Authorization header (same as api.js)
+      // Prevent sending "Bearer undefined" or invalid tokens
+      if (token && typeof token === 'string' && token.trim().length > 0 && token !== 'undefined' && token !== 'null') {
+        const cleanToken = token.trim();
+        headers.set('authorization', `Bearer ${cleanToken}`);
+        console.log('🔐 [RTK Query] Authorization header added (token length:', cleanToken.length, ')');
+      } else {
+        console.warn('⚠️ [RTK Query] No valid token in Redux auth state:', {
+          hasToken: !!token,
+          tokenType: typeof token,
+          tokenValue: token ? (typeof token === 'string' ? token.substring(0, 20) + '...' : String(token)) : 'null/undefined',
+        });
       }
       
       // Add user identity headers
-      if (userId) {
-        headers.set('X-User-Id', userId);
+      if (userId && userId !== 'undefined' && userId !== 'null') {
+        headers.set('X-User-Id', String(userId));
       }
       
-      if (tenantId) {
-        headers.set('X-Tenant-Id', tenantId);
+      if (tenantId && tenantId !== 'undefined' && tenantId !== 'null') {
+        headers.set('X-Tenant-Id', String(tenantId));
       }
+      
+      // Log headers for debugging
+      console.log('🔐 [RTK Query] Headers prepared:', {
+        hasAuth: !!headers.get('authorization'),
+        hasUserId: !!headers.get('X-User-Id'),
+        hasTenantId: !!headers.get('X-Tenant-Id'),
+        userId: headers.get('X-User-Id'),
+        tenantId: headers.get('X-Tenant-Id'),
+      });
       
       return headers;
     },
