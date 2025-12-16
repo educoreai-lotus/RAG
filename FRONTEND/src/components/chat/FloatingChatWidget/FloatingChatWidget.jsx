@@ -375,7 +375,8 @@ const FloatingChatWidget = ({
           const sessionId = sessionStorage.getItem('chatbot_session_id') || `session_${Date.now()}`;
           sessionStorage.setItem('chatbot_session_id', sessionId);
           
-          const ragResponse = await submitQuery({ 
+          // CRITICAL: Log what we're sending
+          const requestPayload = {
             query: text,
             tenant_id: currentTenantId,
             context: {
@@ -387,7 +388,16 @@ const FloatingChatWidget = ({
               min_confidence: 0.7,
               include_metadata: true,
             },
-          }).unwrap();
+          };
+          
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📤 [FloatingChatWidget] Sending CHAT MODE request');
+          console.log('📤 Payload:', JSON.stringify(requestPayload, null, 2));
+          console.log('📤 Current User ID:', currentUserId);
+          console.log('📤 Current Tenant ID:', currentTenantId);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          
+          const ragResponse = await submitQuery(requestPayload).unwrap();
           
           // Use RAG API response (from OpenAI)
           botMessages.push({

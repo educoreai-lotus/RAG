@@ -46,47 +46,86 @@ const baseUrl = getBaseUrl();
 
 export const ragApi = createApi({
   reducerPath: 'ragApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl,
-    prepareHeaders: (headers, { getState }) => {
-      const state = getState();
-      const { token, userId, tenantId } = state.auth;
-      
-      // CRITICAL FIX: Validate token before adding Authorization header (same as api.js)
-      // Prevent sending "Bearer undefined" or invalid tokens
-      if (token && typeof token === 'string' && token.trim().length > 0 && token !== 'undefined' && token !== 'null') {
-        const cleanToken = token.trim();
-        headers.set('authorization', `Bearer ${cleanToken}`);
-        console.log('🔐 [RTK Query] Authorization header added (token length:', cleanToken.length, ')');
-      } else {
-        console.warn('⚠️ [RTK Query] No valid token in Redux auth state:', {
+  baseQuery: async (args, api, extraOptions) => {
+    // CRITICAL: Log base URL and request details
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 [RTK Query] Starting request');
+    console.log('🚀 Base URL:', baseUrl);
+    console.log('🚀 Request args:', JSON.stringify(args, null, 2));
+    console.log('🚀 Full URL will be:', `${baseUrl}${args.url}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Use fetchBaseQuery with custom error handling
+    const result = await fetchBaseQuery({
+      baseUrl,
+      prepareHeaders: (headers, { getState }) => {
+        const state = getState();
+        const { token, userId, tenantId } = state.auth;
+        
+        console.log('🔐 [RTK Query] Preparing headers...');
+        console.log('🔐 Auth state:', {
           hasToken: !!token,
           tokenType: typeof token,
-          tokenValue: token ? (typeof token === 'string' ? token.substring(0, 20) + '...' : String(token)) : 'null/undefined',
+          hasUserId: !!userId,
+          hasTenantId: !!tenantId,
         });
-      }
-      
-      // Add user identity headers
-      if (userId && userId !== 'undefined' && userId !== 'null') {
-        headers.set('X-User-Id', String(userId));
-      }
-      
-      if (tenantId && tenantId !== 'undefined' && tenantId !== 'null') {
-        headers.set('X-Tenant-Id', String(tenantId));
-      }
-      
-      // Log headers for debugging
-      console.log('🔐 [RTK Query] Headers prepared:', {
-        hasAuth: !!headers.get('authorization'),
-        hasUserId: !!headers.get('X-User-Id'),
-        hasTenantId: !!headers.get('X-Tenant-Id'),
-        userId: headers.get('X-User-Id'),
-        tenantId: headers.get('X-Tenant-Id'),
-      });
-      
-      return headers;
-    },
-  }),
+        
+        // CRITICAL FIX: Validate token before adding Authorization header (same as api.js)
+        // Prevent sending "Bearer undefined" or invalid tokens
+        if (token && typeof token === 'string' && token.trim().length > 0 && token !== 'undefined' && token !== 'null') {
+          const cleanToken = token.trim();
+          headers.set('authorization', `Bearer ${cleanToken}`);
+          console.log('✅ [RTK Query] Authorization header added (token length:', cleanToken.length, ')');
+        } else {
+          console.warn('⚠️ [RTK Query] No valid token in Redux auth state:', {
+            hasToken: !!token,
+            tokenType: typeof token,
+            tokenValue: token ? (typeof token === 'string' ? token.substring(0, 20) + '...' : String(token)) : 'null/undefined',
+          });
+        }
+        
+        // Add user identity headers
+        if (userId && userId !== 'undefined' && userId !== 'null') {
+          headers.set('X-User-Id', String(userId));
+          console.log('✅ [RTK Query] X-User-Id header added:', userId);
+        }
+        
+        if (tenantId && tenantId !== 'undefined' && tenantId !== 'null') {
+          headers.set('X-Tenant-Id', String(tenantId));
+          console.log('✅ [RTK Query] X-Tenant-Id header added:', tenantId);
+        }
+        
+        // Log headers for debugging
+        console.log('🔐 [RTK Query] Final headers:', {
+          hasAuth: !!headers.get('authorization'),
+          hasUserId: !!headers.get('X-User-Id'),
+          hasTenantId: !!headers.get('X-Tenant-Id'),
+          userId: headers.get('X-User-Id'),
+          tenantId: headers.get('X-Tenant-Id'),
+        });
+        
+        return headers;
+      },
+    })(args, api, extraOptions);
+    
+    // CRITICAL: Log response or error
+    if (result.error) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ [RTK Query] Request failed');
+      console.error('❌ Error status:', result.error.status);
+      console.error('❌ Error data:', JSON.stringify(result.error.data, null, 2));
+      console.error('❌ Error:', result.error);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } else {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('✅ [RTK Query] Request succeeded');
+      console.log('✅ Response status:', result.meta?.response?.status);
+      console.log('✅ Response data keys:', result.data ? Object.keys(result.data) : 'no data');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+    
+    return result;
+  },
   tagTypes: ['Query', 'Recommendation'],
   endpoints: (builder) => ({
     submitQuery: builder.mutation({
