@@ -1,11 +1,14 @@
 /**
  * Microservice Support Controller
- * Handles proxy requests for Assessment and DevLab microservices
+ * Handles proxy requests for Assessment and DevLab microservices.
+ * In SUPPORT mode we can forward requests to the Coordinator (gRPC),
+ * which then routes to the appropriate microservice (e.g. DevLab/Assessment).
  */
 
 import { logger } from '../utils/logger.util.js';
 import Joi from 'joi';
 import { validate } from '../utils/validation.util.js';
+import { callCoordinatorRoute, processCoordinatorResponse } from '../communication/communicationManager.service.js';
 
 /**
  * Support request validation schema
@@ -187,28 +190,118 @@ export async function devlabSupport(req, res, next) {
       });
     }
 
+    const userId = metadata.user_id || req.headers['x-user-id'];
+    const tenantId = metadata.tenant_id || req.headers['x-tenant-id'];
+
     logger.info('DevLab support request', {
       query,
       session_id,
-      user_id: metadata.user_id || req.headers['x-user-id'],
-      tenant_id: metadata.tenant_id || req.headers['x-tenant-id'],
-      source: 'devlab',
+      user_id: userId,
+      tenant_id: tenantId,
+      source: 'devlab_support',
     });
 
-    // TODO: Forward to actual DevLab microservice
-    // For now, return a mock response
-    // In production, this should forward to the DevLab microservice API
-    
-    console.log('🔍 [DEVLAB SUPPORT] Preparing response...');
-    const response = {
-      response: `DevLab Support: I received your question "${query}". This is a proxy response. In production, this will be forwarded to the DevLab microservice.`,
+    // ═══════════════════════════════════════════════════════
+    // FORWARD TO COORDINATOR (gRPC) → DEVLAB MICROSERVICE
+    // ═══════════════════════════════════════════════════════
+    console.log('🔄 [DEVLAB SUPPORT] Forwarding to Coordinator via gRPC...');
+    console.log('🔄 [DEVLAB SUPPORT] Coordinator payload:', JSON.stringify({
+      tenant_id: tenantId,
+      user_id: userId,
+      query_text: query,
+      metadata: {
+        ...metadata,
+        support_mode: 'DevLab',
+        source: 'devlab_support',
+        session_id,
+      },
+    }, null, 2));
+
+    const coordinatorResponse = await callCoordinatorRoute({
+      tenant_id: tenantId,
+      user_id: userId,
+      query_text: query,
+      metadata: {
+        ...metadata,
+        support_mode: 'DevLab',
+        source: 'devlab_support',
+        session_id,
+      },
+    });
+
+    if (!coordinatorResponse) {
+      console.error('❌ [DEVLAB SUPPORT] No response from Coordinator/DevLab');
+      return res.status(502).json({
+        error: 'Bad Gateway',
+        message: 'No response from Coordinator/DevLab service',
+      });
+    }
+
+    console.log('✅ [DEVLAB SUPPORT] Raw Coordinator response:', JSON.stringify(coordinatorResponse, null, 2));
+
+    const processed = processCoordinatorResponse(coordinatorResponse);
+    if (!processed) {
+      console.error('❌ [DEVLAB SUPPORT] Failed to process Coordinator response');
+      return res.status(502).json({
+        error: 'Bad Gateway',
+        message: 'Failed to process response from DevLab service',
+      });
+    }
+
+    // Try to extract a human-readable answer from business data / envelope
+    let answer = null;
+    const businessData = processed.business_data || processed.business_data?.data;
+
+    if (businessData) {
+      if (typeof businessData === 'string') {
+        answer = businessData;
+      } else if (typeof businessData === 'object') {
+        if (typeof businessData.answer === 'string') {
+          answer = businessData.answer;
+        } else if (typeof businessData.message === 'string') {
+          answer = businessData.message;
+        } else if (typeof businessData.text === 'string') {
+          answer = businessData.text;
+        }
+      }
+    }
+
+    // Fallback: try envelope payload
+    if (!answer && processed.envelope?.payload) {
+      const payload = processed.envelope.payload;
+      if (typeof payload === 'string') {
+        answer = payload;
+      } else if (payload && typeof payload === 'object') {
+        if (typeof payload.answer === 'string') {
+          answer = payload.answer;
+        } else if (typeof payload.message === 'string') {
+          answer = payload.message;
+        } else if (typeof payload.text === 'string') {
+          answer = payload.text;
+        }
+      }
+    }
+
+    if (!answer) {
+      console.warn('⚠️ [DEVLAB SUPPORT] No explicit answer field in Coordinator response, returning summary');
+      answer = 'DevLab processed your request but did not return a direct answer. Please check DevLab logs for details.';
+    }
+
+    const responsePayload = {
+      response: answer,
       timestamp: new Date().toISOString(),
       session_id,
+      metadata: {
+        target_services: processed.target_services || [],
+        successful_service: processed.successful_service,
+        quality_score: processed.quality_score,
+        rank_used: processed.rank_used,
+      },
     };
 
     console.log('✅ [DEVLAB SUPPORT] Sending success response');
-    console.log('✅ [DEVLAB SUPPORT] Response:', JSON.stringify(response, null, 2));
-    res.json(response);
+    console.log('✅ [DEVLAB SUPPORT] Response:', JSON.stringify(responsePayload, null, 2));
+    res.json(responsePayload);
   } catch (error) {
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error('❌ [DEVLAB SUPPORT] ERROR CAUGHT:');
