@@ -51,7 +51,8 @@ export function criticalDebugLogger(req, res, next) {
     
     // For POST/PUT requests, log truncated body
     if (req.method === 'POST' || req.method === 'PUT') {
-      console.log(`🔍 [BODY] ${JSON.stringify(req.body).substring(0, 200)}`);
+      const bodyStr = req.body ? JSON.stringify(req.body) : 'undefined';
+      console.log(`🔍 [BODY] ${bodyStr.length > 200 ? bodyStr.substring(0, 200) : bodyStr}`);
     } else {
       console.log(`🔍 [BODY] N/A`);
     }
