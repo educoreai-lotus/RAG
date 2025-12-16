@@ -154,7 +154,11 @@ async function main() {
     });
     
     console.log('\n💡 TIP: Run with tenant domain to generate token for specific tenant:');
-    console.log(`   node scripts/generate-test-token.js ${tenants[0]?.domain || 'default'}\n`);
+    if (tenants.length > 0) {
+      console.log(`   node scripts/generate-test-token.js ${tenants[0].domain}\n`);
+    } else {
+      console.log('   node scripts/generate-test-token.js <tenant-domain>\n');
+    }
   }
   
   // Disconnect from database
