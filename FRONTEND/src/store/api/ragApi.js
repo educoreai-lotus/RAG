@@ -44,6 +44,16 @@ const getBaseUrl = () => {
 
 const baseUrl = getBaseUrl();
 
+// CRITICAL: Log base URL determination
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('🌐 [RTK Query] Base URL determined:');
+console.log('🌐 Base URL:', baseUrl);
+console.log('🌐 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || 'NOT SET');
+console.log('🌐 VITE_API_URL:', import.meta.env.VITE_API_URL || 'NOT SET');
+console.log('🌐 window.EDUCORE_BACKEND_URL:', typeof window !== 'undefined' ? window.EDUCORE_BACKEND_URL : 'N/A (SSR)');
+console.log('🌐 window.location.hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A (SSR)');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
 export const ragApi = createApi({
   reducerPath: 'ragApi',
   baseQuery: async (args, api, extraOptions) => {
