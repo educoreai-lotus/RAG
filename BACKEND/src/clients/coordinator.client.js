@@ -421,14 +421,48 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
     
     // Convert metadata to map<string, string> format (proto requirement)
     // All values must be strings for map<string, string>
+    // CRITICAL FIX: Handle objects/arrays properly by JSON.stringify
     const contextMap = {};
     if (metadata && typeof metadata === 'object') {
       Object.entries(metadata).forEach(([key, value]) => {
-        // Convert all values to strings
+        // Convert all values to strings - handle objects/arrays properly
         if (value !== null && value !== undefined) {
-          contextMap[key] = String(value);
+          let stringValue;
+          
+          // Handle objects and arrays by JSON stringifying them
+          if (typeof value === 'object' && !(value instanceof Date)) {
+            try {
+              stringValue = JSON.stringify(value);
+            } catch (e) {
+              logger.warn('[Coordinator] Failed to stringify metadata value', {
+                key,
+                error: e.message,
+              });
+              stringValue = String(value);
+            }
+          } else if (value instanceof Date) {
+            stringValue = value.toISOString();
+          } else {
+            stringValue = String(value);
+          }
+          
+          contextMap[key] = stringValue;
         }
       });
+    }
+    
+    // Validate envelope_json serialization
+    let envelopeJson;
+    try {
+      envelopeJson = JSON.stringify(envelope);
+      // Validate it's valid JSON by parsing it back
+      JSON.parse(envelopeJson);
+    } catch (e) {
+      logger.error('[Coordinator] Failed to serialize envelope_json', {
+        error: e.message,
+        envelope: envelope,
+      });
+      throw new Error(`envelope_json serialization failed: ${e.message}`);
     }
     
     // Build request with all required fields
@@ -436,21 +470,63 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
       tenant_id: tenant_id || '',
       user_id: user_id || '',
       query_text: query_text,
-      requester_service: 'rag-service',  // ✅ Added
-      context: contextMap,                // ✅ Converted to map<string, string>
-      envelope_json: JSON.stringify(envelope)  // ✅ Added
+      requester_service: 'rag-service',
+      context: contextMap,  // ✅ Properly converted to map<string, string>
+      envelope_json: envelopeJson  // ✅ Validated JSON string
     };
 
-    // Generate signed metadata
-    const signedMetadata = createSignedMetadata(request);
+    // 🔍 DEBUG: Log request details before sending
+    logger.info('═══════════════════════════════════');
+    logger.info('🔍 [COORDINATOR] REQUEST TO COORDINATOR');
+    logger.info('═══════════════════════════════════');
+    logger.info('tenant_id type:', typeof request.tenant_id);
+    logger.info('user_id type:', typeof request.user_id);
+    logger.info('query_text type:', typeof request.query_text);
+    logger.info('query_text length:', request.query_text?.length);
+    logger.info('requester_service type:', typeof request.requester_service);
+    logger.info('context type:', typeof request.context);
+    logger.info('context keys:', Object.keys(request.context || {}));
+    logger.info('context values types:', 
+      Object.entries(request.context || {}).map(([k, v]) => 
+        `${k}: ${typeof v}`
+      ).join(', ')
+    );
+    logger.info('envelope_json type:', typeof request.envelope_json);
+    logger.info('envelope_json length:', request.envelope_json?.length);
+    logger.info('envelope_json first 200 chars:', 
+      request.envelope_json?.substring(0, 200)
+    );
+    logger.info('═══════════════════════════════════');
+
+    // Generate signed metadata (can be disabled for testing)
+    const SIGNATURE_ENABLED = process.env.COORDINATOR_SIGNATURE_ENABLED !== 'false'; // Default: enabled
+    let signedMetadata;
+    
+    if (SIGNATURE_ENABLED) {
+      try {
+        signedMetadata = createSignedMetadata(request);
+        logger.info('[Coordinator] Generated signature metadata', {
+          metadataKeys: signedMetadata ? Object.keys(signedMetadata.getMap ? signedMetadata.getMap() : {}) : [],
+        });
+      } catch (error) {
+        logger.error('[Coordinator] Failed to generate signature', {
+          error: error.message,
+        });
+        // Fallback to empty metadata if signature fails
+        signedMetadata = new grpc.Metadata();
+      }
+    } else {
+      logger.warn('[Coordinator] Signature disabled for testing');
+      signedMetadata = new grpc.Metadata();
+    }
 
     // Make gRPC call with signature
-    logger.info('[Coordinator] Calling Route RPC with signature');
+    logger.info('[Coordinator] Calling Route RPC');
     const response = await grpcCall(
       client,
       'Route',
       request,
-      signedMetadata,  // ✅ Include signature metadata
+      signedMetadata,
       GRPC_TIMEOUT
     );
 
@@ -617,14 +693,48 @@ export async function batchSync({
     
     // Convert metadata to map<string, string> format (proto requirement)
     // All values must be strings for map<string, string>
+    // CRITICAL FIX: Handle objects/arrays properly by JSON.stringify
     const contextMap = {};
     if (metadata && typeof metadata === 'object') {
       Object.entries(metadata).forEach(([key, value]) => {
-        // Convert all values to strings
+        // Convert all values to strings - handle objects/arrays properly
         if (value !== null && value !== undefined) {
-          contextMap[key] = String(value);
+          let stringValue;
+          
+          // Handle objects and arrays by JSON stringifying them
+          if (typeof value === 'object' && !(value instanceof Date)) {
+            try {
+              stringValue = JSON.stringify(value);
+            } catch (e) {
+              logger.warn('[Coordinator] Failed to stringify metadata value in batch sync', {
+                key,
+                error: e.message,
+              });
+              stringValue = String(value);
+            }
+          } else if (value instanceof Date) {
+            stringValue = value.toISOString();
+          } else {
+            stringValue = String(value);
+          }
+          
+          contextMap[key] = stringValue;
         }
       });
+    }
+    
+    // Validate envelope_json serialization
+    let envelopeJson;
+    try {
+      envelopeJson = JSON.stringify(envelope);
+      // Validate it's valid JSON by parsing it back
+      JSON.parse(envelopeJson);
+    } catch (e) {
+      logger.error('[Coordinator] Failed to serialize envelope_json in batch sync', {
+        error: e.message,
+        envelope: envelope,
+      });
+      throw new Error(`envelope_json serialization failed: ${e.message}`);
     }
     
     // Build request with all required fields
@@ -633,18 +743,52 @@ export async function batchSync({
       user_id: user_id || '',
       query_text: query_text,
       requester_service: 'rag-service',
-      context: contextMap,  // ⭐ CRITICAL - converted to map<string, string>
-      envelope_json: JSON.stringify(envelope)
+      context: contextMap,  // ⭐ CRITICAL - properly converted to map<string, string>
+      envelope_json: envelopeJson  // ✅ Validated JSON string
     };
 
-    // Generate signed metadata
-    const signedMetadata = createSignedMetadata(request);
+    // 🔍 DEBUG: Log request details before sending
+    logger.info('═══════════════════════════════════');
+    logger.info('🔍 [COORDINATOR] BATCH SYNC REQUEST');
+    logger.info('═══════════════════════════════════');
+    logger.info('target_service:', metadata?.target_service);
+    logger.info('sync_type:', metadata?.sync_type);
+    logger.info('tenant_id type:', typeof request.tenant_id);
+    logger.info('user_id type:', typeof request.user_id);
+    logger.info('context keys:', Object.keys(request.context || {}));
+    logger.info('context values types:', 
+      Object.entries(request.context || {}).map(([k, v]) => 
+        `${k}: ${typeof v}`
+      ).join(', ')
+    );
+    logger.info('envelope_json length:', request.envelope_json?.length);
+    logger.info('═══════════════════════════════════');
+
+    // Generate signed metadata (can be disabled for testing)
+    const SIGNATURE_ENABLED = process.env.COORDINATOR_SIGNATURE_ENABLED !== 'false'; // Default: enabled
+    let signedMetadata;
+    
+    if (SIGNATURE_ENABLED) {
+      try {
+        signedMetadata = createSignedMetadata(request);
+        logger.info('[Coordinator] Generated signature metadata for batch sync');
+      } catch (error) {
+        logger.error('[Coordinator] Failed to generate signature for batch sync', {
+          error: error.message,
+        });
+        // Fallback to empty metadata if signature fails
+        signedMetadata = new grpc.Metadata();
+      }
+    } else {
+      logger.warn('[Coordinator] Signature disabled for testing (batch sync)');
+      signedMetadata = new grpc.Metadata();
+    }
 
     // Use longer timeout for batch operations (5 minutes)
     const BATCH_TIMEOUT = parseInt(process.env.BATCH_SYNC_TIMEOUT || '300', 10) * 1000; // Default 5 minutes
 
     // Make gRPC call with signature
-    logger.info('[Coordinator] Calling Route RPC for batch sync with signature');
+    logger.info('[Coordinator] Calling Route RPC for batch sync');
     const response = await grpcCall(
       client,
       'Route',
