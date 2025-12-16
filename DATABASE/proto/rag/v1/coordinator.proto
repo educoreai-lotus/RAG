@@ -18,14 +18,13 @@ service CoordinatorService {
 /**
  * Route Request
  * Sent by RAG when real-time microservice data is needed
+ * ⭐ CRITICAL: Must match Coordinator's proto structure exactly
  */
 message RouteRequest {
   string tenant_id = 1;                    // Tenant identifier
   string user_id = 2;                      // User identifier
   string query_text = 3;                   // Original user query
-  string requester_service = 4;            // Service making the request (e.g., 'rag-service')
-  map<string, string> context = 5;         // Additional context (query context, required fields, etc.)
-  string envelope_json = 6;                 // Universal Envelope JSON string
+  map<string, string> metadata = 4;       // ⭐ All additional data goes here (requester_service, envelope_json, target_service, sync_type, etc.)
 }
 
 /**

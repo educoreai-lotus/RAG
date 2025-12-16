@@ -419,12 +419,23 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
     // Create Universal Envelope
     const envelope = createEnvelope(tenant_id, user_id, query_text, metadata);
     
-    // Convert metadata to map<string, string> format (proto requirement)
-    // All values must be strings for map<string, string>
-    // CRITICAL FIX: Handle objects/arrays properly by JSON.stringify
-    const contextMap = {};
+    // ⭐ CRITICAL: Build metadata map - EVERYTHING goes here to match Coordinator's proto
+    // Coordinator expects: RouteRequest { tenant_id, user_id, query_text, metadata }
+    // All additional fields (requester_service, envelope_json, etc.) go in metadata map
+    const metadataMap = {
+      requester_service: 'rag-service',
+      source: metadata.source || 'rag',
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Convert all incoming metadata to strings and add to metadataMap
     if (metadata && typeof metadata === 'object') {
       Object.entries(metadata).forEach(([key, value]) => {
+        // Skip fields that are already handled or shouldn't be in metadata
+        if (key === 'source' && metadataMap.source) {
+          return; // Already set above
+        }
+        
         // Convert all values to strings - handle objects/arrays properly
         if (value !== null && value !== undefined) {
           let stringValue;
@@ -446,17 +457,17 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
             stringValue = String(value);
           }
           
-          contextMap[key] = stringValue;
+          metadataMap[key] = stringValue;
         }
       });
     }
     
-    // Validate envelope_json serialization
-    let envelopeJson;
+    // Add envelope_json to metadata (not as separate field!)
     try {
-      envelopeJson = JSON.stringify(envelope);
+      const envelopeJson = JSON.stringify(envelope);
       // Validate it's valid JSON by parsing it back
       JSON.parse(envelopeJson);
+      metadataMap.envelope_json = envelopeJson;
     } catch (e) {
       logger.error('[Coordinator] Failed to serialize envelope_json', {
         error: e.message,
@@ -465,14 +476,13 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
       throw new Error(`envelope_json serialization failed: ${e.message}`);
     }
     
-    // Build request with all required fields
+    // ⭐ Build request matching Coordinator's proto structure
+    // Coordinator expects: { tenant_id, user_id, query_text, metadata }
     const request = {
       tenant_id: tenant_id || '',
       user_id: user_id || '',
       query_text: query_text,
-      requester_service: 'rag-service',
-      context: contextMap,  // ✅ Properly converted to map<string, string>
-      envelope_json: envelopeJson  // ✅ Validated JSON string
+      metadata: metadataMap  // ⭐ Everything in metadata map!
     };
 
     // 🔍 DEBUG: Log request details before sending
@@ -483,19 +493,18 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
     logger.info('user_id type:', typeof request.user_id);
     logger.info('query_text type:', typeof request.query_text);
     logger.info('query_text length:', request.query_text?.length);
-    logger.info('requester_service type:', typeof request.requester_service);
-    logger.info('context type:', typeof request.context);
-    logger.info('context keys:', Object.keys(request.context || {}));
-    logger.info('context values types:', 
-      Object.entries(request.context || {}).map(([k, v]) => 
+    logger.info('metadata type:', typeof request.metadata);
+    logger.info('metadata keys:', Object.keys(request.metadata || {}));
+    logger.info('metadata values types:', 
+      Object.entries(request.metadata || {}).map(([k, v]) => 
         `${k}: ${typeof v}`
       ).join(', ')
     );
-    logger.info('envelope_json type:', typeof request.envelope_json);
-    logger.info('envelope_json length:', request.envelope_json?.length);
-    logger.info('envelope_json first 200 chars:', 
-      request.envelope_json?.substring(0, 200)
-    );
+    logger.info('has_requester_service:', !!request.requester_service, '(should be false)');
+    logger.info('has_context:', !!request.context, '(should be false)');
+    logger.info('has_envelope_json:', !!request.envelope_json, '(should be false)');
+    logger.info('envelope_json in metadata:', !!request.metadata?.envelope_json);
+    logger.info('envelope_json length:', request.metadata?.envelope_json?.length);
     logger.info('═══════════════════════════════════');
 
     // Generate signed metadata (can be disabled for testing)
@@ -688,47 +697,33 @@ export async function batchSync({
       has_since: !!since,
     });
 
-    // Create Universal Envelope
-    const envelope = createEnvelope(tenant_id, user_id, query_text, metadata);
+    // ⭐ CRITICAL: Build metadata map - EVERYTHING goes here to match Coordinator's proto
+    // Coordinator expects: RouteRequest { tenant_id, user_id, query_text, metadata }
+    // All additional fields (target_service, sync_type, envelope_json, etc.) go in metadata map
+    const metadataMap = {
+      target_service: target_service,      // ⭐ CRITICAL - tells Coordinator where to route
+      sync_type: sync_type,                // ⭐ CRITICAL - triggers batch mode
+      page: page.toString(),
+      limit: limit.toString(),
+      requester_service: 'rag-service',
+      source: 'rag-batch-sync',
+      timestamp: new Date().toISOString(),
+    };
     
-    // Convert metadata to map<string, string> format (proto requirement)
-    // All values must be strings for map<string, string>
-    // CRITICAL FIX: Handle objects/arrays properly by JSON.stringify
-    const contextMap = {};
-    if (metadata && typeof metadata === 'object') {
-      Object.entries(metadata).forEach(([key, value]) => {
-        // Convert all values to strings - handle objects/arrays properly
-        if (value !== null && value !== undefined) {
-          let stringValue;
-          
-          // Handle objects and arrays by JSON stringifying them
-          if (typeof value === 'object' && !(value instanceof Date)) {
-            try {
-              stringValue = JSON.stringify(value);
-            } catch (e) {
-              logger.warn('[Coordinator] Failed to stringify metadata value in batch sync', {
-                key,
-                error: e.message,
-              });
-              stringValue = String(value);
-            }
-          } else if (value instanceof Date) {
-            stringValue = value.toISOString();
-          } else {
-            stringValue = String(value);
-          }
-          
-          contextMap[key] = stringValue;
-        }
-      });
+    // Add since date if provided (for incremental sync)
+    if (since) {
+      metadataMap.since = since;
     }
     
-    // Validate envelope_json serialization
-    let envelopeJson;
+    // Create Universal Envelope and add to metadata
+    const envelope = createEnvelope(tenant_id, user_id, query_text, metadataMap);
+    
+    // Add envelope_json to metadata (not as separate field!)
     try {
-      envelopeJson = JSON.stringify(envelope);
+      const envelopeJson = JSON.stringify(envelope);
       // Validate it's valid JSON by parsing it back
       JSON.parse(envelopeJson);
+      metadataMap.envelope_json = envelopeJson;
     } catch (e) {
       logger.error('[Coordinator] Failed to serialize envelope_json in batch sync', {
         error: e.message,
@@ -737,31 +732,35 @@ export async function batchSync({
       throw new Error(`envelope_json serialization failed: ${e.message}`);
     }
     
-    // Build request with all required fields
+    // ⭐ Build request matching Coordinator's proto structure
+    // Coordinator expects: { tenant_id, user_id, query_text, metadata }
     const request = {
       tenant_id: tenant_id || '',
       user_id: user_id || '',
       query_text: query_text,
-      requester_service: 'rag-service',
-      context: contextMap,  // ⭐ CRITICAL - properly converted to map<string, string>
-      envelope_json: envelopeJson  // ✅ Validated JSON string
+      metadata: metadataMap  // ⭐ Everything in metadata map!
     };
 
     // 🔍 DEBUG: Log request details before sending
     logger.info('═══════════════════════════════════');
     logger.info('🔍 [COORDINATOR] BATCH SYNC REQUEST');
     logger.info('═══════════════════════════════════');
-    logger.info('target_service:', metadata?.target_service);
-    logger.info('sync_type:', metadata?.sync_type);
+    logger.info('target_service:', metadataMap.target_service);
+    logger.info('sync_type:', metadataMap.sync_type);
     logger.info('tenant_id type:', typeof request.tenant_id);
     logger.info('user_id type:', typeof request.user_id);
-    logger.info('context keys:', Object.keys(request.context || {}));
-    logger.info('context values types:', 
-      Object.entries(request.context || {}).map(([k, v]) => 
+    logger.info('metadata type:', typeof request.metadata);
+    logger.info('metadata keys:', Object.keys(request.metadata || {}));
+    logger.info('metadata values types:', 
+      Object.entries(request.metadata || {}).map(([k, v]) => 
         `${k}: ${typeof v}`
       ).join(', ')
     );
-    logger.info('envelope_json length:', request.envelope_json?.length);
+    logger.info('has_requester_service:', !!request.requester_service, '(should be false)');
+    logger.info('has_context:', !!request.context, '(should be false)');
+    logger.info('has_envelope_json:', !!request.envelope_json, '(should be false)');
+    logger.info('envelope_json in metadata:', !!request.metadata?.envelope_json);
+    logger.info('envelope_json length:', request.metadata?.envelope_json?.length);
     logger.info('═══════════════════════════════════');
 
     // Generate signed metadata (can be disabled for testing)
