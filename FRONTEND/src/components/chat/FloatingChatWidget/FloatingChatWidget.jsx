@@ -17,7 +17,8 @@ import { detectModeChange, getModeSpecificResponse } from '../../../utils/modeDe
 import { getModeSpecificRecommendations } from '../../../utils/recommendations.js';
 import { proxyToMicroservice } from '../../../services/microserviceProxy.js';
 import { useSubmitQueryMutation, useGetRecommendationsQuery } from '../../../store/api/ragApi.js';
-import { useAuth } from '../../../hooks/useAuth.js';
+import { setUserContext } from '../../../store/slices/auth.slice.js';
+import { store } from '../../../store/store.js';
 import ChatWidgetButton from '../../chatbot/ChatWidgetButton/ChatWidgetButton.jsx';
 import ChatPanel from '../../chatbot/ChatPanel/ChatPanel.jsx';
 
@@ -36,21 +37,48 @@ const FloatingChatWidget = ({
   const isLoading = useSelector((state) => state.chat.isLoading);
   const currentMode = useSelector((state) => state.chatMode.currentMode);
   
-  // Load user context using useAuth hook
-  const { loadUserContext } = useAuth({
-    props: { userId, token, tenantId },
-    autoLoad: false, // We'll handle loading manually to support prop changes
-  });
-  
   // Get user context from Redux (with fallback to anonymous)
   const authUserId = useSelector((state) => state.auth.userId);
+  const authToken = useSelector((state) => state.auth.token);
   const authTenantId = useSelector((state) => state.auth.tenantId);
   
-  // Load user context on mount and when props change
+  // CRITICAL FIX: Direct Redux dispatch for embedded mode auth
+  // This ensures auth state is set immediately when props are provided
   useEffect(() => {
-    loadUserContext({ userId, token, tenantId });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, token, tenantId]); // Reload when identity props change
+    if (embedded && userId && token) {
+      const finalTenantId = tenantId || 'default';
+      console.log('🔐 [FloatingChatWidget] Setting auth in Redux (embedded mode):', {
+        userId,
+        token: token.substring(0, 20) + '...', // Log partial token for security
+        tenantId: finalTenantId,
+      });
+      
+      // Direct dispatch to Redux - bypasses useAuth hook complexity
+      dispatch(setUserContext({
+        userId: String(userId),
+        token: String(token),
+        tenantId: String(finalTenantId),
+        source: 'props', // Mark as coming from props
+      }));
+      
+      // Verify it worked (async check)
+      setTimeout(() => {
+        const state = store.getState();
+        const authState = state.auth;
+        console.log('✅ [FloatingChatWidget] Auth state after dispatch:', {
+          userId: authState.userId,
+          token: authState.token ? authState.token.substring(0, 20) + '...' : null,
+          tenantId: authState.tenantId,
+          isAuthenticated: authState.isAuthenticated,
+          source: authState.source,
+        });
+        
+        if (!authState.token) {
+          console.error('❌ [FloatingChatWidget] CRITICAL: Auth state still undefined after dispatch!');
+        }
+      }, 100);
+    }
+  }, [embedded, userId, token, tenantId, dispatch]);
   
   const [recommendations, setRecommendations] = useState([]);
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
