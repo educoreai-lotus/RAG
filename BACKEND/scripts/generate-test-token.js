@@ -46,8 +46,11 @@ async function scanTenants() {
     
     if (tenants.length === 0) {
       console.log('⚠️  No tenants found in database!');
-      console.log('💡 Using default tenant_id: "default"\n');
-      return [{ id: 'default', name: 'Default Tenant', domain: 'default' }];
+      console.log('💡 Please run the seed script first:');
+      console.log('   cd DATABASE/prisma && node seed.js');
+      console.log('   OR');
+      console.log('   cd BACKEND && npm run db:seed\n');
+      throw new Error('No tenants found in database. Please seed the database first.');
     }
     
     console.log(`✅ Found ${tenants.length} tenant(s) in database:\n`);
@@ -61,8 +64,12 @@ async function scanTenants() {
     return tenants;
   } catch (error) {
     console.error('\n❌ Error scanning database:', error.message);
-    console.error('💡 Falling back to default tenant_id: "default"\n');
-    return [{ id: 'default', name: 'Default Tenant', domain: 'default' }];
+    console.error('\n💡 Troubleshooting:');
+    console.error('   1. Check DATABASE_URL is set correctly in .env');
+    console.error('   2. Make sure database is accessible');
+    console.error('   3. Run migrations: npm run db:migrate');
+    console.error('   4. Seed database: npm run db:seed\n');
+    throw error;
   }
 }
 
