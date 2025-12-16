@@ -47,6 +47,35 @@ const queryRequestSchema = Joi.object({
  */
 export async function submitQuery(req, res, next) {
   try {
+    // CRITICAL: Set CORS headers for CHAT MODE (same as SUPPORT MODE)
+    const origin = req.headers.origin;
+    if (origin) {
+      // Allow all Vercel origins (same as SUPPORT MODE)
+      if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        // Allow localhost for development
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else {
+        // Check ALLOWED_ORIGINS environment variable
+        const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+          // If no whitelist or origin is in whitelist, allow it
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+        } else {
+          // Origin not in whitelist - still set header for CORS error visibility
+          res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+      }
+    }
+    
     // Header/metadata based support-mode routing (no keyword detection)
     const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
     const metaSource = (req.body?.metadata?.source || '').toString().toLowerCase();
