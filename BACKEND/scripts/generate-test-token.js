@@ -94,8 +94,10 @@ function main() {
 }
 
 // Run main function
-main().catch(error => {
+try {
+  main();
+} catch (error) {
   console.error('\n❌ Fatal error:', error);
   process.exit(1);
-});
+}
 
