@@ -280,7 +280,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     
     if (!isEducore && hasUserNames) {
       logger.info('Query contains user names, treating as EDUCORE query', {
-        query: query.substring(0, 100),
+        query: query ? query.substring(0, 100) : 'N/A',
       });
       isEducore = true;
       category = 'users';
@@ -382,7 +382,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       
       if (hasHebrew) {
         logger.info('Detected Hebrew in query, translating to English for better vector matching', {
-          original_query: query.substring(0, 100),
+          original_query: query ? query.substring(0, 100) : 'N/A',
         });
         
         
@@ -405,8 +405,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         
         
         logger.info('Query translated', {
-          original: query.substring(0, 100),
-          translated: translatedQuery.substring(0, 100),
+          original: query ? query.substring(0, 100) : 'N/A',
+          translated: translatedQuery ? translatedQuery.substring(0, 100) : 'N/A',
         });
       }
       // Translation not needed, using original query
@@ -466,10 +466,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     try {
       logger.info('Starting vector search', {
         tenant_id: actualTenantId,
-        query_for_embedding: queryForEmbedding.substring(0, 100),
+        query_for_embedding: queryForEmbedding ? queryForEmbedding.substring(0, 100) : 'N/A',
         threshold: min_confidence,
         limit: max_results,
-        embedding_dimensions: queryEmbedding.length,
+        embedding_dimensions: queryEmbedding?.length || 0,
       });
       
       
@@ -519,8 +519,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         content_ids: similarVectors.map(v => v.contentId),
         top_similarities: similarVectors.slice(0, 3).map(v => v.similarity),
         threshold_used: min_confidence,
-        query_for_embedding: queryForEmbedding.substring(0, 100),
-        embedding_dimensions: queryEmbedding.length,
+        query_for_embedding: queryForEmbedding ? queryForEmbedding.substring(0, 100) : 'N/A',
+        embedding_dimensions: queryEmbedding?.length || 0,
         filtering_reason: filteringContext.reason,
       });
 
@@ -835,7 +835,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         console.warn('🚨 RBAC Security: User asked specifically about user profile - blocked', {
           userRole: userRole,
           isAuthenticated: isAuthenticated,
-          query: query.substring(0, 100),
+          query: query ? query.substring(0, 100) : 'N/A',
           hasSpecificUserName: hasSpecificUserName,
           matchedName: matchedName,
           userProfilesFound: filteringContext.userProfilesFound,
@@ -849,7 +849,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         console.warn('🚨 RBAC Security: Some user profiles blocked (partial)', {
           userRole: userRole,
           isAuthenticated: isAuthenticated,
-          query: query.substring(0, 100),
+          query: query ? query.substring(0, 100) : 'N/A',
           userProfilesFound: filteringContext.userProfilesFound,
           userProfilesRemoved: filteringContext.userProfilesRemoved,
           remainingResults: filteredVectors.length,
@@ -880,9 +880,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         filtered_vectors: filteredVectors.length,
         user_profiles_filtered_out: allowUserProfiles ? 0 : userProfilesFound.length,
         privacy_protected: !allowUserProfiles && userProfilesFound.length > 0,
-        query_preview: query.substring(0, 50),
-        translated_preview: translatedQuery?.substring(0, 50),
-        query_for_embedding_preview: queryForEmbedding.substring(0, 50),
+        query_preview: query ? query.substring(0, 50) : 'N/A',
+        translated_preview: translatedQuery ? translatedQuery.substring(0, 50) : 'N/A',
+        query_for_embedding_preview: queryForEmbedding ? queryForEmbedding.substring(0, 50) : 'N/A',
         threshold_used: min_confidence,
         filtering_reason: filteringContext.reason,
         vectors_before_rbac: filteringContext.vectorResultsFound,
@@ -894,7 +894,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         sourceType: vec.contentType,
         sourceMicroservice: vec.microserviceId, // Track which microservice provided this source
         title: vec.metadata?.title || `${vec.contentType}:${vec.contentId}`,
-        contentSnippet: vec.contentText.substring(0, 200),
+        contentSnippet: vec.contentText ? vec.contentText.substring(0, 200) : '',
         sourceUrl: vec.metadata?.url || `/${vec.contentType}/${vec.contentId}`,
         relevanceScore: vec.similarity,
         metadata: vec.metadata,
@@ -919,7 +919,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         avg_confidence: sources.length ? confidence : 0,
         similar_vectors_count: similarVectors.length,
         threshold_used: min_confidence,
-        query_preview: query.substring(0, 100),
+        query_preview: query ? query.substring(0, 100) : 'N/A',
         filtering_reason: filteringContext.reason,
         vectors_before_rbac: filteringContext.vectorResultsFound,
         vectors_after_rbac: filteringContext.afterRBAC,
@@ -944,8 +944,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           default_threshold: min_confidence,
           similar_vectors_found: similarVectors.length,
           filtered_vectors: filteredVectors.length,
-          query_for_embedding: queryForEmbedding.substring(0, 100),
-          original_query: query.substring(0, 100),
+          query_for_embedding: queryForEmbedding ? queryForEmbedding.substring(0, 100) : 'N/A',
+          original_query: query ? query.substring(0, 100) : 'N/A',
           translated_query: translatedQuery?.substring(0, 100),
           embedding_dimensions: queryEmbedding.length,
           filtering_reason: filteringContext.reason,
@@ -1038,7 +1038,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
               console.warn('🚨 SECURITY: Unauthorized access attempt blocked (low threshold):', {
                 userRole: userRoleLow,
                 isAuthenticated: isAuthenticatedLow,
-                query: query.substring(0, 100),
+                query: query ? query.substring(0, 100) : 'N/A',
                 attemptedAccess: 'user_profile',
                 userProfilesFound: userProfilesInLowThreshold.length,
                 action: 'BLOCKED',
@@ -1077,7 +1077,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
                 sourceType: vec.contentType,
                 sourceMicroservice: vec.microserviceId,
                 title: vec.metadata?.title || `${vec.contentType}:${vec.contentId}`,
-                contentSnippet: vec.contentText.substring(0, 200),
+                contentSnippet: vec.contentText ? vec.contentText.substring(0, 200) : '',
                 sourceUrl: vec.metadata?.url || `/${vec.contentType}/${vec.contentId}`,
                 relevanceScore: vec.similarity,
                 metadata: vec.metadata,
@@ -1127,8 +1127,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
               tenant_id: actualTenantId,
               tenant_domain: tenantDomain,
               threshold_tried: 0.1,
-              query_for_embedding: queryForEmbedding.substring(0, 100),
-              original_query: query.substring(0, 100),
+              query_for_embedding: queryForEmbedding ? queryForEmbedding.substring(0, 100) : 'N/A',
+              original_query: query ? query.substring(0, 100) : 'N/A',
               embedding_dimensions: queryEmbedding.length,
               recommendation: 'Check if embeddings exist for this tenant. Use /api/debug/embeddings-status to verify.',
             });
