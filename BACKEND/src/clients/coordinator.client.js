@@ -60,12 +60,10 @@ const getGrpcUrl = () => {
   // Priority 4: Default (localhost for dev, but try Railway internal if in production)
   if (process.env.NODE_ENV === 'production') {
     // In production, try Railway internal networking
-    // Railway resolves service names within the same project
     const railwayInternal = 'coordinator.railway.internal:50051';
     logger.info('🔍 [COORDINATOR CLIENT] Using default Railway internal URL', {
       url: railwayInternal,
       nodeEnv: process.env.NODE_ENV,
-      hint: 'If this fails, set COORDINATOR_GRPC_ENDPOINT explicitly in Railway environment variables',
     });
     return railwayInternal;
   }
@@ -421,13 +419,25 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
     // Create Universal Envelope
     const envelope = createEnvelope(tenant_id, user_id, query_text, metadata);
     
+    // Convert metadata to map<string, string> format (proto requirement)
+    // All values must be strings for map<string, string>
+    const contextMap = {};
+    if (metadata && typeof metadata === 'object') {
+      Object.entries(metadata).forEach(([key, value]) => {
+        // Convert all values to strings
+        if (value !== null && value !== undefined) {
+          contextMap[key] = String(value);
+        }
+      });
+    }
+    
     // Build request with all required fields
     const request = {
       tenant_id: tenant_id || '',
       user_id: user_id || '',
       query_text: query_text,
       requester_service: 'rag-service',  // ✅ Added
-      context: metadata || {},            // ✅ Renamed from metadata
+      context: contextMap,                // ✅ Converted to map<string, string>
       envelope_json: JSON.stringify(envelope)  // ✅ Added
     };
 
@@ -605,13 +615,25 @@ export async function batchSync({
     // Create Universal Envelope
     const envelope = createEnvelope(tenant_id, user_id, query_text, metadata);
     
+    // Convert metadata to map<string, string> format (proto requirement)
+    // All values must be strings for map<string, string>
+    const contextMap = {};
+    if (metadata && typeof metadata === 'object') {
+      Object.entries(metadata).forEach(([key, value]) => {
+        // Convert all values to strings
+        if (value !== null && value !== undefined) {
+          contextMap[key] = String(value);
+        }
+      });
+    }
+    
     // Build request with all required fields
     const request = {
       tenant_id: tenant_id || '',
       user_id: user_id || '',
       query_text: query_text,
       requester_service: 'rag-service',
-      context: metadata,  // ⭐ CRITICAL - metadata goes in context field
+      context: contextMap,  // ⭐ CRITICAL - converted to map<string, string>
       envelope_json: JSON.stringify(envelope)
     };
 
