@@ -103,6 +103,15 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       'devlab': ['code', 'programming', 'debug', 'error', 'sandbox', 'execution', 'compile'],
       'analytics': ['report', 'analytics', 'metrics', 'dashboard', 'statistics', 'performance'],
       'content': ['course', 'lesson', 'module', 'content', 'material', 'resource'],
+      'hr-reporting': [
+        'hr report', 'hr reporting', 'human resources report',
+        'learning performance', 'monthly report', 'performance report',
+        'employee report', 'management report', 'hr analytics',
+        'conclusions', 'summary report', 'hr dashboard',
+        'monthly learning', 'learning performance report',
+        'monthly learning performance', 'hr & management',
+        'management reporting'
+      ],
     };
 
     const requiresMicroservice = Object.entries(microserviceKeywords).some(([_service, keywords]) => {

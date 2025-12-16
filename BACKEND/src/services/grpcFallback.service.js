@@ -62,6 +62,14 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
     });
 
     // Call Coordinator via Communication Manager
+    logger.info('gRPC fallback: Calling Coordinator route', {
+      category,
+      tenantId,
+      userId,
+      query: query.substring(0, 100),
+      vectorResultsCount: vectorResults.length,
+    });
+
     const coordinatorResponse = await callCoordinatorRoute({
       tenant_id: tenantId,
       user_id: userId,
@@ -71,6 +79,14 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
         source: 'rag_fallback',
         vector_results_count: vectorResults.length,
       },
+    });
+
+    logger.info('gRPC fallback: Coordinator response received', {
+      category,
+      tenantId,
+      hasResponse: !!coordinatorResponse,
+      responseType: coordinatorResponse ? typeof coordinatorResponse : 'null',
+      responseKeys: coordinatorResponse ? Object.keys(coordinatorResponse) : [],
     });
 
     if (!coordinatorResponse) {
