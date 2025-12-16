@@ -45,13 +45,29 @@ const getGrpcUrl = () => {
     try {
       // Remove protocol if present
       const hostname = coordinatorHost.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
-      return `${hostname}:${coordinatorPort}`;
+      const url = `${hostname}:${coordinatorPort}`;
+      logger.info('🔍 [COORDINATOR CLIENT] Using COORDINATOR_URL', {
+        coordinatorHost,
+        coordinatorPort,
+        resolvedUrl: url,
+      });
+      return url;
     } catch (error) {
       logger.warn('Failed to parse Coordinator URL', { error: error.message });
     }
   }
   
-  // Priority 4: Default (localhost for dev)
+  // Priority 4: Default (localhost for dev, but try Railway internal if in production)
+  if (process.env.NODE_ENV === 'production') {
+    // In production, try Railway internal networking
+    const railwayInternal = 'coordinator.railway.internal:50051';
+    logger.info('🔍 [COORDINATOR CLIENT] Using default Railway internal URL', {
+      url: railwayInternal,
+      nodeEnv: process.env.NODE_ENV,
+    });
+    return railwayInternal;
+  }
+  
   return process.env.COORDINATOR_GRPC_URL || 'localhost:50051';
 };
 
@@ -481,6 +497,11 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
         ...errorDetails,
         tenant_id,
         user_id,
+        grpcUrl: COORDINATOR_GRPC_URL,
+        nodeEnv: process.env.NODE_ENV,
+        coordinatorGrpcEndpoint: process.env.COORDINATOR_GRPC_ENDPOINT,
+        coordinatorUrl: process.env.COORDINATOR_URL,
+        hint: 'Check if COORDINATOR_GRPC_ENDPOINT is set correctly. For Railway, use: coordinator.railway.internal:50051',
         url: COORDINATOR_GRPC_URL,
         processing_time_ms: processingTime,
       });
