@@ -60,10 +60,12 @@ const getGrpcUrl = () => {
   // Priority 4: Default (localhost for dev, but try Railway internal if in production)
   if (process.env.NODE_ENV === 'production') {
     // In production, try Railway internal networking
+    // Railway resolves service names within the same project
     const railwayInternal = 'coordinator.railway.internal:50051';
     logger.info('🔍 [COORDINATOR CLIENT] Using default Railway internal URL', {
       url: railwayInternal,
       nodeEnv: process.env.NODE_ENV,
+      hint: 'If this fails, set COORDINATOR_GRPC_ENDPOINT explicitly in Railway environment variables',
     });
     return railwayInternal;
   }
