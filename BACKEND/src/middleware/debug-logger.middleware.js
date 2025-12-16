@@ -30,7 +30,8 @@ export function criticalDebugLogger(req, res, next) {
     
     // For POST/PUT requests, log full body
     if (req.method === 'POST' || req.method === 'PUT') {
-      console.log(`🚨 [BODY FULL] ${JSON.stringify(req.body, null, 2)}`);
+      const bodyStr = req.body ? JSON.stringify(req.body, null, 2) : 'undefined';
+      console.log(`🚨 [BODY FULL] ${bodyStr}`);
     } else {
       console.log(`🚨 [BODY] N/A (method: ${req.method})`);
     }
