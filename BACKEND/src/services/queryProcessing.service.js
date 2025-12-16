@@ -1603,12 +1603,28 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
 
     return response;
   } catch (error) {
+    // CRITICAL: Comprehensive error logging for debugging 500 errors
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('🚨 [PROCESS QUERY SERVICE] ERROR CAUGHT:');
+    console.error('🚨 Error name:', error.name);
+    console.error('🚨 Error message:', error.message);
+    console.error('🚨 Error stack:', error.stack);
+    console.error('🚨 Query:', query);
+    console.error('🚨 Tenant ID:', tenant_id);
+    console.error('🚨 User ID:', user_id);
+    console.error('🚨 Context:', JSON.stringify(context, null, 2));
+    console.error('🚨 Options:', JSON.stringify(options, null, 2));
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     logger.error('Query processing error', {
       error: error.message,
+      errorName: error.name,
       query,
       tenant_id,
       user_id,
       stack: error.stack,
+      context,
+      options,
     });
 
     // Try to log error to audit
@@ -1622,15 +1638,19 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
         resourceType: 'query',
         details: {
           error: error.message,
+          errorName: error.name,
           query,
         },
       });
     } catch (_auditError) {
       // Ignore audit errors
+      console.error('⚠️ [PROCESS QUERY SERVICE] Failed to log audit event:', _auditError.message);
     }
 
-    // Return error response
-    throw new Error(`Query processing failed: ${error.message}`);
+    // Return error response with more details
+    const errorMessage = `Query processing failed: ${error.message}`;
+    console.error('🚨 [PROCESS QUERY SERVICE] Throwing error:', errorMessage);
+    throw new Error(errorMessage);
   }
 }
 
