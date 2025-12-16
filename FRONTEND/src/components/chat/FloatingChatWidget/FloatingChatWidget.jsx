@@ -96,9 +96,23 @@ const FloatingChatWidget = ({
     }
   }, [embedded, initialMode, mode, dispatch]);
 
-  // Show initial greeting when widget opens (only in General mode, not in embedded support mode)
+  // Auto-open widget in embedded CHAT MODE
   useEffect(() => {
-    if (isOpen && !hasShownGreeting && messages.length === 0 && currentMode === MODES.GENERAL && !embedded) {
+    if (embedded && mode === 'chat' && !isOpen) {
+      console.log('🔄 [FloatingChatWidget] Auto-opening widget in embedded CHAT mode');
+      dispatch(setWidgetOpen(true));
+    }
+  }, [embedded, mode, isOpen, dispatch]);
+
+  // Show initial greeting when widget opens
+  useEffect(() => {
+    if (
+      isOpen &&
+      !hasShownGreeting &&
+      messages.length === 0 &&
+      currentMode === MODES.GENERAL &&
+      (!embedded || mode === 'chat') // allow greeting in embedded CHAT MODE
+    ) {
       const greeting = {
         id: 'greeting-1',
         text: "Hello! I'm your AI assistant. How can I help you today?",
@@ -142,7 +156,7 @@ const FloatingChatWidget = ({
         }
       }, 500);
     }
-  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, apiRecommendations, recommendationsError, currentUserId, isLoadingRecommendations]);
+  }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, mode, apiRecommendations, recommendationsError, currentUserId, isLoadingRecommendations]);
 
   // Update recommendations when API data arrives (for logged-in users)
   useEffect(() => {
@@ -182,6 +196,19 @@ const FloatingChatWidget = ({
       }
     }
   }, [messages, currentMode]);
+
+  // Debug logging for embedded/chat state
+  useEffect(() => {
+    console.log('🔍 [FloatingChatWidget] state:', {
+      embedded,
+      mode,
+      initialMode,
+      isOpen,
+      messagesCount: messages.length,
+      currentMode,
+      hasShownGreeting,
+    });
+  }, [embedded, mode, initialMode, isOpen, messages.length, currentMode, hasShownGreeting]);
 
   const handleToggle = () => {
     dispatch(toggleWidget());
