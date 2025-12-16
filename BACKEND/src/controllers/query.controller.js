@@ -85,12 +85,13 @@ export async function submitQuery(req, res, next) {
     const supportEnabled = (process.env.SUPPORT_MODE_ENABLED || '').toLowerCase() === 'true';
     const sharedSecret = process.env.SUPPORT_SHARED_SECRET || '';
     const providedSecret = (req.headers['x-embed-secret'] || '').toString();
-    const origin = (req.headers.origin || '').toString();
+    // Use origin already defined above (line 51)
+    const originStr = origin ? origin.toString() : '';
     const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const originAllowed = allowedOrigins.length === 0 || (origin && allowedOrigins.includes(origin));
+    const originAllowed = allowedOrigins.length === 0 || (originStr && allowedOrigins.includes(originStr));
     const secretOk = !sharedSecret || providedSecret === sharedSecret;
 
     const supportAuthorized = supportEnabled && originAllowed && secretOk;
@@ -101,7 +102,7 @@ export async function submitQuery(req, res, next) {
           headerSource,
           metaSource,
           supportModeFlag,
-          origin,
+          origin: originStr,
           originAllowed,
           hasSecret: !!providedSecret,
         });
@@ -112,7 +113,7 @@ export async function submitQuery(req, res, next) {
           headerSource,
           metaSource,
           supportModeFlag,
-          origin,
+          origin: originStr,
           originAllowed,
           hasSecret: !!providedSecret,
         });
@@ -124,7 +125,7 @@ export async function submitQuery(req, res, next) {
         metaSource,
         supportModeFlag,
         supportEnabled,
-        origin,
+        origin: originStr,
         originAllowed,
         secretProvided: !!providedSecret,
       });
