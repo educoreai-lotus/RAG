@@ -54,6 +54,30 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       hasInternalData: !!(internalData.cachedData || internalData.kgRelations),
     });
     
+    // ⚠️ CRITICAL: Check for report queries FIRST (before similarity check)
+    // Report queries should ALWAYS check Coordinator, even with high similarity
+    const queryLower = query.toLowerCase();
+    const reportKeywords = ['report', 'conclusions', 'summary', 'findings', 'results', 'monthly', 'performance'];
+    const isReportQuery = reportKeywords.some(keyword => queryLower.includes(keyword));
+    
+    if (isReportQuery) {
+      logger.info('🔍 [COORDINATOR DECISION] Report query detected - checking Coordinator', {
+        query: query.substring(0, 100),
+        vectorResultsCount: vectorResults.length,
+        avgSimilarity: avgSimilarity.toFixed(3),
+      });
+      
+      // For report queries, ALWAYS check Coordinator (even with high similarity)
+      // Reports need fresh data from microservices
+      logger.info('✅ [COORDINATOR DECISION] Should call Coordinator: Report query requires microservice data', {
+        query: query.substring(0, 100),
+        reason: 'report_query_always_check',
+        vectorResultsCount: vectorResults.length,
+        avgSimilarity: avgSimilarity.toFixed(3),
+      });
+      return true; // Always check Coordinator for reports
+    }
+    
     // If no vector results, check if we have other internal data
     if (vectorResults.length === 0) {
       // Check if we have cached data, KG relations, or other internal sources
@@ -70,7 +94,7 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       }
     }
 
-    // Check vector similarity scores
+    // Check vector similarity scores (only for non-report queries)
     if (vectorResults.length > 0) {
       // High similarity and sufficient sources - internal data is sufficient
       if (avgSimilarity >= VECTOR_SIMILARITY_THRESHOLD && vectorResults.length >= MIN_REQUIRED_SOURCES) {
@@ -100,7 +124,6 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       'today', 'now', 'recent', 'just now'
     ];
     
-    const queryLower = query.toLowerCase();
     const requiresRealTime = realTimeKeywords.some(keyword => queryLower.includes(keyword));
     
     if (requiresRealTime) {
@@ -118,32 +141,6 @@ export function shouldCallCoordinator(query, vectorResults = [], internalData = 
       'hr-reporting': ['learning performance', 'monthly report', 'hr report', 'performance report', 'conclusions', 'findings'],
       'content': ['course', 'lesson', 'module', 'content', 'material', 'resource'],
     };
-    
-    // Special check for report queries - always check Coordinator for specific reports
-    const reportKeywords = ['report', 'conclusions', 'summary', 'findings', 'results', 'monthly', 'performance'];
-    const isReportQuery = reportKeywords.some(keyword => queryLower.includes(keyword));
-    
-    if (isReportQuery) {
-      logger.info('🔍 [COORDINATOR DECISION] Report query detected', {
-        query: query.substring(0, 100),
-        vectorResultsCount: vectorResults.length,
-        avgSimilarity: avgSimilarity.toFixed(3),
-      });
-      
-      // For report queries, always check Coordinator if:
-      // 1. No vector results, OR
-      // 2. Low similarity (< 0.8 for reports), OR
-      // 3. Less than 3 sources (reports need multiple sources)
-      if (vectorResults.length === 0 || avgSimilarity < 0.8 || vectorResults.length < 3) {
-        logger.info('✅ [COORDINATOR DECISION] Should call Coordinator: Report query with insufficient data', {
-          query: query.substring(0, 100),
-          reason: vectorResults.length === 0 ? 'no_results' : avgSimilarity < 0.8 ? 'low_similarity' : 'insufficient_sources',
-          vectorResultsCount: vectorResults.length,
-          avgSimilarity: avgSimilarity.toFixed(3),
-        });
-        return true;
-      }
-    }
 
     const requiresMicroservice = Object.entries(microserviceKeywords).some(([_service, keywords]) => {
       return keywords.some(keyword => queryLower.includes(keyword));
