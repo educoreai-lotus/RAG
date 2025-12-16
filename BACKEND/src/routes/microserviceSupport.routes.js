@@ -64,15 +64,62 @@ function supportAuthMiddleware(req, res, next) {
   }
 
   const origin = (req.headers.origin || '').toString();
-  const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
   
-  // Only check origin if SUPPORT_ALLOWED_ORIGINS is explicitly set
-  if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ error: 'Forbidden', message: 'Origin not allowed for support mode' });
+  // Helper function to check if origin is allowed
+  const isOriginAllowed = (originToCheck) => {
+    // Allow requests with no origin (server-to-server)
+    if (!originToCheck) {
+      console.log('✅ [AUTH MIDDLEWARE] No origin - allowing');
+      return true;
+    }
+    
+    // Allow all Vercel deployments (production and preview)
+    if (/^https:\/\/.*\.vercel\.app$/.test(originToCheck)) {
+      console.log('✅ [AUTH MIDDLEWARE] Vercel origin allowed:', originToCheck);
+      return true;
+    }
+    
+    // Allow localhost in development
+    if (originToCheck.includes('localhost') || originToCheck.includes('127.0.0.1')) {
+      console.log('✅ [AUTH MIDDLEWARE] Localhost origin allowed:', originToCheck);
+      return true;
+    }
+    
+    // Check explicit whitelist from environment variable
+    const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    
+    if (allowedOrigins.length > 0) {
+      if (allowedOrigins.includes(originToCheck)) {
+        console.log('✅ [AUTH MIDDLEWARE] Whitelisted origin allowed:', originToCheck);
+        return true;
+      }
+      
+      // If whitelist is set but origin not in it, reject
+      console.error('❌ [AUTH MIDDLEWARE] Origin not in whitelist:', originToCheck);
+      console.error('❌ [AUTH MIDDLEWARE] Allowed origins:', allowedOrigins);
+      return false;
+    }
+    
+    // If no whitelist is set, allow all origins (backward compatibility)
+    console.log('✅ [AUTH MIDDLEWARE] No whitelist set - allowing origin:', originToCheck);
+    return true;
+  };
+  
+  // Validate origin
+  if (!isOriginAllowed(origin)) {
+    console.error('❌ [AUTH MIDDLEWARE] Origin rejected:', origin);
+    return res.status(403).json({ 
+      error: 'Forbidden', 
+      message: 'Origin not allowed for support mode',
+      origin: origin,
+      hint: 'Make sure SUPPORT_ALLOWED_ORIGINS includes your origin, or use a Vercel deployment'
+    });
   }
+  
+  console.log('✅ [AUTH MIDDLEWARE] Origin validation passed:', origin);
 
   const sharedSecret = process.env.SUPPORT_SHARED_SECRET || '';
   const providedSecret = (req.headers['x-embed-secret'] || '').toString();
