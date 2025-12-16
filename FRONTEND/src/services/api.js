@@ -81,18 +81,27 @@ api.interceptors.request.use(
     console.log('  Full URL:', fullUrl);
     console.log('  Method:', config.method?.toUpperCase());
     
-    // Add Authorization header
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // CRITICAL FIX: Validate token before adding Authorization header
+    // Prevent sending "Bearer undefined" or invalid tokens
+    if (token && typeof token === 'string' && token.trim().length > 0 && token !== 'undefined' && token !== 'null') {
+      const cleanToken = token.trim();
+      config.headers.Authorization = `Bearer ${cleanToken}`;
+      console.log('  ✅ Authorization header added (token length:', cleanToken.length, ')');
+    } else {
+      console.warn('  ⚠️ No valid token in Redux auth state:', {
+        hasToken: !!token,
+        tokenType: typeof token,
+        tokenValue: token ? (typeof token === 'string' ? token.substring(0, 20) + '...' : String(token)) : 'null/undefined',
+      });
     }
     
     // Add user identity headers
-    if (userId) {
-      config.headers['X-User-Id'] = userId;
+    if (userId && userId !== 'undefined' && userId !== 'null') {
+      config.headers['X-User-Id'] = String(userId);
     }
     
-    if (tenantId) {
-      config.headers['X-Tenant-Id'] = tenantId;
+    if (tenantId && tenantId !== 'undefined' && tenantId !== 'null') {
+      config.headers['X-Tenant-Id'] = String(tenantId);
     }
     
     return config;

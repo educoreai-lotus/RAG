@@ -45,18 +45,22 @@ const FloatingChatWidget = ({
   // CRITICAL FIX: Direct Redux dispatch for embedded mode auth
   // This ensures auth state is set immediately when props are provided
   useEffect(() => {
-    if (embedded && userId && token) {
+    // Safety check: ensure token is a valid string
+    if (embedded && userId && token && typeof token === 'string' && token.trim().length > 0) {
       const finalTenantId = tenantId || 'default';
+      const tokenStr = String(token).trim();
+      
       console.log('🔐 [FloatingChatWidget] Setting auth in Redux (embedded mode):', {
         userId,
-        token: token.substring(0, 20) + '...', // Log partial token for security
+        token: tokenStr.length > 20 ? tokenStr.substring(0, 20) + '...' : '***', // Log partial token for security
         tenantId: finalTenantId,
+        tokenLength: tokenStr.length,
       });
       
       // Direct dispatch to Redux - bypasses useAuth hook complexity
       dispatch(setUserContext({
         userId: String(userId),
-        token: String(token),
+        token: tokenStr, // Use trimmed token string
         tenantId: String(finalTenantId),
         source: 'props', // Mark as coming from props
       }));
@@ -65,18 +69,33 @@ const FloatingChatWidget = ({
       setTimeout(() => {
         const state = store.getState();
         const authState = state.auth;
+        const loggedToken = authState.token && typeof authState.token === 'string' && authState.token.length > 20
+          ? authState.token.substring(0, 20) + '...'
+          : (authState.token ? '***' : null);
+        
         console.log('✅ [FloatingChatWidget] Auth state after dispatch:', {
           userId: authState.userId,
-          token: authState.token ? authState.token.substring(0, 20) + '...' : null,
+          token: loggedToken,
+          tokenLength: authState.token ? authState.token.length : 0,
           tenantId: authState.tenantId,
           isAuthenticated: authState.isAuthenticated,
           source: authState.source,
         });
         
-        if (!authState.token) {
-          console.error('❌ [FloatingChatWidget] CRITICAL: Auth state still undefined after dispatch!');
+        if (!authState.token || typeof authState.token !== 'string' || authState.token.trim().length === 0) {
+          console.error('❌ [FloatingChatWidget] CRITICAL: Auth state token is invalid after dispatch!', {
+            token: authState.token,
+            tokenType: typeof authState.token,
+          });
         }
       }, 100);
+    } else if (embedded && (!userId || !token)) {
+      console.warn('⚠️ [FloatingChatWidget] Missing auth props in embedded mode:', {
+        hasUserId: !!userId,
+        hasToken: !!token,
+        tokenType: typeof token,
+        userId,
+      });
     }
   }, [embedded, userId, token, tenantId, dispatch]);
   
