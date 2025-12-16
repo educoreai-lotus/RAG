@@ -104,6 +104,17 @@ const COORDINATOR_PROTO_PATH = getProtoPath();
 const COORDINATOR_SERVICE_NAME = process.env.COORDINATOR_SERVICE_NAME || 'rag.v1.CoordinatorService';
 const GRPC_TIMEOUT = parseInt(process.env.GRPC_TIMEOUT || '30', 10) * 1000; // Convert seconds to milliseconds
 
+// Log the gRPC URL configuration for debugging
+logger.info('🔍 [COORDINATOR CLIENT] gRPC Configuration', {
+  COORDINATOR_GRPC_ENDPOINT: process.env.COORDINATOR_GRPC_ENDPOINT,
+  COORDINATOR_GRPC_URL: process.env.COORDINATOR_GRPC_URL,
+  COORDINATOR_URL: process.env.COORDINATOR_URL,
+  COORDINATOR_SERVICE_URL: process.env.COORDINATOR_SERVICE_URL,
+  COORDINATOR_GRPC_PORT: process.env.COORDINATOR_GRPC_PORT,
+  resolvedGrpcUrl: COORDINATOR_GRPC_URL,
+  enabled: COORDINATOR_ENABLED,
+});
+
 /**
  * Validate required environment variables
  */
