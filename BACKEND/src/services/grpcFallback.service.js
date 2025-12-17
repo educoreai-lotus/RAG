@@ -148,9 +148,35 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       // Convert data array items to source format
       if (typeof item === 'object' && item !== null) {
         const isReportFormat = item.report_name && item.generated_at;
-        const conclusionsText = item.conclusions 
-          ? (typeof item.conclusions === 'string' ? item.conclusions : JSON.stringify(item.conclusions))
-          : '';
+        // Extract conclusions text from structure: { conclusions: [{ statement, rationale, confidence }, ...] }
+        let conclusionsText = '';
+        if (item.conclusions) {
+          if (typeof item.conclusions === 'string') {
+            // Already a string
+            conclusionsText = item.conclusions;
+          } else if (item.conclusions.conclusions && Array.isArray(item.conclusions.conclusions)) {
+            // Structure: { conclusions: [...] }
+            conclusionsText = item.conclusions.conclusions
+              .map((c, idx) => {
+                const statement = c.statement || c.text || '';
+                const rationale = c.rationale ? ` (${c.rationale})` : '';
+                return `${idx + 1}. ${statement}${rationale}`;
+              })
+              .join('\n');
+          } else if (Array.isArray(item.conclusions)) {
+            // Direct array
+            conclusionsText = item.conclusions
+              .map((c, idx) => {
+                const statement = c.statement || c.text || '';
+                const rationale = c.rationale ? ` (${c.rationale})` : '';
+                return `${idx + 1}. ${statement}${rationale}`;
+              })
+              .join('\n');
+          } else {
+            // Fallback to JSON
+            conclusionsText = JSON.stringify(item.conclusions);
+          }
+        }
         const contentText = conclusionsText || item.content || item.text || item.description || JSON.stringify(item);
         
         return {
@@ -194,6 +220,12 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       items_count: contentItems.length,
       target_services: processed.target_services || [],
       query: query.substring(0, 100),
+      content_items_preview: contentItems.map(item => ({
+        contentId: item.contentId,
+        contentType: item.contentType,
+        contentText_length: item.contentText?.length || 0,
+        contentText_preview: item.contentText?.substring(0, 100) || 'empty',
+      })),
     });
 
     return contentItems;

@@ -161,11 +161,35 @@ export function createStructuredFields(coordinatorData = {}, interpretedFields =
         
         if (isReportFormat) {
           // Format for managementreporting-service reports
-          const conclusionsText = item.conclusions 
-            ? (typeof item.conclusions === 'string' 
-                ? item.conclusions 
-                : JSON.stringify(item.conclusions))
-            : '';
+          // Extract conclusions text from structure: { conclusions: [{ statement, rationale, confidence }, ...] }
+          let conclusionsText = '';
+          if (item.conclusions) {
+            if (typeof item.conclusions === 'string') {
+              // Already a string
+              conclusionsText = item.conclusions;
+            } else if (item.conclusions.conclusions && Array.isArray(item.conclusions.conclusions)) {
+              // Structure: { conclusions: [...] }
+              conclusionsText = item.conclusions.conclusions
+                .map((c, idx) => {
+                  const statement = c.statement || c.text || '';
+                  const rationale = c.rationale ? ` (${c.rationale})` : '';
+                  return `${idx + 1}. ${statement}${rationale}`;
+                })
+                .join('\n');
+            } else if (Array.isArray(item.conclusions)) {
+              // Direct array
+              conclusionsText = item.conclusions
+                .map((c, idx) => {
+                  const statement = c.statement || c.text || '';
+                  const rationale = c.rationale ? ` (${c.rationale})` : '';
+                  return `${idx + 1}. ${statement}${rationale}`;
+                })
+                .join('\n');
+            } else {
+              // Fallback to JSON
+              conclusionsText = JSON.stringify(item.conclusions);
+            }
+          }
           
           const contentText = conclusionsText || 
             item.content || 

@@ -1213,16 +1213,20 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         });
 
         // Convert Coordinator results into sources format
-        coordinatorSources = grpcContext.map((item, idx) => ({
-          sourceId: item.contentId || `coordinator-${idx}`,
-          sourceType: item.contentType || category || 'coordinator',
-          sourceMicroservice: item.metadata?.target_services?.[0] || 'coordinator',
-          title: item.metadata?.title || item.contentType || 'Coordinator Source',
-          contentSnippet: String(item.contentText || '').substring(0, 200),
-          sourceUrl: item.metadata?.url || '',
-          relevanceScore: item.metadata?.relevanceScore || 0.75,
-          metadata: { ...(item.metadata || {}), via: 'coordinator' },
-        }));
+        coordinatorSources = grpcContext.map((item, idx) => {
+          // Use longer snippet for reports (conclusions can be lengthy)
+          const maxLength = item.contentType === 'management_reporting' ? 1500 : 200;
+          return {
+            sourceId: item.contentId || `coordinator-${idx}`,
+            sourceType: item.contentType || category || 'coordinator',
+            sourceMicroservice: item.metadata?.target_services?.[0] || 'coordinator',
+            title: item.metadata?.title || item.contentType || 'Coordinator Source',
+            contentSnippet: String(item.contentText || '').substring(0, maxLength),
+            sourceUrl: item.metadata?.url || '',
+            relevanceScore: item.metadata?.relevanceScore || 0.75,
+            metadata: { ...(item.metadata || {}), via: 'coordinator' },
+          };
+        });
       }
     } catch (coordinatorError) {
       logger.warn('Coordinator call failed, continuing with internal data only', {
