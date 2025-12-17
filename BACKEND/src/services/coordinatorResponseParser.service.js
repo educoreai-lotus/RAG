@@ -215,31 +215,32 @@ export function extractBusinessData(parsedResponse) {
     // Also check envelope payload for data array (if not already extracted)
     if (!businessData.sources || businessData.sources.length === 0) {
       if (parsedResponse.envelope?.payload?.data && Array.isArray(parsedResponse.envelope.payload.data)) {
-      // Also check envelope payload for data array
-      businessData.data = parsedResponse.envelope.payload.data;
-      businessData.sources = parsedResponse.envelope.payload.data;
-      
-      // Extract metadata from envelope payload
-      if (parsedResponse.envelope.payload.metadata) {
-        businessData.metadata = {
-          ...businessData.metadata,
-          ...parsedResponse.envelope.payload.metadata,
-        };
+        // Also check envelope payload for data array
+        businessData.data = parsedResponse.envelope.payload.data;
+        businessData.sources = parsedResponse.envelope.payload.data;
+        
+        // Extract metadata from envelope payload
+        if (parsedResponse.envelope.payload.metadata) {
+          businessData.metadata = {
+            ...businessData.metadata,
+            ...parsedResponse.envelope.payload.metadata,
+          };
+        }
+      } else if (parsedResponse.envelope?.payload?.content) {
+        // Fallback to old format: content field
+        businessData.sources = Array.isArray(parsedResponse.envelope.payload.content)
+          ? parsedResponse.envelope.payload.content
+          : [parsedResponse.envelope.payload.content];
+      } else if (parsedResponse.routing?.all_attempts) {
+        // Extract from routing metadata
+        businessData.sources = parsedResponse.routing.all_attempts
+          .filter(attempt => attempt.success)
+          .map(attempt => ({
+            service: attempt.service,
+            rank: attempt.rank,
+            quality: attempt.quality,
+          }));
       }
-    } else if (parsedResponse.envelope?.payload?.content) {
-      // Fallback to old format: content field
-      businessData.sources = Array.isArray(parsedResponse.envelope.payload.content)
-        ? parsedResponse.envelope.payload.content
-        : [parsedResponse.envelope.payload.content];
-    } else if (parsedResponse.routing?.all_attempts) {
-      // Extract from routing metadata
-      businessData.sources = parsedResponse.routing.all_attempts
-        .filter(attempt => attempt.success)
-        .map(attempt => ({
-          service: attempt.service,
-          rank: attempt.rank,
-          quality: attempt.quality,
-        }));
     }
 
     // Extract metadata
