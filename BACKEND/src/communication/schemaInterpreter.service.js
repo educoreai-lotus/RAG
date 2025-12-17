@@ -6,6 +6,107 @@
 import { logger } from '../utils/logger.util.js';
 
 /**
+ * Extract readable text from any object structure (generic extraction)
+ * Tries multiple common field names and structures
+ * 
+ * @param {*} item - Any object or value
+ * @returns {string} Extracted text content
+ */
+function extractTextFromObject(item) {
+  if (!item || typeof item !== 'object') {
+    return typeof item === 'string' ? item : '';
+  }
+
+  // Common text field names (in priority order)
+  const textFields = [
+    'content', 'text', 'description', 'body', 'summary', 'message', 
+    'value', 'data', 'details', 'info', 'contentText', 'snippet'
+  ];
+
+  // Try common text fields first
+  for (const field of textFields) {
+    if (item[field]) {
+      if (typeof item[field] === 'string' && item[field].trim().length > 0) {
+        return item[field];
+      }
+      if (Array.isArray(item[field])) {
+        // If field is array, try to extract from items
+        const extracted = item[field]
+          .map(subItem => extractTextFromObject(subItem))
+          .filter(text => text && text.trim().length > 0)
+          .join('\n');
+        if (extracted) return extracted;
+      }
+    }
+  }
+
+  // Try to extract from arrays of objects
+  if (Array.isArray(item)) {
+    return item
+      .map(subItem => extractTextFromObject(subItem))
+      .filter(text => text && text.trim().length > 0)
+      .join('\n');
+  }
+
+  // Try nested structures (common patterns)
+  // For conclusions-like structures: { conclusions: [...] } or { items: [...] }
+  const nestedArrayFields = ['conclusions', 'items', 'results', 'data', 'list', 'entries'];
+  for (const field of nestedArrayFields) {
+    if (item[field] && Array.isArray(item[field])) {
+      const extracted = item[field]
+        .map((c, idx) => {
+          // Try common fields in array items
+          const statement = c.statement || c.text || c.content || c.description || c.title || '';
+          const rationale = c.rationale || c.reason || c.explanation || '';
+          const value = c.value || c.data || '';
+          
+          let itemText = '';
+          if (statement) itemText = statement;
+          if (rationale) itemText += (itemText ? ` (${rationale})` : rationale);
+          if (value && !itemText) itemText = String(value);
+          
+          // If still no text, try extracting from the whole object
+          if (!itemText) {
+            const extractedFromObj = extractTextFromObject(c);
+            if (extractedFromObj) itemText = extractedFromObj;
+          }
+          
+          return itemText ? `${idx + 1}. ${itemText}` : null;
+        })
+        .filter(Boolean)
+        .join('\n');
+      if (extracted) return extracted;
+    }
+  }
+
+  // Try to extract from object values (recursive)
+  const values = Object.values(item).filter(v => 
+    v !== null && v !== undefined && (typeof v === 'string' || typeof v === 'object')
+  );
+  if (values.length > 0) {
+    const extracted = values
+      .map(v => extractTextFromObject(v))
+      .filter(text => text && text.trim().length > 0)
+      .join('\n');
+    if (extracted) return extracted;
+  }
+
+  // Fallback: try to stringify, but remove quotes and braces for readability
+  try {
+    const json = JSON.stringify(item);
+    // If JSON is too long or unreadable, return simplified version
+    if (json.length > 500) {
+      // Try to extract meaningful keys
+      const keys = Object.keys(item).slice(0, 5);
+      return keys.map(key => `${key}: ${typeof item[key] === 'string' ? item[key].substring(0, 100) : typeof item[key]}`).join('\n');
+    }
+    return json;
+  } catch {
+    return String(item);
+  }
+}
+
+/**
  * Interpret normalized fields from Coordinator
  * Converts Coordinator's normalized_fields map into structured fields for RAG
  * 
@@ -155,82 +256,53 @@ export function createStructuredFields(coordinatorData = {}, interpretedFields =
           },
         };
       } else if (typeof item === 'object' && item !== null) {
-        // ⭐ NEW: Handle managementreporting-service format
-        // Expected: { report_name, generated_at, conclusions, ... }
-        const isReportFormat = item.report_name && item.generated_at;
+        // ⭐ GENERIC: Extract text from any object structure
+        const contentText = extractTextFromObject(item);
         
-        if (isReportFormat) {
-          // Format for managementreporting-service reports
-          // Extract conclusions text from structure: { conclusions: [{ statement, rationale, confidence }, ...] }
-          let conclusionsText = '';
-          if (item.conclusions) {
-            if (typeof item.conclusions === 'string') {
-              // Already a string
-              conclusionsText = item.conclusions;
-            } else if (item.conclusions.conclusions && Array.isArray(item.conclusions.conclusions)) {
-              // Structure: { conclusions: [...] }
-              conclusionsText = item.conclusions.conclusions
-                .map((c, idx) => {
-                  const statement = c.statement || c.text || '';
-                  const rationale = c.rationale ? ` (${c.rationale})` : '';
-                  return `${idx + 1}. ${statement}${rationale}`;
-                })
-                .join('\n');
-            } else if (Array.isArray(item.conclusions)) {
-              // Direct array
-              conclusionsText = item.conclusions
-                .map((c, idx) => {
-                  const statement = c.statement || c.text || '';
-                  const rationale = c.rationale ? ` (${c.rationale})` : '';
-                  return `${idx + 1}. ${statement}${rationale}`;
-                })
-                .join('\n');
-            } else {
-              // Fallback to JSON
-              conclusionsText = JSON.stringify(item.conclusions);
-            }
-          }
-          
-          const contentText = conclusionsText || 
-            item.content || 
-            item.text || 
-            item.description || 
-            JSON.stringify(item);
-          
-          return {
-            sourceId: item.id || item.report_id || `coordinator-report-${index}`,
-            sourceType: 'management_reporting',
-            sourceMicroservice: structured.metadata.target_services?.[0] || 'managementreporting-service',
-            title: item.report_name || `Report ${index + 1}`,
-            contentSnippet: contentText.substring(0, 500), // Longer snippet for reports
-            sourceUrl: item.url || item.sourceUrl || '',
-            relevanceScore: item.relevanceScore || item.score || 0.75,
-            metadata: {
-              ...structured.metadata,
-              ...(item.metadata || {}),
-              report_name: item.report_name,
-              generated_at: item.generated_at,
-              report_type: item.report_type,
-              index,
-            },
-          };
-        } else {
-          // Generic object format
-          return {
-            sourceId: item.id || item.sourceId || `coordinator-${index}`,
-            sourceType: item.type || item.sourceType || 'coordinator',
-            sourceMicroservice: item.microservice || structured.metadata.target_services?.[0] || 'coordinator',
-            title: item.title || item.name || `Coordinator Source ${index + 1}`,
-            contentSnippet: item.content || item.text || item.description || JSON.stringify(item).substring(0, 200),
-            sourceUrl: item.url || item.sourceUrl || '',
-            relevanceScore: item.relevanceScore || item.score || 0.75,
-            metadata: {
-              ...structured.metadata,
-              ...(item.metadata || {}),
-              index,
-            },
-          };
+        // Determine source type based on common patterns
+        let sourceType = item.type || item.sourceType || 'coordinator';
+        const targetService = structured.metadata.target_services?.[0] || 'coordinator';
+        
+        // Try to detect service-specific types
+        if (item.report_name || item.report_id) {
+          sourceType = 'management_reporting';
+        } else if (targetService && targetService !== 'coordinator') {
+          // Use service name as type hint
+          sourceType = targetService.replace('-service', '').replace('-', '_');
         }
+        
+        // Extract title from common fields
+        const title = item.title || item.name || item.report_name || item.label || 
+                     item.subject || `Source ${index + 1}`;
+        
+        // Extract ID from common fields
+        const sourceId = item.id || item.sourceId || item.report_id || 
+                        item.identifier || `coordinator-${index}`;
+        
+        // Determine snippet length based on content type (longer for structured data)
+        const isStructuredData = contentText.length > 200 || item.conclusions || item.items || item.data;
+        const maxSnippetLength = isStructuredData ? 1500 : 500;
+        
+        return {
+          sourceId,
+          sourceType,
+          sourceMicroservice: item.microservice || targetService,
+          title,
+          contentSnippet: contentText.substring(0, maxSnippetLength),
+          sourceUrl: item.url || item.sourceUrl || item.link || '',
+          relevanceScore: item.relevanceScore || item.score || item.confidence || 0.75,
+          metadata: {
+            ...structured.metadata,
+            ...(item.metadata || {}),
+            // Preserve all original fields for reference
+            ...Object.fromEntries(
+              Object.entries(item).filter(([key]) => 
+                !['content', 'text', 'description', 'body'].includes(key)
+              )
+            ),
+            index,
+          },
+        };
       }
       return null;
     }).filter(Boolean);
