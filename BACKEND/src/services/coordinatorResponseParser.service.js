@@ -157,6 +157,7 @@ export function extractBusinessData(parsedResponse) {
     };
 
     // Extract from envelope payload
+    // ⭐ IMPORTANT: envelope.payload might be the full structure: { request_id, success, data: [...], metadata: {...} }
     if (parsedResponse.envelope?.payload) {
       logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope.payload', {
         payload_keys: Object.keys(parsedResponse.envelope.payload),
@@ -164,8 +165,32 @@ export function extractBusinessData(parsedResponse) {
         data_is_array: Array.isArray(parsedResponse.envelope.payload.data),
         has_content: !!parsedResponse.envelope.payload.content,
         has_metadata: !!parsedResponse.envelope.payload.metadata,
+        has_request_id: !!parsedResponse.envelope.payload.request_id,
+        has_success: parsedResponse.envelope.payload.success !== undefined,
+        payload_structure: parsedResponse.envelope.payload.data && Array.isArray(parsedResponse.envelope.payload.data) 
+          ? 'NEW_FORMAT_WITH_DATA_ARRAY' 
+          : (parsedResponse.envelope.payload.content ? 'OLD_FORMAT_WITH_CONTENT' : 'UNKNOWN'),
       });
-      businessData.data = parsedResponse.envelope.payload;
+      
+      // ⭐ Check if payload IS the new structure (has data array directly)
+      if (parsedResponse.envelope.payload.data && Array.isArray(parsedResponse.envelope.payload.data)) {
+        logger.info('🔍 [EXTRACT BUSINESS DATA] envelope.payload IS the new structure with data array', {
+          data_array_length: parsedResponse.envelope.payload.data.length,
+        });
+        // This is the new structure - use it directly
+        businessData.data = parsedResponse.envelope.payload.data;
+        businessData.sources = parsedResponse.envelope.payload.data;
+        
+        if (parsedResponse.envelope.payload.metadata) {
+          businessData.metadata = {
+            ...parsedResponse.envelope.payload.metadata,
+            request_id: parsedResponse.envelope.payload.request_id || null,
+          };
+        }
+      } else {
+        // Store payload for later processing
+        businessData.data = parsedResponse.envelope.payload;
+      }
     }
 
     // Extract from normalized_fields (business fields)
@@ -217,16 +242,17 @@ export function extractBusinessData(parsedResponse) {
       data_field_is_array: Array.isArray(businessFields.data),
     });
 
-    // ⭐ NEW STRUCTURE: Check for new format in businessFields first
+    // ⭐ NEW STRUCTURE: Check for new format in businessFields or other locations (if not already extracted)
     // Expected structure: { request_id, success, data: [...], metadata: {...} }
     let extractedData = null;
     
-    logger.info('🔍 [EXTRACT BUSINESS DATA] Checking for new structure', {
+    logger.info('🔍 [EXTRACT BUSINESS DATA] Checking for new structure (sources not yet extracted)', {
       businessFields_has_data: !!businessFields.data,
       businessFields_data_type: typeof businessFields.data,
       businessFields_data_is_array: Array.isArray(businessFields.data),
       businessData_has_data: !!businessData.data,
       businessData_data_type: typeof businessData.data,
+      businessData_data_is_array: Array.isArray(businessData.data),
     });
     
     // Check if businessFields contains 'data' field with new structure
@@ -235,15 +261,12 @@ export function extractBusinessData(parsedResponse) {
       extractedData = businessFields.data;
     } else if (businessFields.data && typeof businessFields.data === 'object' && !Array.isArray(businessFields.data) && businessFields.data.data) {
       logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessFields.data (nested object)');
-      // data field might be nested
       extractedData = businessFields.data;
-    } else if (businessData.data && typeof businessData.data === 'object' && Array.isArray(businessData.data.data)) {
+    } else if (businessData.data && typeof businessData.data === 'object' && !Array.isArray(businessData.data) && Array.isArray(businessData.data.data)) {
       logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessData.data.data (array)');
-      // Check envelope payload
       extractedData = businessData.data;
     } else if (businessData.data && typeof businessData.data === 'object' && !Array.isArray(businessData.data) && businessData.data.data) {
       logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessData.data (nested object)');
-      // Check envelope payload (nested)
       extractedData = businessData.data;
     }
     
@@ -255,11 +278,9 @@ export function extractBusinessData(parsedResponse) {
         request_id: extractedData.request_id,
         metadata_keys: extractedData.metadata ? Object.keys(extractedData.metadata) : [],
       });
-      // New format: { request_id, success, data: [...], metadata: {...} }
-      businessData.data = extractedData.data; // Extract the data array
-      businessData.sources = extractedData.data; // Use data array as sources
+      businessData.data = extractedData.data;
+      businessData.sources = extractedData.data;
       
-      // Merge metadata from the response
       if (extractedData.metadata) {
         businessData.metadata = {
           ...businessData.metadata,
@@ -271,49 +292,19 @@ export function extractBusinessData(parsedResponse) {
         sources_count: businessData.sources.length,
         metadata_keys: Object.keys(businessData.metadata),
       });
-    } else {
-      logger.info('🔍 [EXTRACT BUSINESS DATA] Using fallback structure', {
-        extractedData_found: !!extractedData,
-        extractedData_has_data_array: extractedData ? Array.isArray(extractedData.data) : false,
+    } else if (!businessData.sources || businessData.sources.length === 0) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Checking fallback options', {
+        has_envelope_payload_content: !!parsedResponse.envelope?.payload?.content,
+        has_routing: !!parsedResponse.routing?.all_attempts,
       });
-      // Fallback to old structure
-      businessData.data = businessData.data || businessFields;
-    }
-    
-    // Also check envelope payload for data array (if not already extracted)
-    if (!businessData.sources || businessData.sources.length === 0) {
-      logger.info('🔍 [EXTRACT BUSINESS DATA] No sources yet, checking envelope payload', {
-        has_envelope_payload: !!parsedResponse.envelope?.payload,
-        envelope_payload_has_data: !!parsedResponse.envelope?.payload?.data,
-        envelope_payload_data_is_array: Array.isArray(parsedResponse.envelope?.payload?.data),
-        envelope_payload_has_content: !!parsedResponse.envelope?.payload?.content,
-        has_routing: !!parsedResponse.routing,
-      });
-
-      if (parsedResponse.envelope?.payload?.data && Array.isArray(parsedResponse.envelope.payload.data)) {
-        logger.info('🔍 [EXTRACT BUSINESS DATA] Found data array in envelope.payload.data', {
-          data_array_length: parsedResponse.envelope.payload.data.length,
-        });
-        // Also check envelope payload for data array
-        businessData.data = parsedResponse.envelope.payload.data;
-        businessData.sources = parsedResponse.envelope.payload.data;
-        
-        // Extract metadata from envelope payload
-        if (parsedResponse.envelope.payload.metadata) {
-          businessData.metadata = {
-            ...businessData.metadata,
-            ...parsedResponse.envelope.payload.metadata,
-          };
-        }
-      } else if (parsedResponse.envelope?.payload?.content) {
+      
+      if (parsedResponse.envelope?.payload?.content) {
         logger.info('🔍 [EXTRACT BUSINESS DATA] Using envelope.payload.content (old format)');
-        // Fallback to old format: content field
         businessData.sources = Array.isArray(parsedResponse.envelope.payload.content)
           ? parsedResponse.envelope.payload.content
           : [parsedResponse.envelope.payload.content];
       } else if (parsedResponse.routing?.all_attempts) {
         logger.info('🔍 [EXTRACT BUSINESS DATA] Using routing.all_attempts');
-        // Extract from routing metadata
         businessData.sources = parsedResponse.routing.all_attempts
           .filter(attempt => attempt.success)
           .map(attempt => ({
@@ -321,6 +312,9 @@ export function extractBusinessData(parsedResponse) {
             rank: attempt.rank,
             quality: attempt.quality,
           }));
+      } else {
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Using fallback structure');
+        businessData.data = businessData.data || businessFields;
       }
     }
 
