@@ -129,8 +129,52 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
     // Create structured fields
     const structured = createStructuredFields(processed, interpretedFields);
 
+    // ⭐ NEW: Also check business_data.data for new format
+    // New format: { request_id, success, data: [...], metadata: {...} }
+    let dataArray = [];
+    if (processed.business_data?.data && Array.isArray(processed.business_data.data)) {
+      // New format - data is already an array
+      dataArray = processed.business_data.data;
+    } else if (processed.business_data?.data && typeof processed.business_data.data === 'object' && processed.business_data.data.data) {
+      // Nested data format
+      dataArray = Array.isArray(processed.business_data.data.data) 
+        ? processed.business_data.data.data 
+        : [processed.business_data.data.data];
+    }
+
     // Convert to format expected by queryProcessing.service.js
-    const contentItems = structured.sources.map((source) => ({
+    // Use structured.sources if available, otherwise convert dataArray
+    const sourcesToConvert = structured.sources.length > 0 ? structured.sources : dataArray.map((item, index) => {
+      // Convert data array items to source format
+      if (typeof item === 'object' && item !== null) {
+        const isReportFormat = item.report_name && item.generated_at;
+        const conclusionsText = item.conclusions 
+          ? (typeof item.conclusions === 'string' ? item.conclusions : JSON.stringify(item.conclusions))
+          : '';
+        const contentText = conclusionsText || item.content || item.text || item.description || JSON.stringify(item);
+        
+        return {
+          sourceId: item.id || item.report_id || `coordinator-${index}`,
+          sourceType: isReportFormat ? 'management_reporting' : (item.type || category),
+          sourceMicroservice: processed.target_services?.[0] || 'coordinator',
+          title: item.report_name || item.title || item.name || `Source ${index + 1}`,
+          contentSnippet: contentText.substring(0, 500),
+          sourceUrl: item.url || item.sourceUrl || '',
+          relevanceScore: item.relevanceScore || item.score || 0.75,
+          metadata: {
+            ...(item.metadata || {}),
+            report_name: item.report_name,
+            generated_at: item.generated_at,
+            report_type: item.report_type,
+            source: 'coordinator',
+            target_services: processed.target_services || [],
+          },
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
+    const contentItems = sourcesToConvert.map((source) => ({
       contentId: source.sourceId,
       contentType: source.sourceType || category,
       contentText: source.contentSnippet || '',

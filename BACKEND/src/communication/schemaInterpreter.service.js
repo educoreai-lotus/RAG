@@ -38,7 +38,38 @@ export function interpretNormalizedFields(normalizedFields = {}) {
       }
 
       // Categorize fields based on key patterns
-      if (key.includes('content') || key.includes('text') || key.includes('data')) {
+      // ⭐ NEW: Handle 'data' field specifically (managementreporting-service format)
+      // Expected structure: { request_id, success, data: [...], metadata: {...} }
+      if (key === 'data') {
+        if (Array.isArray(parsedValue)) {
+          // Direct array format
+          structured.content.push(...parsedValue);
+        } else if (typeof parsedValue === 'object' && parsedValue !== null && Array.isArray(parsedValue.data)) {
+          // New format: { request_id, success, data: [...], metadata: {...} }
+          // Extract the data array from the object
+          structured.content.push(...parsedValue.data);
+          
+          // Also extract metadata if present
+          if (parsedValue.metadata && typeof parsedValue.metadata === 'object') {
+            structured.metadata = { ...structured.metadata, ...parsedValue.metadata };
+          }
+          
+          // Store request_id and success in fields
+          if (parsedValue.request_id) {
+            structured.fields.request_id = parsedValue.request_id;
+          }
+          if (parsedValue.success !== undefined) {
+            structured.fields.success = parsedValue.success;
+          }
+        } else if (typeof parsedValue === 'object' && parsedValue !== null) {
+          // Object but not the expected format - store as field
+          structured.fields[key] = parsedValue;
+        } else {
+          // String or other type
+          structured.fields[key] = parsedValue;
+        }
+      } else if (key.includes('content') || key.includes('text')) {
+        // Old format: content or text fields
         if (Array.isArray(parsedValue)) {
           structured.content.push(...parsedValue);
         } else {
@@ -124,20 +155,58 @@ export function createStructuredFields(coordinatorData = {}, interpretedFields =
           },
         };
       } else if (typeof item === 'object' && item !== null) {
-        return {
-          sourceId: item.id || item.sourceId || `coordinator-${index}`,
-          sourceType: item.type || item.sourceType || 'coordinator',
-          sourceMicroservice: item.microservice || structured.metadata.target_services?.[0] || 'coordinator',
-          title: item.title || item.name || `Coordinator Source ${index + 1}`,
-          contentSnippet: item.content || item.text || item.description || '',
-          sourceUrl: item.url || item.sourceUrl || '',
-          relevanceScore: item.relevanceScore || item.score || 0.75,
-          metadata: {
-            ...structured.metadata,
-            ...(item.metadata || {}),
-            index,
-          },
-        };
+        // ⭐ NEW: Handle managementreporting-service format
+        // Expected: { report_name, generated_at, conclusions, ... }
+        const isReportFormat = item.report_name && item.generated_at;
+        
+        if (isReportFormat) {
+          // Format for managementreporting-service reports
+          const conclusionsText = item.conclusions 
+            ? (typeof item.conclusions === 'string' 
+                ? item.conclusions 
+                : JSON.stringify(item.conclusions))
+            : '';
+          
+          const contentText = conclusionsText || 
+            item.content || 
+            item.text || 
+            item.description || 
+            JSON.stringify(item);
+          
+          return {
+            sourceId: item.id || item.report_id || `coordinator-report-${index}`,
+            sourceType: 'management_reporting',
+            sourceMicroservice: structured.metadata.target_services?.[0] || 'managementreporting-service',
+            title: item.report_name || `Report ${index + 1}`,
+            contentSnippet: contentText.substring(0, 500), // Longer snippet for reports
+            sourceUrl: item.url || item.sourceUrl || '',
+            relevanceScore: item.relevanceScore || item.score || 0.75,
+            metadata: {
+              ...structured.metadata,
+              ...(item.metadata || {}),
+              report_name: item.report_name,
+              generated_at: item.generated_at,
+              report_type: item.report_type,
+              index,
+            },
+          };
+        } else {
+          // Generic object format
+          return {
+            sourceId: item.id || item.sourceId || `coordinator-${index}`,
+            sourceType: item.type || item.sourceType || 'coordinator',
+            sourceMicroservice: item.microservice || structured.metadata.target_services?.[0] || 'coordinator',
+            title: item.title || item.name || `Coordinator Source ${index + 1}`,
+            contentSnippet: item.content || item.text || item.description || JSON.stringify(item).substring(0, 200),
+            sourceUrl: item.url || item.sourceUrl || '',
+            relevanceScore: item.relevanceScore || item.score || 0.75,
+            metadata: {
+              ...structured.metadata,
+              ...(item.metadata || {}),
+              index,
+            },
+          };
+        }
       }
       return null;
     }).filter(Boolean);

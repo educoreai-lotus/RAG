@@ -175,10 +175,59 @@ export function extractBusinessData(parsedResponse) {
       }
     });
 
-    businessData.data = businessData.data || businessFields;
-
-    // Extract sources from envelope or routing metadata
-    if (parsedResponse.envelope?.payload?.content) {
+    // ⭐ NEW STRUCTURE: Check for new format in businessFields first
+    // Expected structure: { request_id, success, data: [...], metadata: {...} }
+    let extractedData = null;
+    
+    // Check if businessFields contains 'data' field with new structure
+    if (businessFields.data && typeof businessFields.data === 'object' && Array.isArray(businessFields.data.data)) {
+      extractedData = businessFields.data;
+    } else if (businessFields.data && typeof businessFields.data === 'object' && !Array.isArray(businessFields.data) && businessFields.data.data) {
+      // data field might be nested
+      extractedData = businessFields.data;
+    } else if (businessData.data && typeof businessData.data === 'object' && Array.isArray(businessData.data.data)) {
+      // Check envelope payload
+      extractedData = businessData.data;
+    } else if (businessData.data && typeof businessData.data === 'object' && !Array.isArray(businessData.data) && businessData.data.data) {
+      // Check envelope payload (nested)
+      extractedData = businessData.data;
+    }
+    
+    // If found new structure, extract it
+    if (extractedData && Array.isArray(extractedData.data)) {
+      // New format: { request_id, success, data: [...], metadata: {...} }
+      businessData.data = extractedData.data; // Extract the data array
+      businessData.sources = extractedData.data; // Use data array as sources
+      
+      // Merge metadata from the response
+      if (extractedData.metadata) {
+        businessData.metadata = {
+          ...businessData.metadata,
+          ...extractedData.metadata,
+          request_id: extractedData.request_id || businessData.metadata.request_id,
+        };
+      }
+    } else {
+      // Fallback to old structure
+      businessData.data = businessData.data || businessFields;
+    }
+    
+    // Also check envelope payload for data array (if not already extracted)
+    if (!businessData.sources || businessData.sources.length === 0) {
+      if (parsedResponse.envelope?.payload?.data && Array.isArray(parsedResponse.envelope.payload.data)) {
+      // Also check envelope payload for data array
+      businessData.data = parsedResponse.envelope.payload.data;
+      businessData.sources = parsedResponse.envelope.payload.data;
+      
+      // Extract metadata from envelope payload
+      if (parsedResponse.envelope.payload.metadata) {
+        businessData.metadata = {
+          ...businessData.metadata,
+          ...parsedResponse.envelope.payload.metadata,
+        };
+      }
+    } else if (parsedResponse.envelope?.payload?.content) {
+      // Fallback to old format: content field
       businessData.sources = Array.isArray(parsedResponse.envelope.payload.content)
         ? parsedResponse.envelope.payload.content
         : [parsedResponse.envelope.payload.content];
