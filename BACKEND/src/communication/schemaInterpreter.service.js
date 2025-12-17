@@ -148,7 +148,16 @@ function extractTextFromObject(item, depth = 0) {
  */
 export function interpretNormalizedFields(normalizedFields = {}) {
   try {
+    logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Starting interpretation', {
+      has_normalizedFields: !!normalizedFields,
+      normalizedFields_type: typeof normalizedFields,
+      normalizedFields_keys: normalizedFields && typeof normalizedFields === 'object' ? Object.keys(normalizedFields) : [],
+    });
+
     if (!normalizedFields || typeof normalizedFields !== 'object') {
+      logger.warn('🔍 [INTERPRET NORMALIZED FIELDS] Invalid normalized fields', {
+        normalizedFields_type: typeof normalizedFields,
+      });
       return {};
     }
 
@@ -160,6 +169,13 @@ export function interpretNormalizedFields(normalizedFields = {}) {
 
     // Process each normalized field
     Object.entries(normalizedFields).forEach(([key, value]) => {
+      logger.debug('🔍 [INTERPRET NORMALIZED FIELDS] Processing field', {
+        key,
+        value_type: typeof value,
+        value_is_string: typeof value === 'string',
+        value_length: typeof value === 'string' ? value.length : 'N/A',
+        value_starts_with_json: typeof value === 'string' && (value.startsWith('{') || value.startsWith('[')),
+      });
       // Try to parse JSON values
       let parsedValue = value;
       if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
@@ -175,10 +191,28 @@ export function interpretNormalizedFields(normalizedFields = {}) {
       // ⭐ NEW: Handle 'data' field specifically (managementreporting-service format)
       // Expected structure: { request_id, success, data: [...], metadata: {...} }
       if (key === 'data') {
+        logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Processing data field', {
+          key,
+          parsedValue_type: typeof parsedValue,
+          parsedValue_is_array: Array.isArray(parsedValue),
+          parsedValue_is_object: typeof parsedValue === 'object' && parsedValue !== null,
+          has_data_property: typeof parsedValue === 'object' && parsedValue !== null && 'data' in parsedValue,
+          data_property_is_array: typeof parsedValue === 'object' && parsedValue !== null && Array.isArray(parsedValue?.data),
+          data_array_length: typeof parsedValue === 'object' && parsedValue !== null && Array.isArray(parsedValue?.data) ? parsedValue.data.length : 'N/A',
+        });
+
         if (Array.isArray(parsedValue)) {
+          logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Data field is direct array', {
+            array_length: parsedValue.length,
+          });
           // Direct array format
           structured.content.push(...parsedValue);
         } else if (typeof parsedValue === 'object' && parsedValue !== null && Array.isArray(parsedValue.data)) {
+          logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Data field has nested data array', {
+            data_array_length: parsedValue.data.length,
+            has_metadata: !!parsedValue.metadata,
+            has_request_id: !!parsedValue.request_id,
+          });
           // New format: { request_id, success, data: [...], metadata: {...} }
           // Extract the data array from the object
           structured.content.push(...parsedValue.data);
@@ -196,9 +230,11 @@ export function interpretNormalizedFields(normalizedFields = {}) {
             structured.fields.success = parsedValue.success;
           }
         } else if (typeof parsedValue === 'object' && parsedValue !== null) {
+          logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Data field is object (storing as field)');
           // Object but not the expected format - store as field
           structured.fields[key] = parsedValue;
         } else {
+          logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Data field is string/other (storing as field)');
           // String or other type
           structured.fields[key] = parsedValue;
         }
@@ -221,10 +257,18 @@ export function interpretNormalizedFields(normalizedFields = {}) {
       }
     });
 
-    logger.debug('Interpreted normalized fields', {
+    logger.info('🔍 [INTERPRET NORMALIZED FIELDS] Interpretation completed', {
       content_items: structured.content.length,
-      metadata_keys: Object.keys(structured.metadata).length,
-      field_keys: Object.keys(structured.fields).length,
+      metadata_keys_count: Object.keys(structured.metadata).length,
+      metadata_keys: Object.keys(structured.metadata),
+      field_keys_count: Object.keys(structured.fields).length,
+      field_keys: Object.keys(structured.fields),
+      content_preview: structured.content.slice(0, 2).map((item, idx) => ({
+        index: idx,
+        type: typeof item,
+        is_array: Array.isArray(item),
+        keys: typeof item === 'object' && item !== null && !Array.isArray(item) ? Object.keys(item).slice(0, 10) : [],
+      })),
     });
 
     return structured;
