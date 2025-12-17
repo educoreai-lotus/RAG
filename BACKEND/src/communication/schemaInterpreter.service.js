@@ -12,7 +12,13 @@ import { logger } from '../utils/logger.util.js';
  * @param {*} item - Any object or value
  * @returns {string} Extracted text content
  */
-function extractTextFromObject(item) {
+function extractTextFromObject(item, depth = 0) {
+  const maxDepth = 5; // Prevent infinite recursion
+  if (depth > maxDepth) {
+    logger.warn('🔍 [EXTRACT TEXT] Max depth reached', { depth });
+    return '';
+  }
+
   if (!item || typeof item !== 'object') {
     return typeof item === 'string' ? item : '';
   }
@@ -27,15 +33,20 @@ function extractTextFromObject(item) {
   for (const field of textFields) {
     if (item[field]) {
       if (typeof item[field] === 'string' && item[field].trim().length > 0) {
+        logger.debug('🔍 [EXTRACT TEXT] Found text field', { field, text_length: item[field].length, depth });
         return item[field];
       }
       if (Array.isArray(item[field])) {
+        logger.debug('🔍 [EXTRACT TEXT] Found array field', { field, array_length: item[field].length, depth });
         // If field is array, try to extract from items
         const extracted = item[field]
-          .map(subItem => extractTextFromObject(subItem))
+          .map(subItem => extractTextFromObject(subItem, depth + 1))
           .filter(text => text && text.trim().length > 0)
           .join('\n');
-        if (extracted) return extracted;
+        if (extracted) {
+          logger.debug('🔍 [EXTRACT TEXT] Extracted from array field', { field, extracted_length: extracted.length });
+          return extracted;
+        }
       }
     }
   }
@@ -53,6 +64,7 @@ function extractTextFromObject(item) {
   const nestedArrayFields = ['conclusions', 'items', 'results', 'data', 'list', 'entries'];
   for (const field of nestedArrayFields) {
     if (item[field] && Array.isArray(item[field])) {
+      logger.debug('🔍 [EXTRACT TEXT] Found nested array field', { field, array_length: item[field].length, depth });
       const extracted = item[field]
         .map((c, idx) => {
           // Try common fields in array items
@@ -67,7 +79,7 @@ function extractTextFromObject(item) {
           
           // If still no text, try extracting from the whole object
           if (!itemText) {
-            const extractedFromObj = extractTextFromObject(c);
+            const extractedFromObj = extractTextFromObject(c, depth + 1);
             if (extractedFromObj) itemText = extractedFromObj;
           }
           
@@ -75,7 +87,28 @@ function extractTextFromObject(item) {
         })
         .filter(Boolean)
         .join('\n');
-      if (extracted) return extracted;
+      if (extracted) {
+        logger.debug('🔍 [EXTRACT TEXT] Extracted from nested array field', { field, extracted_length: extracted.length });
+        return extracted;
+      }
+    } else if (item[field] && typeof item[field] === 'object' && !Array.isArray(item[field]) && item[field].conclusions) {
+      // Handle nested structure: { conclusions: { conclusions: [...] } }
+      logger.debug('🔍 [EXTRACT TEXT] Found nested conclusions structure', { field, depth });
+      const nestedItem = item[field];
+      if (Array.isArray(nestedItem.conclusions)) {
+        const extracted = nestedItem.conclusions
+          .map((c, idx) => {
+            const statement = c.statement || c.text || c.content || c.description || '';
+            const rationale = c.rationale || c.reason || c.explanation || '';
+            return statement ? `${idx + 1}. ${statement}${rationale ? ` (${rationale})` : ''}` : null;
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (extracted) {
+          logger.debug('🔍 [EXTRACT TEXT] Extracted from nested conclusions', { extracted_length: extracted.length });
+          return extracted;
+        }
+      }
     }
   }
 
@@ -217,6 +250,14 @@ export function interpretNormalizedFields(normalizedFields = {}) {
  */
 export function createStructuredFields(coordinatorData = {}, interpretedFields = {}) {
   try {
+    logger.info('🔍 [CREATE STRUCTURED FIELDS] Starting', {
+      has_coordinatorData: !!coordinatorData,
+      target_services: coordinatorData.target_services || [],
+      interpreted_content_count: interpretedFields.content?.length || 0,
+      interpreted_metadata_keys: Object.keys(interpretedFields.metadata || {}),
+      interpreted_fields_keys: Object.keys(interpretedFields.fields || {}),
+    });
+
     const structured = {
       // Content from Coordinator
       content: interpretedFields.content || [],
@@ -238,6 +279,17 @@ export function createStructuredFields(coordinatorData = {}, interpretedFields =
       // Routing metadata
       routing: coordinatorData.metadata || null,
     };
+
+    logger.info('🔍 [CREATE STRUCTURED FIELDS] Converting content to sources', {
+      content_count: structured.content.length,
+      content_types: structured.content.map((item, idx) => ({
+        index: idx,
+        type: typeof item,
+        is_array: Array.isArray(item),
+        is_object: typeof item === 'object',
+        keys: typeof item === 'object' && item !== null && !Array.isArray(item) ? Object.keys(item).slice(0, 10) : [],
+      })),
+    });
 
     // Convert content array to sources format (compatible with RAG sources)
     const sources = structured.content.map((item, index) => {
@@ -309,9 +361,16 @@ export function createStructuredFields(coordinatorData = {}, interpretedFields =
 
     structured.sources = sources;
 
-    logger.debug('Created structured fields', {
+    logger.info('🔍 [CREATE STRUCTURED FIELDS] Conversion completed', {
       sources_count: structured.sources.length,
       has_envelope: !!structured.envelope,
+      sources_preview: sources.slice(0, 3).map(s => ({
+        sourceId: s.sourceId,
+        sourceType: s.sourceType,
+        title: s.title,
+        contentSnippet_length: s.contentSnippet?.length || 0,
+        contentSnippet_preview: s.contentSnippet?.substring(0, 100) || 'empty',
+      })),
     });
 
     return structured;

@@ -129,7 +129,19 @@ export function parseRouteResponse(response) {
  * @returns {Object} Business data extracted from envelope and normalized fields
  */
 export function extractBusinessData(parsedResponse) {
+  logger.info('🔍 [EXTRACT BUSINESS DATA] Starting extraction', {
+    has_parsedResponse: !!parsedResponse,
+    success: parsedResponse?.success,
+    has_envelope: !!parsedResponse?.envelope,
+    has_normalized_fields: !!parsedResponse?.normalized_fields,
+    normalized_fields_keys: parsedResponse?.normalized_fields ? Object.keys(parsedResponse.normalized_fields) : [],
+  });
+
   if (!parsedResponse || !parsedResponse.success) {
+    logger.warn('🔍 [EXTRACT BUSINESS DATA] No response or not successful', {
+      has_parsedResponse: !!parsedResponse,
+      success: parsedResponse?.success,
+    });
     return {
       data: null,
       sources: [],
@@ -146,6 +158,13 @@ export function extractBusinessData(parsedResponse) {
 
     // Extract from envelope payload
     if (parsedResponse.envelope?.payload) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope.payload', {
+        payload_keys: Object.keys(parsedResponse.envelope.payload),
+        has_data: !!parsedResponse.envelope.payload.data,
+        data_is_array: Array.isArray(parsedResponse.envelope.payload.data),
+        has_content: !!parsedResponse.envelope.payload.content,
+        has_metadata: !!parsedResponse.envelope.payload.metadata,
+      });
       businessData.data = parsedResponse.envelope.payload;
     }
 
@@ -160,6 +179,11 @@ export function extractBusinessData(parsedResponse) {
       'processing_time_ms',
     ];
 
+    logger.info('🔍 [EXTRACT BUSINESS DATA] Processing normalized_fields', {
+      normalized_fields_count: Object.keys(normalized).length,
+      system_fields_count: systemFields.length,
+    });
+
     Object.entries(normalized).forEach(([key, value]) => {
       if (!systemFields.includes(key)) {
         // Try to parse JSON values
@@ -167,34 +191,70 @@ export function extractBusinessData(parsedResponse) {
         if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
           try {
             parsedValue = JSON.parse(value);
+            logger.debug('🔍 [EXTRACT BUSINESS DATA] Parsed JSON field', {
+              key,
+              value_type_before: 'string',
+              value_type_after: typeof parsedValue,
+              is_array: Array.isArray(parsedValue),
+              is_object: typeof parsedValue === 'object',
+            });
           } catch (_e) {
             // Keep as string if parsing fails
+            logger.debug('🔍 [EXTRACT BUSINESS DATA] Failed to parse JSON field', {
+              key,
+              error: _e.message,
+            });
           }
         }
         businessFields[key] = parsedValue;
       }
     });
 
+    logger.info('🔍 [EXTRACT BUSINESS DATA] Business fields extracted', {
+      business_fields_keys: Object.keys(businessFields),
+      has_data_field: !!businessFields.data,
+      data_field_type: typeof businessFields.data,
+      data_field_is_array: Array.isArray(businessFields.data),
+    });
+
     // ⭐ NEW STRUCTURE: Check for new format in businessFields first
     // Expected structure: { request_id, success, data: [...], metadata: {...} }
     let extractedData = null;
     
+    logger.info('🔍 [EXTRACT BUSINESS DATA] Checking for new structure', {
+      businessFields_has_data: !!businessFields.data,
+      businessFields_data_type: typeof businessFields.data,
+      businessFields_data_is_array: Array.isArray(businessFields.data),
+      businessData_has_data: !!businessData.data,
+      businessData_data_type: typeof businessData.data,
+    });
+    
     // Check if businessFields contains 'data' field with new structure
     if (businessFields.data && typeof businessFields.data === 'object' && Array.isArray(businessFields.data.data)) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessFields.data.data (array)');
       extractedData = businessFields.data;
     } else if (businessFields.data && typeof businessFields.data === 'object' && !Array.isArray(businessFields.data) && businessFields.data.data) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessFields.data (nested object)');
       // data field might be nested
       extractedData = businessFields.data;
     } else if (businessData.data && typeof businessData.data === 'object' && Array.isArray(businessData.data.data)) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessData.data.data (array)');
       // Check envelope payload
       extractedData = businessData.data;
     } else if (businessData.data && typeof businessData.data === 'object' && !Array.isArray(businessData.data) && businessData.data.data) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found new structure in businessData.data (nested object)');
       // Check envelope payload (nested)
       extractedData = businessData.data;
     }
     
     // If found new structure, extract it
     if (extractedData && Array.isArray(extractedData.data)) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Extracting from new structure', {
+        data_array_length: extractedData.data.length,
+        has_metadata: !!extractedData.metadata,
+        request_id: extractedData.request_id,
+        metadata_keys: extractedData.metadata ? Object.keys(extractedData.metadata) : [],
+      });
       // New format: { request_id, success, data: [...], metadata: {...} }
       businessData.data = extractedData.data; // Extract the data array
       businessData.sources = extractedData.data; // Use data array as sources
@@ -207,14 +267,33 @@ export function extractBusinessData(parsedResponse) {
           request_id: extractedData.request_id || businessData.metadata.request_id,
         };
       }
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Extracted from new structure', {
+        sources_count: businessData.sources.length,
+        metadata_keys: Object.keys(businessData.metadata),
+      });
     } else {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Using fallback structure', {
+        extractedData_found: !!extractedData,
+        extractedData_has_data_array: extractedData ? Array.isArray(extractedData.data) : false,
+      });
       // Fallback to old structure
       businessData.data = businessData.data || businessFields;
     }
     
     // Also check envelope payload for data array (if not already extracted)
     if (!businessData.sources || businessData.sources.length === 0) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] No sources yet, checking envelope payload', {
+        has_envelope_payload: !!parsedResponse.envelope?.payload,
+        envelope_payload_has_data: !!parsedResponse.envelope?.payload?.data,
+        envelope_payload_data_is_array: Array.isArray(parsedResponse.envelope?.payload?.data),
+        envelope_payload_has_content: !!parsedResponse.envelope?.payload?.content,
+        has_routing: !!parsedResponse.routing,
+      });
+
       if (parsedResponse.envelope?.payload?.data && Array.isArray(parsedResponse.envelope.payload.data)) {
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Found data array in envelope.payload.data', {
+          data_array_length: parsedResponse.envelope.payload.data.length,
+        });
         // Also check envelope payload for data array
         businessData.data = parsedResponse.envelope.payload.data;
         businessData.sources = parsedResponse.envelope.payload.data;
@@ -227,11 +306,13 @@ export function extractBusinessData(parsedResponse) {
           };
         }
       } else if (parsedResponse.envelope?.payload?.content) {
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Using envelope.payload.content (old format)');
         // Fallback to old format: content field
         businessData.sources = Array.isArray(parsedResponse.envelope.payload.content)
           ? parsedResponse.envelope.payload.content
           : [parsedResponse.envelope.payload.content];
       } else if (parsedResponse.routing?.all_attempts) {
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Using routing.all_attempts');
         // Extract from routing metadata
         businessData.sources = parsedResponse.routing.all_attempts
           .filter(attempt => attempt.success)
@@ -247,13 +328,22 @@ export function extractBusinessData(parsedResponse) {
     businessData.metadata = {
       source: parsedResponse.envelope?.source || parsedResponse.successful_service,
       timestamp: parsedResponse.envelope?.timestamp || new Date().toISOString(),
-      request_id: parsedResponse.envelope?.request_id || null,
+      request_id: parsedResponse.envelope?.request_id || businessData.metadata.request_id || null,
       tenant_id: parsedResponse.envelope?.tenant_id || null,
       user_id: parsedResponse.envelope?.user_id || null,
       quality_score: parsedResponse.quality_score,
       rank_used: parsedResponse.rank_used,
       successful_service: parsedResponse.successful_service,
     };
+
+    logger.info('🔍 [EXTRACT BUSINESS DATA] Extraction completed', {
+      has_data: !!businessData.data,
+      data_is_array: Array.isArray(businessData.data),
+      data_length: Array.isArray(businessData.data) ? businessData.data.length : 'N/A',
+      sources_count: businessData.sources.length,
+      metadata_keys: Object.keys(businessData.metadata),
+      first_source_preview: businessData.sources[0] ? JSON.stringify(businessData.sources[0]).substring(0, 200) : 'N/A',
+    });
 
     return businessData;
   } catch (error) {

@@ -215,32 +215,104 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
     }
 
     // Process Coordinator response
+    logger.info('🔍 [GRPC FALLBACK] Processing Coordinator response', {
+      category,
+      tenantId,
+      has_response: !!coordinatorResponse,
+      has_target_services: !!coordinatorResponse?.target_services,
+      target_services: coordinatorResponse?.target_services || [],
+      has_normalized_fields: !!coordinatorResponse?.normalized_fields,
+      normalized_fields_keys: coordinatorResponse?.normalized_fields ? Object.keys(coordinatorResponse.normalized_fields) : [],
+    });
+
     const processed = processCoordinatorResponse(coordinatorResponse);
     if (!processed) {
-      logger.warn('Failed to process Coordinator response', {
+      logger.warn('❌ [GRPC FALLBACK] Failed to process Coordinator response', {
         category,
         tenantId,
       });
       return [];
     }
 
+    logger.info('🔍 [GRPC FALLBACK] Coordinator response processed', {
+      category,
+      tenantId,
+      has_business_data: !!processed.business_data,
+      business_data_has_data: !!processed.business_data?.data,
+      business_data_data_type: typeof processed.business_data?.data,
+      business_data_data_is_array: Array.isArray(processed.business_data?.data),
+      business_data_sources_count: processed.business_data?.sources?.length || 0,
+      target_services: processed.target_services || [],
+    });
+
     // Interpret normalized fields
+    logger.info('🔍 [GRPC FALLBACK] Interpreting normalized fields', {
+      category,
+      tenantId,
+      normalized_fields_keys: processed.normalized_fields ? Object.keys(processed.normalized_fields) : [],
+    });
+
     const interpretedFields = interpretNormalizedFields(processed.normalized_fields);
     
+    logger.info('🔍 [GRPC FALLBACK] Normalized fields interpreted', {
+      category,
+      tenantId,
+      content_items_count: interpretedFields.content?.length || 0,
+      metadata_keys: Object.keys(interpretedFields.metadata || {}),
+      fields_keys: Object.keys(interpretedFields.fields || {}),
+    });
+    
     // Create structured fields
+    logger.info('🔍 [GRPC FALLBACK] Creating structured fields', {
+      category,
+      tenantId,
+    });
+
     const structured = createStructuredFields(processed, interpretedFields);
+
+    logger.info('🔍 [GRPC FALLBACK] Structured fields created', {
+      category,
+      tenantId,
+      structured_sources_count: structured.sources?.length || 0,
+      has_envelope: !!structured.envelope,
+    });
 
     // ⭐ NEW: Also check business_data.data for new format
     // New format: { request_id, success, data: [...], metadata: {...} }
+    logger.info('🔍 [GRPC FALLBACK] Extracting data array', {
+      category,
+      tenantId,
+      has_business_data: !!processed.business_data,
+      has_business_data_data: !!processed.business_data?.data,
+      business_data_data_type: typeof processed.business_data?.data,
+      business_data_data_is_array: Array.isArray(processed.business_data?.data),
+      structured_sources_count: structured.sources?.length || 0,
+    });
+
     let dataArray = [];
     if (processed.business_data?.data && Array.isArray(processed.business_data.data)) {
+      logger.info('🔍 [GRPC FALLBACK] Found data array directly', {
+        category,
+        tenantId,
+        data_array_length: processed.business_data.data.length,
+      });
       // New format - data is already an array
       dataArray = processed.business_data.data;
     } else if (processed.business_data?.data && typeof processed.business_data.data === 'object' && processed.business_data.data.data) {
+      logger.info('🔍 [GRPC FALLBACK] Found nested data structure', {
+        category,
+        tenantId,
+        nested_data_is_array: Array.isArray(processed.business_data.data.data),
+      });
       // Nested data format
       dataArray = Array.isArray(processed.business_data.data.data) 
         ? processed.business_data.data.data 
         : [processed.business_data.data.data];
+    } else {
+      logger.info('🔍 [GRPC FALLBACK] No data array found in business_data.data', {
+        category,
+        tenantId,
+      });
     }
 
     // Convert to format expected by queryProcessing.service.js
