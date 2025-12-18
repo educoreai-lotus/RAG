@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { runBatchSync } from '../jobs/scheduledSync.js';
+import { listServices } from '../clients/coordinator.client.js';
 import { logger } from '../utils/logger.util.js';
 
 const router = express.Router();
@@ -47,6 +48,36 @@ router.post('/batch-sync/trigger', async (req, res) => {
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /admin/batch-sync/services
+ * Get list of services that will be synced (from Coordinator)
+ */
+router.get('/batch-sync/services', async (req, res) => {
+  try {
+    logger.info('🔍 [ADMIN] Fetching services list from Coordinator');
+
+    const services = await listServices();
+
+    res.json({
+      success: true,
+      services: services,
+      count: services.length,
+      source: 'coordinator',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('❌ [ADMIN] Failed to fetch services list', {
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
     });
   }
 });

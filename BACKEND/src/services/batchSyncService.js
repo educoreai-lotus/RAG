@@ -10,17 +10,62 @@
  */
 
 import { logger } from '../utils/logger.util.js';
-import { batchSync } from '../clients/coordinator.client.js';
+import { batchSync, listServices as getCoordinatorServices } from '../clients/coordinator.client.js';
 import { processCoordinatorResponse } from '../communication/communicationManager.service.js';
 import { getPrismaClient } from '../config/database.config.js';
 
 // Configuration
 const BATCH_SYNC_ENABLED = process.env.BATCH_SYNC_ENABLED !== 'false'; // Default: enabled
 const BATCH_SYNC_LIMIT = parseInt(process.env.BATCH_SYNC_LIMIT || '1000', 10);
-const MICROSERVICES_TO_SYNC = (process.env.BATCH_SYNC_SERVICES || 'payment-service,assessment-service,devlab-service,analytics-service')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+
+/**
+ * Get list of services to sync
+ * Priority:
+ * 1. BATCH_SYNC_SERVICES env var (manual override)
+ * 2. Coordinator's list (source of truth)
+ * 3. Fallback list (if Coordinator fails)
+ */
+async function getServicesToSync() {
+  // 1. Check env var for manual override
+  if (process.env.BATCH_SYNC_SERVICES) {
+    const services = process.env.BATCH_SYNC_SERVICES
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    logger.info('[BatchSync] Using BATCH_SYNC_SERVICES from env var', {
+      services: services,
+      count: services.length,
+    });
+    return services;
+  }
+
+  // 2. Get services from Coordinator
+  try {
+    logger.info('[BatchSync] Fetching services list from Coordinator');
+
+    const services = await getCoordinatorServices();
+
+    if (services && services.length > 0) {
+      logger.info('[BatchSync] Using services from Coordinator', {
+        services: services,
+        count: services.length,
+      });
+      return services;
+    }
+  } catch (error) {
+    logger.error('[BatchSync] Failed to get services from Coordinator', {
+      error: error.message,
+    });
+  }
+
+  // 3. Fallback to known services
+  logger.warn('[BatchSync] Using fallback service list');
+  return [
+    'managementreporting-service',
+    'assessment-service',
+    'devlab-service',
+  ];
+}
 
 /**
  * Sync a single microservice with pagination support
@@ -322,7 +367,7 @@ async function updateDataStore(serviceName, data) {
  * @returns {Promise<Object>} Summary of all syncs
  */
 export async function syncAllServices(options = {}) {
-  const { syncType = 'daily', since = null } = options;
+  const { syncType = 'batch', since = null } = options; // ✅ FIXED: 'batch' not 'daily'
   const startTime = Date.now();
 
   if (!BATCH_SYNC_ENABLED) {
@@ -337,24 +382,47 @@ export async function syncAllServices(options = {}) {
     };
   }
 
-  logger.info('[BatchSync] Starting sync for all services', {
-    services: MICROSERVICES_TO_SYNC,
-    syncType,
+  logger.info('[BatchSync] Starting sync for all services');
+
+  // Get services list (now async!)
+  const services = await getServicesToSync();
+
+  logger.info('[BatchSync] Services to sync', {
+    services: services,
+    count: services.length,
+    syncType: syncType,
     has_since: !!since,
   });
 
   const results = [];
 
   // Sync each service independently (errors in one don't stop others)
-  for (const serviceName of MICROSERVICES_TO_SYNC) {
+  for (const serviceName of services) {
     try {
+      logger.info('[BatchSync] Starting sync for service', {
+        service: serviceName,
+      });
+
       const result = await syncService(serviceName, { syncType, since });
-      results.push(result);
+
+      results.push({
+        service: serviceName,
+        success: true,
+        ...result,
+      });
+
+      logger.info('[BatchSync] Service sync completed', {
+        service: serviceName,
+        success: true,
+        totalItems: result.totalItems,
+      });
+
     } catch (error) {
-      logger.error('[BatchSync] Failed to sync service', {
+      logger.error('[BatchSync] Service sync failed', {
         service: serviceName,
         error: error.message,
       });
+
       results.push({
         service: serviceName,
         success: false,
@@ -367,13 +435,13 @@ export async function syncAllServices(options = {}) {
   }
 
   const duration = Date.now() - startTime;
-  const totalItems = results.reduce((sum, r) => sum + r.totalItems, 0);
-  const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+  const totalItems = results.reduce((sum, r) => sum + (r.totalItems || 0), 0);
+  const totalErrors = results.reduce((sum, r) => sum + (r.errors?.length || 0), 0);
   const successfulServices = results.filter(r => r.success).length;
   const failedServices = results.filter(r => !r.success).length;
 
   logger.info('[BatchSync] All services sync completed', {
-    total_services: MICROSERVICES_TO_SYNC.length,
+    total: services.length,
     successful: successfulServices,
     failed: failedServices,
     totalItems,
@@ -399,8 +467,9 @@ export async function syncAllServices(options = {}) {
 export function getBatchSyncStatus() {
   return {
     enabled: BATCH_SYNC_ENABLED,
-    services: MICROSERVICES_TO_SYNC,
+    services: process.env.BATCH_SYNC_SERVICES ? process.env.BATCH_SYNC_SERVICES.split(',').map(s => s.trim()) : 'from Coordinator',
     limit: BATCH_SYNC_LIMIT,
+    coordinator_http_url: process.env.COORDINATOR_HTTP_URL || process.env.COORDINATOR_URL || 'not set',
   };
 }
 

@@ -13,6 +13,7 @@ import * as grpc from '@grpc/grpc-js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -119,6 +120,7 @@ const COORDINATOR_ENABLED = process.env.COORDINATOR_ENABLED !== 'false'; // Defa
 const COORDINATOR_PROTO_PATH = getProtoPath();
 const COORDINATOR_SERVICE_NAME = process.env.COORDINATOR_SERVICE_NAME || 'rag.v1.CoordinatorService';
 const GRPC_TIMEOUT = parseInt(process.env.GRPC_TIMEOUT || '30', 10) * 1000; // Convert seconds to milliseconds
+const COORDINATOR_HTTP_URL = process.env.COORDINATOR_HTTP_URL || process.env.COORDINATOR_URL || 'https://coordinator-production.up.railway.app';
 
 // Log the gRPC URL configuration for debugging
 logger.info('🔍 [COORDINATOR CLIENT] gRPC Configuration', {
@@ -977,5 +979,56 @@ export function resetMetrics() {
     }
   });
   logger.info('Coordinator metrics reset');
+}
+
+/**
+ * Get list of available services from Coordinator
+ * @returns {Promise<Array<string>>} Array of service names
+ */
+export async function listServices() {
+  try {
+    logger.info('[Coordinator] Fetching services list', {
+      coordinator_http_url: COORDINATOR_HTTP_URL,
+    });
+
+    // Call Coordinator's HTTP endpoint
+    const url = `${COORDINATOR_HTTP_URL}/services/list`;
+
+    // Use axios with timeout
+    const response = await axios.get(url, {
+      timeout: 10000, // 10 seconds
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = response.data;
+
+    if (!data.success || !Array.isArray(data.services)) {
+      throw new Error('Invalid response format from Coordinator');
+    }
+
+    logger.info('[Coordinator] Services list received', {
+      count: data.services.length,
+      services: data.services,
+    });
+
+    return data.services;
+
+  } catch (error) {
+    logger.error('[Coordinator] Failed to fetch services list', {
+      error: error.message,
+      stack: error.stack,
+      coordinator_http_url: COORDINATOR_HTTP_URL,
+    });
+
+    // Return fallback list
+    logger.warn('[Coordinator] Using fallback service list');
+    return [
+      'managementreporting-service',
+      'assessment-service',
+      'devlab-service',
+    ];
+  }
 }
 
