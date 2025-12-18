@@ -3,6 +3,7 @@
  * Runs batch synchronization on a schedule using node-cron
  * 
  * Schedule: Daily at 2 AM (configurable via BATCH_SYNC_SCHEDULE env var)
+ * ⚠️ TEMPORARY: Currently set to 19:50 UTC for testing - change back to 2 AM after testing
  */
 
 import { logger } from '../utils/logger.util.js';
@@ -21,7 +22,8 @@ try {
 
 // Configuration
 const BATCH_SYNC_ENABLED = process.env.BATCH_SYNC_ENABLED !== 'false'; // Default: enabled
-const BATCH_SYNC_SCHEDULE = process.env.BATCH_SYNC_SCHEDULE || '0 2 * * *'; // Default: Daily at 2 AM
+// ⚠️ TEMPORARY: Set to 19:50 for testing - CHANGE BACK TO '0 2 * * *' (2 AM) after testing
+const BATCH_SYNC_SCHEDULE = process.env.BATCH_SYNC_SCHEDULE || '50 19 * * *'; // TEMPORARY: 19:50 UTC for testing (was: '0 2 * * *')
 const BATCH_SYNC_ON_STARTUP = process.env.BATCH_SYNC_ON_STARTUP === 'true'; // Default: false
 
 let scheduledTask = null;
@@ -187,4 +189,6 @@ export function getSchedulerStatus() {
     cronAvailable: cron !== null,
   };
 }
+
+
 
