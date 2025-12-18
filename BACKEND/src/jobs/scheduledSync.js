@@ -3,7 +3,6 @@
  * Runs batch synchronization on a schedule using node-cron
  * 
  * Schedule: Daily at 2 AM (configurable via BATCH_SYNC_SCHEDULE env var)
- * ⚠️ TEMPORARY: Currently set to 19:50 UTC for testing - change back to 2 AM after testing
  */
 
 import { logger } from '../utils/logger.util.js';
