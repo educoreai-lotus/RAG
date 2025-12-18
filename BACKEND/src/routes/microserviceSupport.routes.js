@@ -86,10 +86,10 @@ function supportAuthMiddleware(req, res, next) {
     }
     
     // Check explicit whitelist from environment variable
-    const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  const allowedOrigins = (process.env.SUPPORT_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
     
     if (allowedOrigins.length > 0) {
       if (allowedOrigins.includes(originToCheck)) {

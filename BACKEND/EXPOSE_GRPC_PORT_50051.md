@@ -195,3 +195,5 @@ GRPC_USE_SSL=false
 
 4. **Check logs first** - The best way to verify is to check Coordinator logs for "gRPC server started" and RAG logs for successful connection.
 
+
+

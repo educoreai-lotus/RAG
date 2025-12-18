@@ -175,3 +175,5 @@ Coordinator should:
 
 **RAG side is working correctly** - the issue is entirely in Coordinator's request handling and routing logic.
 
+
+

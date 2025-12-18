@@ -126,3 +126,5 @@ fetch('https://rag-backend.com/api/v1/query', {
 
 **המסקנה:** אחרי התיקון, CHAT MODE ו-SUPPORT MODE עובדים באותה צורה מבחינת CORS!
 
+
+

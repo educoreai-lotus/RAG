@@ -1,6 +1,53 @@
 {
-  "_comment": "Waiting for DATA_STRUCTURE_REPORT.json from Learner AI team",
-  "_instructions": "When you receive the report, open this file and paste the entire content here",
-  "_status": "pending"
+  "service_name": "learnerAI",
+  "description": "LearnerAI service data sync for RAG: courses (learning paths) from Supabase 'courses' table, returned via GRPC Process (realtime + batch).",
+  "version": "1.0.0",
+  "data_structure": {
+    "competency_target_name": "string",
+    "user_id": "string",
+    "gap_id": "string",
+    "learning_path": "object",
+    "approved": "boolean",
+    "created_at": "datetime",
+    "last_modified_at": "datetime"
+  },
+  "field_descriptions": {
+    "competency_target_name": "Primary key / course identifier (also used as learning path id).",
+    "user_id": "Learner UUID that owns this course.",
+    "gap_id": "Related skills_gap.gap_id (nullable).",
+    "learning_path": "Prompt-3 structured JSON (path_title, learner_id, total_estimated_duration_hours, learning_modules).",
+    "approved": "Whether the learning path is approved.",
+    "created_at": "When the course record was created.",
+    "last_modified_at": "When the course record was last modified."
+  },
+  "sample_data": {
+    "competency_target_name": "C++ basics Noam",
+    "user_id": "b2b400ed-bc11-4aa9-a89e-f4a00d0f6321",
+    "gap_id": "550e8400-e29b-41d4-a716-446655440000",
+    "learning_path": {
+      "path_title": "C++ Basics Learning Path",
+      "learner_id": "b2b400ed-bc11-4aa9-a89e-f4a00d0f6321",
+      "total_estimated_duration_hours": 12,
+      "learning_modules": [
+        {
+          "module_title": "Pointers Fundamentals",
+          "module_description": "Understand pointer basics, dereferencing, and memory safety.",
+          "estimated_duration_hours": 3,
+          "skills_covered": [
+            "Pointers (basic usage & referencing)",
+            "Passing by Value vs Passing by Reference"
+          ],
+          "resources": []
+        }
+      ]
+    },
+    "approved": true,
+    "created_at": "2025-12-18T10:00:00.000Z",
+    "last_modified_at": "2025-12-18T10:15:00.000Z"
+  },
+  "notes": [
+    "GRPC realtime mode returns data as a direct array of course records (no wrappers).",
+    "GRPC batch mode returns data as {\"items\": [...], \"page\": n, \"limit\": n, \"total\": n} (no extra wrapper keys).",
+    "This service currently syncs from Supabase table 'courses'."
+  ]
 }
-

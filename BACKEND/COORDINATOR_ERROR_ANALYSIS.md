@@ -164,3 +164,5 @@ When RAG sends a query like "show me my recent payments":
 
 The error shows Coordinator trying to call RAG, which is wrong. Coordinator should only route to other microservices, not back to the requester.
 
+
+

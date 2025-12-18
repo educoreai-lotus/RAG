@@ -128,3 +128,5 @@ Coordinator needs to:
 
 The fix needed is in Coordinator's proxy service - it should use the microservice's actual HTTP endpoints, not the gRPC service path.
 
+
+

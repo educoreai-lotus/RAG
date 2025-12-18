@@ -21,8 +21,7 @@ try {
 
 // Configuration
 const BATCH_SYNC_ENABLED = process.env.BATCH_SYNC_ENABLED !== 'false'; // Default: enabled
-// ⚠️ TEMPORARY: Set to 19:50 for testing - CHANGE BACK TO '0 2 * * *' (2 AM) after testing
-const BATCH_SYNC_SCHEDULE = process.env.BATCH_SYNC_SCHEDULE || '50 19 * * *'; // TEMPORARY: 19:50 UTC for testing (was: '0 2 * * *')
+const BATCH_SYNC_SCHEDULE = process.env.BATCH_SYNC_SCHEDULE || '0 2 * * *'; // Default: Daily at 2 AM
 const BATCH_SYNC_ON_STARTUP = process.env.BATCH_SYNC_ON_STARTUP === 'true'; // Default: false
 
 let scheduledTask = null;

@@ -68,3 +68,5 @@ RAG Service → gondola.proxy.rlwy.net:16335 → Coordinator:50051
 פשוט עדכן את המשתנים להשתמש ב-`gondola.proxy.rlwy.net:16335` 🚀
 
 
+
+

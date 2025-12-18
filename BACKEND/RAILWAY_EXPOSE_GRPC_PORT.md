@@ -154,3 +154,5 @@ grpcurl coordinator-production-6004.up.railway.app:50051 list
 לאחר מכן עדכן את המשתנים ב-RAG Service והרץ את הבדיקה!
 
 
+
+

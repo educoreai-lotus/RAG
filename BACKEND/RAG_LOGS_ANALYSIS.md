@@ -139,3 +139,5 @@ Then check RAG logs for:
 
 The fact that `[Coordinator] Environment validation passed` is a good sign - it means the configuration is correct. Now we need to test if the actual gRPC connection works when a request is made.
 
+
+

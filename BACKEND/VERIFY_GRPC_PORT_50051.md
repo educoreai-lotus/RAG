@@ -193,3 +193,5 @@ Based on your screenshots, verify:
 
 If both services are in the same project, Private Networking should work without TCP Proxy.
 
+
+

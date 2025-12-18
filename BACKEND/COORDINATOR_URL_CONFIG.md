@@ -42,3 +42,5 @@ node scripts/test-grpc-only.js
 3. **gRPC לא זמין דרך HTTP**: Railway לא חושף gRPC דרך ה-HTTP domain אוטומטית
 
 
+
+

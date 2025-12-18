@@ -1,6 +1,87 @@
 {
-  "_comment": "Waiting for DATA_STRUCTURE_REPORT.json from Course Builder team",
-  "_instructions": "When you receive the report, open this file and paste the entire content here",
-  "_status": "pending"
+  "service_name": "course-builder",
+  "description": "Manages educational courses, lessons, topics, modules, assessments, feedback, and learner registrations. Handles course creation from Content Studio, personalized learning paths from Learner AI, and course structure management.",
+  "version": "1.0.0",
+  "data_structure": {
+    "course_id": "string",
+    "course_name": "string",
+    "course_description": "text",
+    "course_type": "string",
+    "status": "string",
+    "level": "string",
+    "duration_hours": "number",
+    "start_date": "datetime",
+    "created_at": "datetime",
+    "updated_at": "datetime",
+    "created_by_user_id": "string",
+    "learning_path_designation": "object",
+    "ai_assets": "object"
+  },
+  "field_descriptions": {
+    "course_id": "Unique UUID identifier for the course",
+    "course_name": "Display name/title of the course",
+    "course_description": "Detailed description of the course content and objectives",
+    "course_type": "Type of course: 'learner_specific' (personalized) or 'trainer' (marketplace)",
+    "status": "Course status: 'active' (published and available), 'archived' (no longer active), or 'draft' (not yet published)",
+    "level": "Difficulty level: 'beginner', 'intermediate', or 'advanced'",
+    "duration_hours": "Estimated total duration of the course in hours",
+    "start_date": "Scheduled start date for the course (ISO 8601 timestamp)",
+    "created_at": "Timestamp when the course was created (ISO 8601)",
+    "updated_at": "Timestamp when the course was last modified (ISO 8601)",
+    "created_by_user_id": "UUID of the user who created the course (trainer UUID for marketplace courses, learner UUID for personalized courses)",
+    "learning_path_designation": "Metadata object indicating if course is part of a learning path, includes source (learner_ai), flow type (CAREER_PATH_DRIVEN), and competency target information",
+    "ai_assets": "Course-level AI enrichment assets including videos, GitHub repositories, and other curated resources"
+  },
+  "sample_data": {
+    "course_id": "550e8400-e29b-41d4-a716-446655440000",
+    "course_name": "Advanced Node.js Backend Development",
+    "course_description": "Master server-side JavaScript development with Node.js, Express, and PostgreSQL. Learn to build scalable REST APIs, handle authentication, implement database migrations, and deploy production-ready applications.",
+    "course_type": "trainer",
+    "status": "active",
+    "level": "advanced",
+    "duration_hours": 40,
+    "start_date": "2025-02-01T00:00:00.000Z",
+    "created_at": "2025-01-15T10:30:00.000Z",
+    "updated_at": "2025-01-20T14:22:00.000Z",
+    "created_by_user_id": "20000000-0000-0000-0000-000000000001",
+    "learning_path_designation": {
+      "is_designated": false,
+      "source": null,
+      "flow": null,
+      "competency_target_name": null,
+      "structured_path": false
+    },
+    "ai_assets": {
+      "videos": [
+        {
+          "title": "Node.js Event Loop Explained",
+          "url": "https://www.youtube.com/watch?v=8aGhZQkoFbQ",
+          "description": "Deep dive into Node.js event loop architecture"
+        }
+      ],
+      "repos": [
+        {
+          "name": "expressjs/express",
+          "url": "https://github.com/expressjs/express",
+          "description": "Fast, unopinionated, minimalist web framework for Node.js"
+        }
+      ],
+      "suggestedUrls": {
+        "youtube": [],
+        "github": []
+      },
+      "enrichedItems": [],
+      "generated_at": "2025-01-15T10:35:00.000Z"
+    }
+  },
+  "notes": [
+    "Course Builder manages hierarchical course structure: Course → Topics → Modules → Lessons",
+    "Each course can have multiple topics, each topic can have multiple modules, and each module contains lessons",
+    "learning_path_designation is a JSONB object that contains metadata for personalized courses created via Learner AI",
+    "ai_assets is a JSONB object containing course-level enrichment resources (videos, repos) that appear on all lesson pages",
+    "course_type 'learner_specific' indicates personalized courses created for individual learners",
+    "course_type 'trainer' indicates marketplace courses created by trainers and available to all learners",
+    "status 'active' courses are published and visible to learners, 'draft' courses are still being edited",
+    "The service also manages assessments, feedback, and registrations, but GRPC queries primarily return course data"
+  ]
 }
-

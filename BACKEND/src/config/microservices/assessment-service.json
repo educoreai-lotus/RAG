@@ -1,6 +1,83 @@
 {
-  "_comment": "Waiting for DATA_STRUCTURE_REPORT.json from Assessment team",
-  "_instructions": "When you receive the report, open this file and paste the entire content here",
-  "_status": "pending"
+  "service_name": "assessment-backend",
+  "description": "Exposes GRPC Process endpoint and manages AI audit trail records for RAG sync and real-time queries.",
+  "version": "1.0.0",
+  "data_structure": {
+    "_id": "string",
+    "exam_id": "string",
+    "attempt_id": "string",
+    "event_type": "string",
+    "model": "object",
+    "prompt": "object",
+    "response": "object",
+    "metadata": "object",
+    "latency_ms": "number",
+    "status": "string",
+    "error": "object",
+    "executed_at": "datetime",
+    "created_at": "datetime",
+    "updated_at": "datetime"
+  },
+  "field_descriptions": {
+    "_id": "Unique identifier for the audit event (prefixed with 'audit_').",
+    "exam_id": "Associated exam identifier when applicable.",
+    "attempt_id": "Exam attempt identifier tied to this AI event.",
+    "event_type": "Kind of AI event: prompt, rerun, score_adjustment, mitigation, grading, or other.",
+    "model": "AI model metadata including provider, name and version.",
+    "prompt": "Raw or structured prompt content sent to the AI.",
+    "response": "Raw or structured response content returned by the AI.",
+    "metadata": "Additional context fields such as user_id, tenant_id, and request metadata.",
+    "latency_ms": "Total end-to-end latency for the AI operation in milliseconds.",
+    "status": "Execution status of the AI operation: success, failure, or timeout.",
+    "error": "Error object when status is failure; otherwise null or omitted.",
+    "executed_at": "Timestamp when the AI operation was executed.",
+    "created_at": "Record creation timestamp (ISO 8601).",
+    "updated_at": "Record last update timestamp (ISO 8601)."
+  },
+  "sample_data": {
+    "_id": "audit_679a1c1b2f3d4e5f6a7b8c9d",
+    "exam_id": "exam-1024",
+    "attempt_id": "attempt-55a3f7c9",
+    "event_type": "prompt",
+    "model": {
+      "provider": "openai",
+      "name": "gpt-4.1",
+      "version": "2025-10-01"
+    },
+    "prompt": {
+      "instruction": "Grade the following short-answer response against the rubric.",
+      "rubric": {
+        "criteria": [
+          "Accuracy",
+          "Completeness",
+          "Clarity"
+        ],
+        "max_score": 10
+      },
+      "student_answer": "The OSI model has 7 layers that organize network communication."
+    },
+    "response": {
+      "score": 8.5,
+      "feedback": "Accurate and clear; could include brief layer names for completeness.",
+      "reasoning": "Mentions 7 layers (accurate) and concept (clarity) but lacks details."
+    },
+    "metadata": {
+      "tenant_id": "tenant-42",
+      "user_id": "user-9b84",
+      "ip_address": "203.0.113.25",
+      "request_id": "req-1f0c1c27",
+      "exam_type": "baseline"
+    },
+    "latency_ms": 642,
+    "status": "success",
+    "error": null,
+    "executed_at": "2025-12-15T10:22:31.512Z",
+    "created_at": "2025-12-15T10:22:31.700Z",
+    "updated_at": "2025-12-15T10:22:31.700Z"
+  },
+  "notes": [
+    "Records originate from MongoDB collection 'ai_audit_trail' with created_at/updated_at timestamps.",
+    "Model, prompt, response, and metadata are nested objects and may vary by event_type.",
+    "executed_at is used for incremental batch sync pagination via 'since' parameter."
+  ]
 }
-

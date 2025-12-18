@@ -288,3 +288,5 @@ railway run --service rag-service node BACKEND/scripts/test-coordinator-from-rag
 - `RAILWAY_ENV_VARS_SETUP.md` - Environment variables setup
 - `COORDINATOR_PROGRESS_ANALYSIS.md` - Test results analysis
 
+
+

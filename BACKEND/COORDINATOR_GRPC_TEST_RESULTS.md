@@ -94,3 +94,5 @@ COORDINATOR_PROTO_PATH=../DATABASE/proto/rag/v1/coordinator.proto
 
 **המלצה:** בדוק את ה-logs של Coordinator כדי לראות למה gRPC server לא מגיב.
 
+
+
