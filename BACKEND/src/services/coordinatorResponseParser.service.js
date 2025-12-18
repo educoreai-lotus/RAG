@@ -47,13 +47,26 @@ export function parseRouteResponse(response) {
 
     // Parse normalized_fields
     const normalized = parsed.normalized_fields;
-    parsed.successful_service = normalized.successful_service || 'none';
-    parsed.rank_used = parseInt(normalized.rank_used || '0', 10);
-    parsed.total_attempts = parseInt(normalized.total_attempts || '0', 10);
-    parsed.stopped_reason = normalized.stopped_reason || 'unknown';
-    parsed.quality_score = parseFloat(normalized.quality_score || '0');
-    parsed.primary_target = normalized.primary_target || null;
-    parsed.primary_confidence = parseFloat(normalized.primary_confidence || '0');
+
+    // ⭐ ADD DEBUG LOGGING FOR normalized_fields
+    logger.info('🔍 [PARSE ROUTE RESPONSE] normalized_fields debug', {
+      has_normalized_fields: !!parsed.normalized_fields,
+      normalized_fields_type: typeof parsed.normalized_fields,
+      normalized_fields_keys: Object.keys(parsed.normalized_fields || {}),
+      normalized_fields_count: Object.keys(parsed.normalized_fields || {}).length,
+      successful_service_raw: normalized?.successful_service,
+      rank_used_raw: normalized?.rank_used,
+      is_empty: Object.keys(parsed.normalized_fields || {}).length === 0,
+      full_normalized_fields: JSON.stringify(parsed.normalized_fields).substring(0, 500),
+    });
+
+    parsed.successful_service = normalized?.successful_service || 'none';
+    parsed.rank_used = parseInt(normalized?.rank_used || '0', 10);
+    parsed.total_attempts = parseInt(normalized?.total_attempts || '0', 10);
+    parsed.stopped_reason = normalized?.stopped_reason || 'unknown';
+    parsed.quality_score = parseFloat(normalized?.quality_score || '0');
+    parsed.primary_target = normalized?.primary_target || null;
+    parsed.primary_confidence = parseFloat(normalized?.primary_confidence || '0');
     
     // Parse processing time (handle both "200ms" string and number)
     const processingTime = normalized.processing_time || normalized.processing_time_ms || '0';
@@ -143,25 +156,68 @@ export function extractBusinessData(parsedResponse) {
   logger.info('🔍 [EXTRACT BUSINESS DATA] Starting extraction', {
     has_parsedResponse: !!parsedResponse,
     success: parsedResponse?.success,
+    status: parsedResponse?.status,
+    successful_service: parsedResponse?.successful_service,
+    rank_used: parsedResponse?.rank_used,
     has_envelope: !!parsedResponse?.envelope,
     has_envelope_json: !!parsedResponse?.envelope_json,
     has_successfulResult: !!parsedResponse?.envelope?.successfulResult,
     has_successfulResult_data: !!parsedResponse?.envelope?.successfulResult?.data,
+    successfulResult_data_type: parsedResponse?.envelope?.successfulResult?.data 
+      ? (Array.isArray(parsedResponse.envelope.successfulResult.data) ? 'array' : typeof parsedResponse.envelope.successfulResult.data)
+      : 'none',
+    successfulResult_data_length: Array.isArray(parsedResponse?.envelope?.successfulResult?.data)
+      ? parsedResponse.envelope.successfulResult.data.length
+      : 'N/A',
     has_normalized_fields: !!parsedResponse?.normalized_fields,
     normalized_fields_keys: parsedResponse?.normalized_fields ? Object.keys(parsedResponse.normalized_fields) : [],
     envelope_keys: parsedResponse?.envelope ? Object.keys(parsedResponse.envelope) : [],
+    envelope_json_length: parsedResponse?.envelope_json ? parsedResponse.envelope_json.length : 0,
   });
 
-  if (!parsedResponse || !parsedResponse.success) {
-    logger.warn('🔍 [EXTRACT BUSINESS DATA] No response or not successful', {
+  // ⭐ Check if we have data even if status shows failed
+  // This handles cases where normalized_fields parsing failed but envelope has data
+  const hasDataInEnvelope = parsedResponse?.envelope?.successfulResult?.data;
+
+  logger.info('🔍 [EXTRACT BUSINESS DATA] Checking response status', {
+    has_parsedResponse: !!parsedResponse,
+    success: parsedResponse?.success,
+    status: parsedResponse?.status,
+    successful_service: parsedResponse?.successful_service,
+    rank_used: parsedResponse?.rank_used,
+    has_envelope: !!parsedResponse?.envelope,
+    has_successfulResult: !!parsedResponse?.envelope?.successfulResult,
+    has_data_in_envelope: !!hasDataInEnvelope,
+    data_type: hasDataInEnvelope ? (Array.isArray(hasDataInEnvelope) ? 'array' : typeof hasDataInEnvelope) : 'none',
+    data_length: Array.isArray(hasDataInEnvelope) ? hasDataInEnvelope.length : 'N/A',
+  });
+
+  // Only reject if BOTH success is false AND no data in envelope
+  if ((!parsedResponse || !parsedResponse.success) && !hasDataInEnvelope) {
+    logger.warn('🔍 [EXTRACT BUSINESS DATA] No response or not successful and no data in envelope', {
       has_parsedResponse: !!parsedResponse,
       success: parsedResponse?.success,
+      has_envelope: !!parsedResponse?.envelope,
+      has_successfulResult: !!parsedResponse?.envelope?.successfulResult,
+      has_data: !!hasDataInEnvelope,
     });
     return {
       data: null,
       sources: [],
       metadata: {},
     };
+  }
+
+  // ⭐ If we have data in envelope but status shows failed, log warning but continue
+  if (!parsedResponse?.success && hasDataInEnvelope) {
+    logger.warn('⚠️ [EXTRACT BUSINESS DATA] Status shows failed but envelope contains data - proceeding with extraction', {
+      status: parsedResponse?.status,
+      successful_service: parsedResponse?.successful_service,
+      rank_used: parsedResponse?.rank_used,
+      has_data: true,
+      data_is_array: Array.isArray(hasDataInEnvelope),
+      data_length: Array.isArray(hasDataInEnvelope) ? hasDataInEnvelope.length : 'N/A',
+    });
   }
 
   try {
