@@ -1,84 +1,93 @@
+#!/usr/bin/env node
 /**
- * Simple Coordinator communication test
- * 
- * Usage:
- *   node scripts/test-coordinator-simple.js
+ * Simple Coordinator Test - Just test if Coordinator responds
+ * This is a minimal test that only checks Coordinator communication
  */
 
-import { routeRequest, isCoordinatorAvailable } from '../src/clients/coordinator.client.js';
-import { logger } from '../src/utils/logger.util.js';
+import { routeRequest } from '../src/clients/coordinator.client.js';
 
-console.log('\n🧪 Testing communication with Coordinator\n');
-
-async function test() {
+async function testCoordinator() {
+  console.log('\n🔍 Testing Coordinator Connection');
+  console.log('═'.repeat(60));
+  
+  const testQuery = process.argv[2] || 'Show me recent management reports';
+  
+  console.log(`📤 Sending query: "${testQuery}"`);
+  console.log(`📍 Coordinator URL: ${process.env.COORDINATOR_URL || 'localhost:50051'}`);
+  console.log('─'.repeat(60));
+  
   try {
-    // Step 1: Check availability
-    console.log('1️⃣  Checking Coordinator availability...');
-    const available = await isCoordinatorAvailable();
-    
-    if (!available) {
-      console.log('❌ Coordinator not available');
-      console.log('\n💡 Possible solutions:');
-      console.log('   - Check that Coordinator is running');
-      console.log('   - Check COORDINATOR_URL');
-      console.log('   - Check COORDINATOR_GRPC_PORT');
-      return;
-    }
-    
-    console.log('✅ Coordinator available!\n');
-    
-    // Step 2: Send request
-    console.log('2️⃣  Sending request to Coordinator...');
     const response = await routeRequest({
-      tenant_id: 'test-tenant-123',
-      user_id: 'test-user-456',
-      query_text: 'show me my recent payments',
+      tenant_id: process.env.TEST_TENANT_ID || 'test-tenant-123',
+      user_id: process.env.TEST_USER_ID || 'test-user-456',
+      query_text: testQuery,
       metadata: {
-        source: 'test-script',
-        timestamp: new Date().toISOString()
+        test: 'true',
+        source: 'rag-service-e2e-test'
       }
     });
-    
+
     if (!response) {
-      console.log('❌ No response from Coordinator');
-      console.log('\n💡 This could be because:');
-      console.log('   - Request was rejected');
-      console.log('   - Invalid signature');
-      console.log('   - Coordinator did not find matching services');
+      console.log('\n❌ No response from Coordinator');
+      console.log('\n💡 Possible issues:');
+      console.log('   1. Coordinator service is not running');
+      console.log('   2. COORDINATOR_URL is not set correctly');
+      console.log('   3. Network connectivity issue');
+      console.log('   4. gRPC port 50051 is not accessible');
       return;
     }
+
+    console.log('\n✅ Response received from Coordinator!');
+    console.log('─'.repeat(60));
     
-    console.log('✅ Response received!\n');
-    
-    // Step 3: Display results
-    console.log('3️⃣  Results:');
-    console.log('   Target Services:', response.target_services || 'None');
-    
-    if (response.normalized_fields) {
-      const nf = response.normalized_fields;
-      console.log('   Successful Service:', nf.successful_service || 'None');
-      console.log('   Rank Used:', nf.rank_used || 'N/A');
-      console.log('   Quality Score:', nf.quality_score || 'N/A');
-      console.log('   Total Attempts:', nf.total_attempts || 'N/A');
+    // Show basic response info
+    if (response.target_services) {
+      console.log(`📋 Target Services: ${response.target_services.join(', ')}`);
     }
     
-    if (response.envelope_json) {
-      try {
-        const envelope = JSON.parse(response.envelope_json);
-        console.log('   Envelope:', JSON.stringify(envelope, null, 2).substring(0, 200) + '...');
-      } catch (e) {
-        console.log('   Envelope: (cannot parse)');
+    if (response.successfulResult) {
+      console.log('✅ Successful Result found!');
+      if (response.successfulResult.data) {
+        const data = response.successfulResult.data;
+        if (Array.isArray(data)) {
+          console.log(`   Items returned: ${data.length}`);
+          if (data.length > 0) {
+            console.log('   First item keys:', Object.keys(data[0]).join(', '));
+          }
+        } else {
+          console.log('   Data type:', typeof data);
+        }
       }
+    }
+    
+    if (response.cascadeAttempts) {
+      console.log(`📊 Cascade Attempts: ${response.cascadeAttempts.length}`);
+      response.cascadeAttempts.forEach((attempt, idx) => {
+        console.log(`   ${idx + 1}. ${attempt.service}: ${attempt.success ? '✅' : '❌'}`);
+      });
     }
     
     console.log('\n✅ Test completed successfully!');
+    console.log('\n📋 What you should see:');
+    console.log('   - In Coordinator logs: Routing decision, service selection');
+    console.log('   - In Microservice logs: Request received, data processing');
+    console.log('   - Here: Response received with data');
     
   } catch (error) {
-    console.error('\n❌ Error:', error.message);
-    console.error('\nDetails:', error);
+    console.error('\n❌ Error during test:', error.message);
+    if (error.code) {
+      console.error(`   gRPC Error Code: ${error.code}`);
+    }
+    if (error.details) {
+      console.error(`   Details: ${error.details}`);
+    }
+    
+    console.log('\n💡 Troubleshooting:');
+    console.log('   1. Check Coordinator is running: docker ps | grep coordinator');
+    console.log('   2. Check COORDINATOR_URL env var');
+    console.log('   3. Check network connectivity');
+    console.log('   4. Check gRPC port is accessible');
   }
 }
 
-test();
-
-
+testCoordinator().catch(console.error);

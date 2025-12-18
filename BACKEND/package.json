@@ -11,6 +11,9 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "test:extraction": "vitest run tests/integration/data-extraction.test.js",
+    "test:grpc": "vitest run tests/integration/grpc-flow.test.js",
+    "test:search": "vitest run tests/integration/vector-search.test.js",
     "test:kg": "vitest run tests/unit/services/knowledgeGraph.service.test.js",
     "test:e2e": "playwright test",
     "test:coverage": "vitest run --coverage",
@@ -30,7 +33,10 @@
     "check:data:search": "node scripts/check-supabase-data.js",
     "create:embeddings": "node scripts/create-embeddings-and-insert.js",
     "add:js-prerequisites": "node scripts/add-js-prerequisites.js",
-    "generate-token": "node scripts/generate-test-token.js"
+    "generate-token": "node scripts/generate-test-token.js",
+    "generate-mocks": "node tests/scripts/generate-mock-responses.js",
+    "test:e2e:real": "node scripts/test-real-microservices-e2e.js",
+    "test:coordinator": "node scripts/test-coordinator-simple.js"
   },
   "keywords": [
     "rag",

@@ -277,26 +277,45 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       has_envelope: !!structured.envelope,
     });
 
-    // ⭐ NEW: Also check business_data.data for new format
-    // New format: { request_id, success, data: [...], metadata: {...} }
+    // ⭐ NEW: Extract data array from sources (already extracted by extractBusinessData)
+    // extractBusinessData already extracted from envelope.successfulResult.data
     logger.info('🔍 [GRPC FALLBACK] Extracting data array', {
       category,
       tenantId,
       has_business_data: !!processed.business_data,
-      has_business_data_data: !!processed.business_data?.data,
-      business_data_data_type: typeof processed.business_data?.data,
-      business_data_data_is_array: Array.isArray(processed.business_data?.data),
+      business_data_is_array: Array.isArray(processed.business_data),
+      has_sources: !!processed.sources,
+      sources_count: processed.sources?.length || 0,
       structured_sources_count: structured.sources?.length || 0,
     });
 
     let dataArray = [];
-    if (processed.business_data?.data && Array.isArray(processed.business_data.data)) {
-      logger.info('🔍 [GRPC FALLBACK] Found data array directly', {
+    
+    // Priority 1: Use sources if available (from extractBusinessData)
+    if (processed.sources && Array.isArray(processed.sources) && processed.sources.length > 0) {
+      logger.info('🔍 [GRPC FALLBACK] Using sources from extractBusinessData', {
+        category,
+        tenantId,
+        sources_count: processed.sources.length,
+      });
+      dataArray = processed.sources;
+    }
+    // Priority 2: Use business_data if it's an array (already extracted)
+    else if (processed.business_data && Array.isArray(processed.business_data)) {
+      logger.info('🔍 [GRPC FALLBACK] Using business_data array', {
+        category,
+        tenantId,
+        data_array_length: processed.business_data.length,
+      });
+      dataArray = processed.business_data;
+    }
+    // Priority 3: Try nested structures (legacy format)
+    else if (processed.business_data?.data && Array.isArray(processed.business_data.data)) {
+      logger.info('🔍 [GRPC FALLBACK] Found data array in business_data.data', {
         category,
         tenantId,
         data_array_length: processed.business_data.data.length,
       });
-      // New format - data is already an array
       dataArray = processed.business_data.data;
     } else if (processed.business_data?.data && typeof processed.business_data.data === 'object' && processed.business_data.data.data) {
       logger.info('🔍 [GRPC FALLBACK] Found nested data structure', {
@@ -304,14 +323,15 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
         tenantId,
         nested_data_is_array: Array.isArray(processed.business_data.data.data),
       });
-      // Nested data format
       dataArray = Array.isArray(processed.business_data.data.data) 
         ? processed.business_data.data.data 
         : [processed.business_data.data.data];
     } else {
-      logger.info('🔍 [GRPC FALLBACK] No data array found in business_data.data', {
+      logger.info('🔍 [GRPC FALLBACK] No data array found', {
         category,
         tenantId,
+        has_business_data: !!processed.business_data,
+        has_sources: !!processed.sources,
       });
     }
 

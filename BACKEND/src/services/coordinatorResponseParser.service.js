@@ -85,14 +85,11 @@ export function parseRouteResponse(response) {
           ? JSON.parse(parsed.envelope_json)
           : parsed.envelope_json;
         
-        // Log envelope structure for debugging
-        logger.debug('Parsed envelope_json structure', {
-          envelope_keys: Object.keys(parsed.envelope || {}),
-          has_data: !!parsed.envelope?.data,
-          data_is_array: Array.isArray(parsed.envelope?.data),
-          data_length: Array.isArray(parsed.envelope?.data) ? parsed.envelope.data.length : 'N/A',
-          has_payload: !!parsed.envelope?.payload,
-          has_metadata: !!parsed.envelope?.metadata,
+        logger.debug('🔍 [PARSE ROUTE RESPONSE] Parsed envelope_json successfully', {
+          envelope_keys: parsed.envelope ? Object.keys(parsed.envelope) : [],
+          has_successfulResult: !!parsed.envelope?.successfulResult,
+          has_successfulResult_data: !!parsed.envelope?.successfulResult?.data,
+          successfulResult_data_is_array: Array.isArray(parsed.envelope?.successfulResult?.data),
         });
       } catch (parseError) {
         logger.warn('Failed to parse envelope_json', {
@@ -100,6 +97,10 @@ export function parseRouteResponse(response) {
         });
         parsed.envelope = null;
       }
+    } else {
+      logger.debug('🔍 [PARSE ROUTE RESPONSE] No envelope_json in response', {
+        response_keys: Object.keys(response || {}),
+      });
     }
 
     // Parse routing_metadata
@@ -143,8 +144,12 @@ export function extractBusinessData(parsedResponse) {
     has_parsedResponse: !!parsedResponse,
     success: parsedResponse?.success,
     has_envelope: !!parsedResponse?.envelope,
+    has_envelope_json: !!parsedResponse?.envelope_json,
+    has_successfulResult: !!parsedResponse?.envelope?.successfulResult,
+    has_successfulResult_data: !!parsedResponse?.envelope?.successfulResult?.data,
     has_normalized_fields: !!parsedResponse?.normalized_fields,
     normalized_fields_keys: parsedResponse?.normalized_fields ? Object.keys(parsedResponse.normalized_fields) : [],
+    envelope_keys: parsedResponse?.envelope ? Object.keys(parsedResponse.envelope) : [],
   });
 
   if (!parsedResponse || !parsedResponse.success) {
@@ -166,28 +171,77 @@ export function extractBusinessData(parsedResponse) {
       metadata: {},
     };
 
-    // Extract from envelope - check both direct envelope.data and envelope.payload
-    // ⭐ IMPORTANT: envelope_json might be parsed directly as { request_id, success, data: [...], metadata: {...} }
-    // OR it might be wrapped in payload: { payload: { request_id, success, data: [...], metadata: {...} } }
-    
-    // First check: envelope.data directly (new format from Coordinator)
-    if (parsedResponse.envelope?.data && Array.isArray(parsedResponse.envelope.data)) {
-      logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope.data directly (Coordinator format)', {
-        data_array_length: parsedResponse.envelope.data.length,
-        has_metadata: !!parsedResponse.envelope.metadata,
-        request_id: parsedResponse.envelope.request_id,
+    // ⭐ PRIORITY 1: Check for Coordinator wrapped format (successfulResult.data)
+    // This is the format that Coordinator sends: { successfulResult: { data: [...] }, ... }
+    if (parsedResponse.envelope?.successfulResult?.data) {
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope.successfulResult.data (Coordinator wrapped format)', {
+        data_is_array: Array.isArray(parsedResponse.envelope.successfulResult.data),
+        data_length: Array.isArray(parsedResponse.envelope.successfulResult.data) 
+          ? parsedResponse.envelope.successfulResult.data.length 
+          : 'N/A',
+        envelope_keys: Object.keys(parsedResponse.envelope),
+        successfulResult_keys: Object.keys(parsedResponse.envelope.successfulResult),
       });
-      businessData.data = parsedResponse.envelope.data;
-      businessData.sources = parsedResponse.envelope.data;
       
+      const data = parsedResponse.envelope.successfulResult.data;
+      
+      if (Array.isArray(data)) {
+        businessData.data = data;
+        businessData.sources = data;
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Extracted array from successfulResult.data', {
+          items_count: data.length,
+        });
+      } else if (typeof data === 'object' && data !== null) {
+        // Single object - wrap in array
+        businessData.data = [data];
+        businessData.sources = [data];
+        logger.info('🔍 [EXTRACT BUSINESS DATA] Extracted single object from successfulResult.data');
+      }
+      
+      // Extract metadata from envelope if available
       if (parsedResponse.envelope.metadata) {
         businessData.metadata = {
           ...businessData.metadata,
           ...parsedResponse.envelope.metadata,
-          request_id: parsedResponse.envelope.request_id || null,
         };
       }
-    } else if (parsedResponse.envelope?.payload) {
+      
+      if (parsedResponse.envelope.request?.request_id) {
+        businessData.metadata.request_id = parsedResponse.envelope.request.request_id;
+      }
+      
+      logger.info('✅ [EXTRACT BUSINESS DATA] Successfully extracted from Coordinator wrapped format', {
+        sources_count: businessData.sources.length,
+        metadata_keys: Object.keys(businessData.metadata),
+      });
+      
+      // Return early - we found the data!
+      businessData.metadata = {
+        ...businessData.metadata,
+        source: parsedResponse.envelope?.source || parsedResponse.successful_service,
+        timestamp: parsedResponse.envelope?.metadata?.timestamp || new Date().toISOString(),
+        request_id: businessData.metadata.request_id || parsedResponse.envelope?.request?.request_id || null,
+        tenant_id: parsedResponse.envelope?.request?.tenant_id || null,
+        user_id: parsedResponse.envelope?.request?.user_id || null,
+        quality_score: parsedResponse.quality_score,
+        rank_used: parsedResponse.rank_used,
+        successful_service: parsedResponse.successful_service,
+      };
+      
+      logger.info('🔍 [EXTRACT BUSINESS DATA] Extraction completed (Coordinator format)', {
+        has_data: !!businessData.data,
+        data_is_array: Array.isArray(businessData.data),
+        data_length: Array.isArray(businessData.data) ? businessData.data.length : 'N/A',
+        sources_count: businessData.sources.length,
+        metadata_keys: Object.keys(businessData.metadata),
+      });
+      
+      return businessData;
+    }
+
+    // ⭐ PRIORITY 2: Extract from envelope payload (legacy format)
+    // envelope.payload might be the full structure: { request_id, success, data: [...], metadata: {...} }
+    if (parsedResponse.envelope?.payload) {
       logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope.payload', {
         payload_keys: Object.keys(parsedResponse.envelope.payload),
         has_data: !!parsedResponse.envelope.payload.data,
@@ -212,7 +266,6 @@ export function extractBusinessData(parsedResponse) {
         
         if (parsedResponse.envelope.payload.metadata) {
           businessData.metadata = {
-            ...businessData.metadata,
             ...parsedResponse.envelope.payload.metadata,
             request_id: parsedResponse.envelope.payload.request_id || null,
           };
@@ -221,12 +274,6 @@ export function extractBusinessData(parsedResponse) {
         // Store payload for later processing
         businessData.data = parsedResponse.envelope.payload;
       }
-    } else if (parsedResponse.envelope) {
-      logger.info('🔍 [EXTRACT BUSINESS DATA] Found envelope but no data/payload structure', {
-        envelope_keys: Object.keys(parsedResponse.envelope),
-      });
-      // Store entire envelope for later processing
-      businessData.data = parsedResponse.envelope;
     }
 
     // Extract from normalized_fields (business fields)
