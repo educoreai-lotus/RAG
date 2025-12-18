@@ -645,17 +645,28 @@ export async function batchSync({
   tenant_id = 'rag-system',
   user_id = 'system'
 }) {
+  // ⭐ ADD THIS AT THE START
+  logger.info('🔍 [COORDINATOR CLIENT] batchSync called', {
+    target_service: target_service,
+    sync_type: sync_type,
+    page: page,
+    limit: limit,
+    since: since,
+    coordinator_url: COORDINATOR_GRPC_URL,
+    coordinator_enabled: COORDINATOR_ENABLED,
+  });
+
   const startTime = Date.now();
   metrics.totalRequests++;
 
   if (!COORDINATOR_ENABLED) {
-    logger.debug('Coordinator client disabled');
+    logger.error('❌ [COORDINATOR CLIENT] Coordinator client disabled');
     return null;
   }
 
   // Validate required parameters
   if (!target_service) {
-    logger.error('Invalid batch sync request: target_service is required', {
+    logger.error('❌ [COORDINATOR CLIENT] Invalid batch sync request: target_service is required', {
       has_target_service: !!target_service,
     });
     metrics.failedRequests++;
@@ -664,7 +675,11 @@ export async function batchSync({
 
   const client = getGrpcClient();
   if (!client) {
-    logger.debug('Coordinator gRPC client not available');
+    logger.error('❌ [COORDINATOR CLIENT] gRPC client not available', {
+      coordinatorEnabled: COORDINATOR_ENABLED,
+      coordinatorUrl: COORDINATOR_GRPC_URL,
+      hasClient: !!client,
+    });
     metrics.failedRequests++;
     return null;
   }
@@ -786,15 +801,51 @@ export async function batchSync({
     // Use longer timeout for batch operations (5 minutes)
     const BATCH_TIMEOUT = parseInt(process.env.BATCH_SYNC_TIMEOUT || '300', 10) * 1000; // Default 5 minutes
 
+    // ⭐ ADD THIS BEFORE grpcCall
+    logger.info('🔍 [COORDINATOR CLIENT] About to make gRPC call', {
+      target_service: target_service,
+      query_text: query_text,
+      metadata_keys: Object.keys(metadataMap),
+      has_sync_type: !!metadataMap.sync_type,
+      sync_type_value: metadataMap.sync_type,
+      has_target_service: !!metadataMap.target_service,
+      target_service_value: metadataMap.target_service,
+      timeout: BATCH_TIMEOUT,
+      coordinator_url: COORDINATOR_GRPC_URL,
+    });
+
     // Make gRPC call with signature
     logger.info('[Coordinator] Calling Route RPC for batch sync');
-    const response = await grpcCall(
-      client,
-      'Route',
-      request,
-      signedMetadata,
-      BATCH_TIMEOUT
-    );
+    
+    let response;
+    try {
+      response = await grpcCall(
+        client,
+        'Route',
+        request,
+        signedMetadata,
+        BATCH_TIMEOUT
+      );
+
+      // ⭐ ADD THIS AFTER grpcCall
+      logger.info('✅ [COORDINATOR CLIENT] gRPC call completed', {
+        target_service: target_service,
+        has_response: !!response,
+        response_keys: response ? Object.keys(response) : [],
+        has_target_services: !!response?.target_services,
+        target_services_count: response?.target_services?.length || 0,
+        has_envelope_json: !!response?.envelope_json,
+      });
+    } catch (grpcError) {
+      logger.error('❌ [COORDINATOR CLIENT] gRPC call failed', {
+        target_service: target_service,
+        error: grpcError.message,
+        stack: grpcError.stack,
+        code: grpcError.code,
+        details: grpcError.details,
+      });
+      throw grpcError;
+    }
 
     const processingTime = Date.now() - startTime;
     metrics.totalProcessingTime += processingTime;
@@ -818,7 +869,7 @@ export async function batchSync({
       });
     } else {
       metrics.failedRequests++;
-      logger.warn('Coordinator batch sync returned null response', {
+      logger.warn('⚠️ [COORDINATOR CLIENT] Coordinator batch sync returned null response', {
         target_service,
         sync_type,
         page,

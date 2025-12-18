@@ -22,6 +22,8 @@ import knowledgeGraphRoutes from './routes/knowledgeGraph.routes.js';
 import diagnosticsRoutes from './routes/diagnostics.routes.js';
 import contentRoutes from './routes/content.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import healthRoutes from './routes/health.routes.js';
 
 // Get directory paths for serving static files
 const __filename = fileURLToPath(import.meta.url);
@@ -596,6 +598,8 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api', microserviceSupportRoutes); // SUPPORT mode: /api/devlab/support, /api/assessment/support
 app.use('/auth', authRoutes);                // Auth: /auth/me
+app.use('/admin', adminRoutes);             // Admin: /admin/batch-sync/trigger
+app.use('/health', healthRoutes);           // Health: /health/batch-sync
 
 // Log mounted routes for verification
 logger.info('✅ Routes mounted:');
@@ -663,6 +667,21 @@ try {
     try {
       startScheduledSync();
       logger.info('✅ Scheduled batch sync job started');
+      
+      // ⭐ ADD THIS VERIFICATION
+      logger.info('🔍 [STARTUP] Batch sync configuration', {
+        BATCH_SYNC_ENABLED: process.env.BATCH_SYNC_ENABLED !== 'false',
+        BATCH_SYNC_SCHEDULE: process.env.BATCH_SYNC_SCHEDULE || '50 19 * * *',
+        BATCH_SYNC_ON_STARTUP: process.env.BATCH_SYNC_ON_STARTUP === 'true',
+        BATCH_SYNC_TIMEZONE: process.env.BATCH_SYNC_TIMEZONE || 'UTC',
+        COORDINATOR_ENABLED: process.env.COORDINATOR_ENABLED !== 'false',
+        COORDINATOR_GRPC_ENDPOINT: process.env.COORDINATOR_GRPC_ENDPOINT || 'not set',
+        COORDINATOR_GRPC_URL: process.env.COORDINATOR_GRPC_URL || 'not set',
+        COORDINATOR_URL: process.env.COORDINATOR_URL || 'not set',
+        has_coordinator_endpoint: !!process.env.COORDINATOR_GRPC_ENDPOINT,
+        has_coordinator_url: !!process.env.COORDINATOR_GRPC_URL,
+      });
+      
     } catch (error) {
       logger.warn('⚠️  Failed to start scheduled batch sync job', {
         error: error.message,

@@ -51,10 +51,11 @@ export async function syncService(serviceName, options = {}) {
   }
 
   try {
-    logger.info('[BatchSync] Starting sync for service', {
+    logger.info('🔍 [BATCH SYNC] Starting sync for service', {
       service: serviceName,
-      syncType,
-      has_since: !!since,
+      syncType: syncType,
+      since: since,
+      coordinatorUrl: process.env.COORDINATOR_GRPC_ENDPOINT || process.env.COORDINATOR_GRPC_URL || 'not set',
     });
 
     let page = 1;
@@ -63,10 +64,19 @@ export async function syncService(serviceName, options = {}) {
 
     while (hasMore) {
       try {
-        logger.debug('[BatchSync] Fetching page', {
+        logger.info('🔍 [BATCH SYNC] Fetching page', {
           service: serviceName,
-          page,
+          page: page,
           limit: BATCH_SYNC_LIMIT,
+        });
+
+        // ⭐ ADD THIS BEFORE batchSync call
+        logger.info('🔍 [BATCH SYNC] About to call Coordinator batchSync', {
+          target_service: serviceName,
+          sync_type: syncType,
+          page: page,
+          limit: BATCH_SYNC_LIMIT,
+          since: since,
         });
 
         // Call Coordinator batchSync with required metadata
@@ -78,10 +88,20 @@ export async function syncService(serviceName, options = {}) {
           since,
         });
 
+        // ⭐ ADD THIS AFTER batchSync call
+        logger.info('🔍 [BATCH SYNC] Coordinator batchSync returned', {
+          service: serviceName,
+          page: page,
+          has_response: !!response,
+          response_keys: response ? Object.keys(response) : [],
+          has_envelope_json: !!response?.envelope_json,
+          has_target_services: !!response?.target_services,
+        });
+
         if (!response) {
-          logger.warn('[BatchSync] No response from Coordinator', {
+          logger.warn('⚠️ [BATCH SYNC] No response from Coordinator', {
             service: serviceName,
-            page,
+            page: page,
           });
           errors.push({
             page,
