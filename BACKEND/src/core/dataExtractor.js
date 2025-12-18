@@ -8,18 +8,128 @@ import { logger } from '../utils/logger.util.js';
 class DataExtractor {
   /**
    * Extract items from response
+   * Handles both direct responses and Coordinator-wrapped responses
    */
   extractItems(responseEnvelope, schema) {
-    const { success, data } = responseEnvelope;
+    // Log the structure we received for debugging
+    logger.debug('[DataExtractor] Received response structure', {
+      service: schema.service_name,
+      has_success: 'success' in responseEnvelope,
+      has_data: 'data' in responseEnvelope,
+      has_successfulResult: 'successfulResult' in responseEnvelope,
+      top_level_keys: Object.keys(responseEnvelope)
+    });
 
-    if (!success || !data) {
+    // ═══════════════════════════════════════════════════════════
+    // STEP 1: Extract data from Coordinator's wrapped format
+    // ═══════════════════════════════════════════════════════════
+
+    let actualData = null;
+    let success = false;
+
+    // Format 1: Coordinator wrapped format
+    // { successfulResult: { data: [...] }, ... }
+    if (responseEnvelope.successfulResult) {
+      logger.debug('[DataExtractor] Detected Coordinator wrapped format');
+      actualData = responseEnvelope.successfulResult.data;
+      success = true; // If we got successfulResult, it succeeded
+    }
+
+    // Format 2: Direct format from microservice
+    // { success: true, data: [...] }
+    else if (responseEnvelope.success !== undefined) {
+      logger.debug('[DataExtractor] Detected direct microservice format');
+      success = responseEnvelope.success;
+      actualData = responseEnvelope.data;
+    }
+
+    // Format 3: Just data field
+    // { data: [...] }
+    else if (responseEnvelope.data !== undefined) {
+      logger.debug('[DataExtractor] Detected data-only format');
+      success = true;
+      actualData = responseEnvelope.data;
+    }
+
+    // Unknown format
+    else {
+      logger.error('[DataExtractor] Unknown response format', {
+        service: schema.service_name,
+        keys: Object.keys(responseEnvelope)
+      });
       return [];
     }
 
-    // Handle both formats
-    let items = Array.isArray(data) ? data : data.items || [];
+    // Check if operation was successful
+    if (!success || !actualData) {
+      logger.warn('[DataExtractor] No data or unsuccessful response', {
+        service: schema.service_name,
+        success,
+        has_data: !!actualData
+      });
+      return [];
+    }
 
-    return items.map(item => this.extractItem(item, schema));
+    // ═══════════════════════════════════════════════════════════
+    // STEP 2: Extract items array from data
+    // ═══════════════════════════════════════════════════════════
+
+    let items = [];
+
+    // Case 1: data is already an array
+    // data: [item1, item2, ...]
+    if (Array.isArray(actualData)) {
+      logger.debug('[DataExtractor] Data is array', {
+        service: schema.service_name,
+        count: actualData.length
+      });
+      items = actualData;
+    }
+
+    // Case 2: data has items property (batch format)
+    // data: { items: [...], page: 1, total: 100 }
+    else if (actualData.items && Array.isArray(actualData.items)) {
+      logger.debug('[DataExtractor] Data has items array', {
+        service: schema.service_name,
+        count: actualData.items.length,
+        page: actualData.page,
+        total: actualData.total
+      });
+      items = actualData.items;
+    }
+
+    // Case 3: data is single object (real-time single item)
+    // data: { id: 123, name: "..." }
+    else if (typeof actualData === 'object' && actualData !== null) {
+      logger.debug('[DataExtractor] Data is single object', {
+        service: schema.service_name
+      });
+      items = [actualData];
+    }
+
+    // Unknown data format
+    else {
+      logger.warn('[DataExtractor] Unknown data format', {
+        service: schema.service_name,
+        data_type: typeof actualData,
+        is_array: Array.isArray(actualData)
+      });
+      return [];
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 3: Extract each item according to schema
+    // ═══════════════════════════════════════════════════════════
+
+    const extractedItems = items.map(item => this.extractItem(item, schema));
+
+    logger.info('[DataExtractor] Extraction complete', {
+      service: schema.service_name,
+      input_count: items.length,
+      output_count: extractedItems.length
+    });
+
+    return extractedItems;
   }
 
   /**
