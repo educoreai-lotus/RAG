@@ -1,0 +1,82 @@
+{
+  "description": "Mock response for Manages AI-generated report conclusions from educational management analytics, including performance insights, learning trends, and data-driven recommendations based on chart analysis",
+  "coordinator_wrapped": {
+    "request": {
+      "request_id": "test-123",
+      "user_query": "Show recent items"
+    },
+    "aiRanking": [],
+    "cascadeAttempts": [
+      {
+        "service": "managementreporting-service",
+        "success": true
+      }
+    ],
+    "successfulResult": {
+      "data": [
+        {
+          "report_name": "Learning Performance Report",
+          "generated_at": "2025-12-18T14:30:0.0Z",
+          "conclusions": {
+            "conclusions": [
+              {
+                "statement": "The Learning Performance Report shows consistent performance metrics across all analyzed charts.",
+                "rationale": "Data visualization indicates stable trends with minimal variance in key indicators.",
+                "confidence": 0.85
+              },
+              {
+                "statement": "Several charts demonstrate positive growth patterns relevant to Learning Performance Report objectives.",
+                "rationale": "Visual analysis reveals upward trends in multiple data series over the reporting period.",
+                "confidence": 0.8
+              },
+              {
+                "statement": "No critical anomalies were detected in the Learning Performance Report dataset.",
+                "rationale": "Chart patterns show expected distributions without significant outliers or disruptions.",
+                "confidence": 0.78
+              },
+              {
+                "statement": "The Learning Performance Report analysis suggests areas for potential optimization and improvement.",
+                "rationale": "Comparative chart data indicates opportunities for enhanced performance in specific metrics.",
+                "confidence": 0.75
+              }
+            ]
+          }
+        },
+        {
+          "report_name": "Learning Performance Report",
+          "generated_at": "2026-13-19T15:31:1.1Z",
+          "conclusions": {
+            "conclusions": [
+              {
+                "statement": "The Learning Performance Report shows consistent performance metrics across all analyzed charts.",
+                "rationale": "Data visualization indicates stable trends with minimal variance in key indicators.",
+                "confidence": 0.85
+              },
+              {
+                "statement": "Several charts demonstrate positive growth patterns relevant to Learning Performance Report objectives.",
+                "rationale": "Visual analysis reveals upward trends in multiple data series over the reporting period.",
+                "confidence": 0.8
+              },
+              {
+                "statement": "No critical anomalies were detected in the Learning Performance Report dataset.",
+                "rationale": "Chart patterns show expected distributions without significant outliers or disruptions.",
+                "confidence": 0.78
+              },
+              {
+                "statement": "The Learning Performance Report analysis suggests areas for potential optimization and improvement.",
+                "rationale": "Comparative chart data indicates opportunities for enhanced performance in specific metrics.",
+                "confidence": 0.75
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "metadata": {
+      "routing_metadata": {
+        "selected_service": "managementreporting-service"
+      },
+      "timestamp": "2025-12-18T13:42:56.169Z"
+    }
+  }
+}
