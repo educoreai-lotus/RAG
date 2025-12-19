@@ -4,6 +4,10 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Important: Use shadow DOM compatible approach
+  corePlugins: {
+    preflight: false,  // Disable global resets (they don't work in shadow DOM)
+  },
   theme: {
     extend: {
       colors: {

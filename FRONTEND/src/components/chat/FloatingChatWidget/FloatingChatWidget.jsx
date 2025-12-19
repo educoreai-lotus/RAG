@@ -29,7 +29,8 @@ const FloatingChatWidget = ({
   microservice = null, // Microservice name (e.g., 'ASSESSMENT', 'CONTENT', etc.)
   userId = null, 
   token = null,
-  tenantId = null
+  tenantId = null,
+  shadowRoot = null  // Shadow DOM root for event handling
 } = {}) => {
   const dispatch = useDispatch();
   const isOpen = useSelector((state) => state.ui.isWidgetOpen);
@@ -243,6 +244,31 @@ const FloatingChatWidget = ({
       }
     }
   }, [messages, currentMode]);
+
+  // Handle clicks outside panel to close (Shadow DOM compatible)
+  useEffect(() => {
+    if (!isOpen || !shadowRoot) return;
+    
+    // Handle clicks outside panel to close
+    const handleClickOutside = (event) => {
+      // In shadow DOM, need to check if click is inside shadow root
+      const clickedInside = event.composedPath().some(el => 
+        el === shadowRoot || 
+        (el && el.closest && el.closest('#bot-shadow-container'))
+      );
+      
+      if (!clickedInside && isOpen) {
+        dispatch(setWidgetOpen(false));
+      }
+    };
+    
+    // Add listener to document (outside shadow DOM)
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [shadowRoot, isOpen, dispatch]);
 
   // Debug logging for embedded/chat state
   useEffect(() => {

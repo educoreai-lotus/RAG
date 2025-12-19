@@ -228,22 +228,108 @@
   }
 
   /**
-   * Initialize the React bot component
+   * Initialize the React bot component in Shadow DOM
    * @param {Object} instance - Bot instance
    */
   function initializeBotReact(instance) {
-    // This will be called after the bundle loads
-    // The bundle should export a function to initialize the React app
-    if (window.EDUCORE_BOT_INIT_REACT) {
-      window.EDUCORE_BOT_INIT_REACT({
-        mountPoint: instance.mountPoint,
-        config: instance.config,
-        widgetMode: instance.widgetMode,
-        mode: instance.mode, // 'support' or 'chat'
-      });
-    } else {
-      console.error('EDUCORE Bot: React initialization function not found. Make sure bot-bundle.js is loaded correctly.');
+    if (!window.EDUCORE_BOT_INIT_REACT) {
+      console.error('EDUCORE Bot: React initialization function not found.');
+      return;
     }
+    
+    // Get the mount point
+    const mountPoint = instance.mountPoint;
+    
+    if (!mountPoint) {
+      console.error('EDUCORE Bot: Mount point not found');
+      return;
+    }
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // CRITICAL: Create Shadow DOM for CSS isolation
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    // Check if shadow root already exists
+    let shadowRoot = mountPoint.shadowRoot;
+    
+    if (!shadowRoot) {
+      try {
+        // Create shadow DOM with 'open' mode
+        shadowRoot = mountPoint.attachShadow({ mode: 'open' });
+        console.log('🛡️ EDUCORE Bot: Shadow DOM created successfully');
+      } catch (error) {
+        console.error('EDUCORE Bot: Failed to create shadow DOM', error);
+        // Fallback to regular DOM if shadow DOM not supported
+        console.warn('EDUCORE Bot: Using regular DOM (no CSS isolation)');
+        shadowRoot = mountPoint;
+      }
+    }
+    
+    // Create container inside shadow root
+    const shadowContainer = document.createElement('div');
+    shadowContainer.id = 'bot-shadow-container';
+    shadowRoot.appendChild(shadowContainer);
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Load CSS into shadow DOM
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    // CRITICAL: We need to load the bot's CSS into the shadow DOM
+    // because shadow DOM doesn't inherit styles from the main document
+    
+    // Method 1: Load CSS from CDN/server (recommended)
+    // Get backend URL from global variable or derive from script source
+    let backendUrl = window.EDUCORE_BACKEND_URL;
+    if (!backendUrl) {
+      // Derive from current script source
+      const scriptSrc = document.currentScript?.src || 
+                       document.querySelector('script[src*="bot.js"]')?.src;
+      if (scriptSrc) {
+        const url = new URL(scriptSrc);
+        backendUrl = `${url.protocol}//${url.host}`;
+        window.EDUCORE_BACKEND_URL = backendUrl;
+      }
+    }
+    const cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    cssLink.href = `${backendUrl || ''}/embed/bot-styles.css`;
+    cssLink.onerror = () => {
+      console.warn('EDUCORE Bot: Failed to load bot-styles.css, using inline styles only');
+    };
+    shadowRoot.appendChild(cssLink);
+    
+    // Method 2: Inline critical CSS (fallback)
+    const criticalStyles = document.createElement('style');
+    criticalStyles.textContent = `
+      /* Critical bot styles - will be replaced by full stylesheet */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      
+      #bot-shadow-container {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    `;
+    shadowRoot.appendChild(criticalStyles);
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Initialize React in shadow DOM
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    window.EDUCORE_BOT_INIT_REACT({
+      mountPoint: shadowContainer,  // React renders inside shadow container
+      shadowRoot: shadowRoot,        // Pass shadow root for reference
+      config: instance.config,
+      widgetMode: instance.widgetMode,
+      mode: instance.mode,
+    });
+    
+    console.log('✅ EDUCORE Bot: Initialized in Shadow DOM');
   }
 
   /**

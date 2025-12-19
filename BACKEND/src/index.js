@@ -407,11 +407,13 @@ app.get('/robots.txt', (req, res) => {
 const embedPath = path.join(frontendDistPath, 'embed');
 const botJsPath = path.join(embedPath, 'bot.js');
 const botBundlePath = path.join(embedPath, 'bot-bundle.js');
+const botStylesPath = path.join(embedPath, 'bot-styles.css');
 
 // Check if embed directory and files exist
 const embedDirExists = existsSync(embedPath);
 const botJsExists = existsSync(botJsPath);
 const botBundleExists = existsSync(botBundlePath);
+const botStylesExists = existsSync(botStylesPath);
 
 if (embedDirExists && (botJsExists || botBundleExists)) {
   // Serve static files with error handling
@@ -420,6 +422,8 @@ if (embedDirExists && (botJsExists || botBundleExists)) {
       // Set proper MIME types
       if (filePath.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
       }
       // Enable CORS for embed files
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -466,9 +470,21 @@ if (embedDirExists && (botJsExists || botBundleExists)) {
     next();
   });
 
+  // Serve bot CSS for shadow DOM
+  app.get('/embed/bot-styles.css', (req, res) => {
+    if (!botStylesExists) {
+      logger.error('bot-styles.css not found at:', botStylesPath);
+      return res.status(404).send('/* Bot styles not found */');
+    }
+    res.setHeader('Content-Type', 'text/css');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(botStylesPath);
+  });
+
   logger.info('✅ Embed files serving enabled from:', embedPath);
   logger.info(`   bot.js: ${botJsExists ? '✅' : '❌'} (${botJsPath})`);
   logger.info(`   bot-bundle.js: ${botBundleExists ? '✅' : '❌'} (${botBundlePath})`);
+  logger.info(`   bot-styles.css: ${botStylesExists ? '✅' : '❌'} (${botStylesPath})`);
   
   // List all files in embed directory for debugging
   if (embedDirExists) {
@@ -484,6 +500,7 @@ if (embedDirExists && (botJsExists || botBundleExists)) {
   logger.warn('   Directory exists:', embedDirExists, '(', embedPath, ')');
   logger.warn('   bot.js exists:', botJsExists, '(', botJsPath, ')');
   logger.warn('   bot-bundle.js exists:', botBundleExists, '(', botBundlePath, ')');
+  logger.warn('   bot-styles.css exists:', botStylesExists, '(', botStylesPath, ')');
   logger.warn('   Make sure to build the frontend: cd FRONTEND && npm run build');
   
   // Add a helpful error handler for embed routes
@@ -660,6 +677,7 @@ try {
     logger.info(`Vector search test: http://${HOST}:${PORT}/api/debug/test-vector-search?query=test`);
     logger.info(`Embed widget: http://${HOST}:${PORT}/embed/bot.js`);
     logger.info(`Embed bundle: http://${HOST}:${PORT}/embed/bot-bundle.js`);
+    logger.info(`Embed styles: http://${HOST}:${PORT}/embed/bot-styles.css`);
     logger.info(`CORS allowed origins: ${allowedOrigins.join(', ') || 'none configured'}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     
