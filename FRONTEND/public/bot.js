@@ -228,7 +228,7 @@
   }
 
   /**
-   * Initialize the React bot component in Shadow DOM
+   * Initialize the React bot component (NO Shadow DOM)
    * @param {Object} instance - Bot instance
    */
   function initializeBotReact(instance) {
@@ -246,90 +246,22 @@
     }
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // CRITICAL: Create Shadow DOM for CSS isolation
+    // NO SHADOW DOM - Just create container
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    // Check if shadow root already exists
-    let shadowRoot = mountPoint.shadowRoot;
+    const botContainer = document.createElement('div');
+    botContainer.id = 'bot-root';
+    mountPoint.appendChild(botContainer);
     
-    if (!shadowRoot) {
-      try {
-        // Create shadow DOM with 'open' mode
-        shadowRoot = mountPoint.attachShadow({ mode: 'open' });
-        console.log('🛡️ EDUCORE Bot: Shadow DOM created successfully');
-      } catch (error) {
-        console.error('EDUCORE Bot: Failed to create shadow DOM', error);
-        // Fallback to regular DOM if shadow DOM not supported
-        console.warn('EDUCORE Bot: Using regular DOM (no CSS isolation)');
-        shadowRoot = mountPoint;
-      }
-    }
-    
-    // Create container inside shadow root
-    const shadowContainer = document.createElement('div');
-    shadowContainer.id = 'bot-shadow-container';
-    shadowRoot.appendChild(shadowContainer);
-    
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Load CSS into shadow DOM
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
-    // CRITICAL: We need to load the bot's CSS into the shadow DOM
-    // because shadow DOM doesn't inherit styles from the main document
-    
-    // Method 1: Load CSS from CDN/server (recommended)
-    // Get backend URL from global variable or derive from script source
-    let backendUrl = window.EDUCORE_BACKEND_URL;
-    if (!backendUrl) {
-      // Derive from current script source
-      const scriptSrc = document.currentScript?.src || 
-                       document.querySelector('script[src*="bot.js"]')?.src;
-      if (scriptSrc) {
-        const url = new URL(scriptSrc);
-        backendUrl = `${url.protocol}//${url.host}`;
-        window.EDUCORE_BACKEND_URL = backendUrl;
-      }
-    }
-    const cssLink = document.createElement('link');
-    cssLink.rel = 'stylesheet';
-    cssLink.href = `${backendUrl || ''}/embed/bot-styles.css`;
-    cssLink.onerror = () => {
-      console.warn('EDUCORE Bot: Failed to load bot-styles.css, using inline styles only');
-    };
-    shadowRoot.appendChild(cssLink);
-    
-    // Method 2: Inline critical CSS (fallback)
-    const criticalStyles = document.createElement('style');
-    criticalStyles.textContent = `
-      /* Critical bot styles - will be replaced by full stylesheet */
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      
-      #bot-shadow-container {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-    `;
-    shadowRoot.appendChild(criticalStyles);
-    
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Initialize React in shadow DOM
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
+    // Initialize React in regular DOM
     window.EDUCORE_BOT_INIT_REACT({
-      mountPoint: shadowContainer,  // React renders inside shadow container
-      shadowRoot: shadowRoot,        // Pass shadow root for reference
+      mountPoint: botContainer,
       config: instance.config,
       widgetMode: instance.widgetMode,
       mode: instance.mode,
     });
     
-    console.log('✅ EDUCORE Bot: Initialized in Shadow DOM');
+    console.log('✅ EDUCORE Bot: Initialized (regular DOM)');
   }
 
   /**
@@ -357,6 +289,277 @@
     return botConfig ? { ...botConfig } : null;
   };
 
+  /**
+   * Add CSS isolation to prevent microservice styles from affecting bot
+   */
+  function addCSSIsolation() {
+    // Check if already added
+    if (document.getElementById('educore-bot-isolation')) {
+      return;
+    }
+    
+    const isolationStyles = document.createElement('style');
+    isolationStyles.id = 'educore-bot-isolation';
+    isolationStyles.textContent = `
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* EDUCORE BOT CSS ISOLATION                                                */
+      /* Prevents microservice CSS from affecting the bot                          */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      
+      /* Reset all styles in bot container */
+      #edu-bot-container {
+        all: initial !important;
+        position: static !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: auto !important;
+      }
+      
+      /* Reset all child elements */
+      #edu-bot-container *,
+      #edu-bot-container *::before,
+      #edu-bot-container *::after {
+        all: unset !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Critical: Restore display properties */
+      #edu-bot-container div { display: block !important; }
+      #edu-bot-container span { display: inline !important; }
+      #edu-bot-container button { display: inline-block !important; cursor: pointer !important; }
+      #edu-bot-container input { display: inline-block !important; }
+      #edu-bot-container img { display: inline-block !important; }
+      #edu-bot-container svg { display: inline-block !important; }
+      
+      /* Restore text properties */
+      #edu-bot-container * {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
+      }
+      
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* FORCE BOT STYLES (High specificity to override microservice CSS)          */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      
+      /* Floating button */
+      #edu-bot-container button[class*="fixed"][class*="bottom"] {
+        position: fixed !important;
+        bottom: 1.5rem !important;
+        right: 1.5rem !important;
+        width: 4rem !important;
+        height: 4rem !important;
+        border-radius: 50% !important;
+        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+        z-index: 50 !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      
+      /* Chat panel */
+      #edu-bot-container div[class*="fixed"][class*="bottom"][class*="w-96"] {
+        position: fixed !important;
+        bottom: 6rem !important;
+        right: 1.5rem !important;
+        width: 24rem !important;
+        height: 37.5rem !important;
+        background: white !important;
+        border-radius: 1rem !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        z-index: 40 !important;
+        overflow: hidden !important;
+      }
+      
+      /* Chat header - General (emerald) */
+      #edu-bot-container div[class*="chat-header"],
+      #edu-bot-container header {
+        background: linear-gradient(to right, #10b981, #059669) !important;
+        color: white !important;
+        padding: 1rem !important;
+        border-radius: 1rem 1rem 0 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+      }
+      
+      /* Chat header - Assessment Support (blue) */
+      #edu-bot-container [data-mode="ASSESSMENT_SUPPORT"] div[class*="chat-header"],
+      #edu-bot-container [data-mode="ASSESSMENT_SUPPORT"] header {
+        background: linear-gradient(to right, #3b82f6, #2563eb) !important;
+      }
+      
+      /* Chat header - DevLab Support (purple) */
+      #edu-bot-container [data-mode="DEVLAB_SUPPORT"] div[class*="chat-header"],
+      #edu-bot-container [data-mode="DEVLAB_SUPPORT"] header {
+        background: linear-gradient(to right, #a855f7, #9333ea) !important;
+      }
+      
+      /* Messages container */
+      #edu-bot-container div[class*="messages"],
+      #edu-bot-container div[class*="overflow-y-auto"] {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        padding: 1rem !important;
+        background: #f9fafb !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+      }
+      
+      /* User message bubble */
+      #edu-bot-container div[class*="message"][class*="user"],
+      #edu-bot-container div[data-message-type="user"] {
+        background: #10b981 !important;
+        color: white !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 1rem !important;
+        max-width: 75% !important;
+        align-self: flex-end !important;
+        word-wrap: break-word !important;
+      }
+      
+      /* Bot message bubble */
+      #edu-bot-container div[class*="message"][class*="bot"],
+      #edu-bot-container div[class*="message"][class*="assistant"],
+      #edu-bot-container div[data-message-type="bot"],
+      #edu-bot-container div[data-message-type="assistant"] {
+        background: white !important;
+        color: #111827 !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 1rem !important;
+        border: 1px solid #e5e7eb !important;
+        max-width: 75% !important;
+        align-self: flex-start !important;
+        word-wrap: break-word !important;
+      }
+      
+      /* Input container */
+      #edu-bot-container div[class*="border-t"] {
+        border-top: 1px solid #e5e7eb !important;
+        padding: 1rem !important;
+        background: white !important;
+        display: flex !important;
+        gap: 0.5rem !important;
+        align-items: center !important;
+      }
+      
+      /* Input field */
+      #edu-bot-container input[type="text"],
+      #edu-bot-container textarea {
+        flex: 1 !important;
+        padding: 0.75rem 1rem !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 9999px !important;
+        outline: none !important;
+        font-size: 0.875rem !important;
+        background: white !important;
+        color: #111827 !important;
+      }
+      
+      #edu-bot-container input[type="text"]:focus,
+      #edu-bot-container textarea:focus {
+        border-color: #10b981 !important;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+      }
+      
+      /* Send button */
+      #edu-bot-container button[class*="send"],
+      #edu-bot-container button[type="submit"] {
+        width: 3rem !important;
+        height: 3rem !important;
+        border-radius: 50% !important;
+        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+        color: white !important;
+        border: none !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.3) !important;
+      }
+      
+      #edu-bot-container button[class*="send"]:hover,
+      #edu-bot-container button[type="submit"]:hover {
+        transform: scale(1.05) !important;
+      }
+      
+      /* Close button */
+      #edu-bot-container button[class*="close"],
+      #edu-bot-container button[aria-label*="close" i] {
+        width: 2rem !important;
+        height: 2rem !important;
+        border-radius: 50% !important;
+        background: rgba(255, 255, 255, 0.2) !important;
+        color: white !important;
+        border: none !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      
+      /* Recommendations */
+      #edu-bot-container button[class*="recommendation"] {
+        background: linear-gradient(to bottom right, #ecfdf5, #d1fae5) !important;
+        border: 1px solid #a7f3d0 !important;
+        border-radius: 9999px !important;
+        padding: 0.625rem 1rem !important;
+        color: #047857 !important;
+        font-size: 0.875rem !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+      }
+      
+      #edu-bot-container button[class*="recommendation"]:hover {
+        background: linear-gradient(to bottom right, #d1fae5, #a7f3d0) !important;
+      }
+      
+      /* Ensure SVG icons display correctly */
+      #edu-bot-container svg {
+        display: inline-block !important;
+        width: 1.25rem !important;
+        height: 1.25rem !important;
+        fill: currentColor !important;
+      }
+      
+      /* Ensure text elements display correctly */
+      #edu-bot-container p {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      
+      #edu-bot-container h1,
+      #edu-bot-container h2,
+      #edu-bot-container h3,
+      #edu-bot-container h4,
+      #edu-bot-container h5,
+      #edu-bot-container h6 {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 600 !important;
+      }
+    `;
+    
+    document.head.appendChild(isolationStyles);
+    console.log('🛡️ EDUCORE Bot: CSS isolation layer added');
+  }
+
   console.log('EDUCORE Bot: Embedding script loaded. Call window.initializeEducoreBot(config) to start.');
+
+  // Add CSS isolation
+  addCSSIsolation();
 })();
 

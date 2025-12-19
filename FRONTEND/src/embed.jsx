@@ -21,21 +21,14 @@ import './index.css';
  * This function is called by bot.js after the bundle loads
  */
 window.EDUCORE_BOT_INIT_REACT = function(options) {
-  const { mountPoint, shadowRoot, config, widgetMode, mode } = options;
+  const { mountPoint, config, widgetMode, mode } = options;
 
   if (!mountPoint) {
     console.error('EDUCORE Bot: Mount point is required');
     return;
   }
 
-  console.log('🚀 EDUCORE Bot: Initializing React', {
-    hasShadowRoot: !!shadowRoot,
-    mountPoint: mountPoint.id || 'unknown',
-    widgetMode,
-    mode
-  });
-
-  // Set initial mode based on widget mode
+  // Set initial mode
   if (widgetMode === 'ASSESSMENT_SUPPORT') {
     store.dispatch(setAssessmentSupportMode());
   } else if (widgetMode === 'DEVLAB_SUPPORT') {
@@ -58,18 +51,15 @@ window.EDUCORE_BOT_INIT_REACT = function(options) {
             userId={config.userId}
             token={config.token}
             tenantId={config.tenantId}
-            shadowRoot={shadowRoot}  // Pass shadow root to component
           />
         </ThemeProvider>
       </Provider>
     </React.StrictMode>
   );
 
-  // Store root reference for cleanup
+  // Store root reference
   window.EDUCORE_BOT_ROOTS = window.EDUCORE_BOT_ROOTS || {};
   window.EDUCORE_BOT_ROOTS[config.mountElement?.getAttribute('data-bot-id')] = root;
-  
-  console.log('✅ EDUCORE Bot: React rendered successfully');
 };
 
 /**

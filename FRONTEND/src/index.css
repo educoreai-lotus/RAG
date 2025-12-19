@@ -2,14 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Shadow DOM resets (since we disabled preflight) */
-*, ::before, ::after {
-  box-sizing: border-box;
-  border-width: 0;
-  border-style: solid;
-  border-color: #e5e7eb;
-}
-
 /* Design System - Dark Emerald Theme */
 :root {
   /* Dark Emerald Color Palette */
