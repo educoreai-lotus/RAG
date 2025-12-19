@@ -1008,12 +1008,33 @@ export async function listServices() {
       throw new Error('Invalid response format from Coordinator');
     }
 
-    logger.info('[Coordinator] Services list received', {
-      count: data.services.length,
-      services: data.services,
+    // ✅ Filter out RAG service (cannot sync self)
+    const allServices = data.services;
+
+    // Remove rag-service and any service containing 'rag' in the name
+    const filteredServices = allServices.filter(service => {
+      const serviceLower = service.toLowerCase();
+
+      // Exclude if it's exactly 'rag-service' or 'rag'
+      if (serviceLower === 'rag-service' || serviceLower === 'rag') {
+        logger.info('[Coordinator] Filtering out RAG service from list', {
+          service: service,
+          reason: 'Cannot sync self',
+        });
+        return false;
+      }
+
+      return true;
     });
 
-    return data.services;
+    logger.info('[Coordinator] Services list received and filtered', {
+      total: allServices.length,
+      filtered: filteredServices.length,
+      removed: allServices.length - filteredServices.length,
+      services: filteredServices,
+    });
+
+    return filteredServices;
 
   } catch (error) {
     logger.error('[Coordinator] Failed to fetch services list', {

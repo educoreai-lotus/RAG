@@ -67,6 +67,7 @@ router.get('/batch-sync/services', async (req, res) => {
       services: services,
       count: services.length,
       source: 'coordinator',
+      note: 'rag-service is automatically excluded',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
