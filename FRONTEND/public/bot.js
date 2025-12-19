@@ -302,254 +302,479 @@
     isolationStyles.id = 'educore-bot-isolation';
     isolationStyles.textContent = `
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      /* EDUCORE BOT CSS ISOLATION                                                */
-      /* Prevents microservice CSS from affecting the bot                          */
+      /* EDUCORE BOT CSS ISOLATION - BASED ON ACTUAL COMPONENT CODE                */
+      /* All selectors match exact classes used in FloatingChatWidget components   */
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      
-      /* Reset all styles in bot container */
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* CRITICAL: Force Tailwind classes to apply                                 */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+      /* Fixed positioning - ChatWidgetButton & ChatPanel */
+      #edu-bot-container .fixed {
+        position: fixed !important;
+      }
+
+      /* Z-index - ChatWidgetButton (z-50) & ChatPanel (z-40) */
+      #edu-bot-container .z-50 {
+        z-index: 50 !important;
+      }
+      #edu-bot-container .z-40 {
+        z-index: 40 !important;
+      }
+
+      /* Bottom positioning */
+      #edu-bot-container .bottom-6 {
+        bottom: 1.5rem !important;
+      }
+      #edu-bot-container .bottom-24 {
+        bottom: 6rem !important;
+      }
+
+      /* Right positioning */
+      #edu-bot-container .right-6 {
+        right: 1.5rem !important;
+      }
+
+      /* Width classes */
+      #edu-bot-container .w-16 {
+        width: 4rem !important;
+      }
+      #edu-bot-container .w-96 {
+        width: 24rem !important;
+      }
+      #edu-bot-container .w-12 {
+        width: 3rem !important;
+      }
+      #edu-bot-container .w-full {
+        width: 100% !important;
+      }
+      #edu-bot-container .w-8 {
+        width: 2rem !important;
+      }
+      #edu-bot-container .w-10 {
+        width: 2.5rem !important;
+      }
+      #edu-bot-container .w-2 {
+        width: 0.5rem !important;
+      }
+
+      /* Height classes */
+      #edu-bot-container .h-16 {
+        height: 4rem !important;
+      }
+      #edu-bot-container .h-12 {
+        height: 3rem !important;
+      }
+      #edu-bot-container .h-8 {
+        height: 2rem !important;
+      }
+      #edu-bot-container .h-10 {
+        height: 2.5rem !important;
+      }
+      #edu-bot-container .h-2 {
+        height: 0.5rem !important;
+      }
+
+      /* Arbitrary height - ChatPanel h-[600px] */
+      #edu-bot-container [class*="h-[600px]"],
+      #edu-bot-container [style*="height: 600px"] {
+        height: 600px !important;
+      }
+
+      /* Max width - ChatMessage */
+      #edu-bot-container [class*="max-w-\\[75"] {
+        max-width: 75% !important;
+      }
+
+      /* Background gradients - CRITICAL! */
+      /* ChatWidgetButton: bg-gradient-to-br from-emerald-500 to-emerald-600 */
+      #edu-bot-container [class*="bg-gradient-to-br"][class*="from-emerald-500"] {
+        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+      }
+
+      /* ChatHeader General: bg-gradient-to-r from-emerald-500 to-emerald-600 */
+      #edu-bot-container [class*="bg-gradient-to-r"][class*="from-emerald-500"] {
+        background: linear-gradient(to right, #10b981, #059669) !important;
+      }
+
+      /* ChatHeader Assessment: bg-gradient-to-r from-blue-500 to-blue-600 */
+      #edu-bot-container [class*="bg-gradient-to-r"][class*="from-blue-500"] {
+        background: linear-gradient(to right, #3b82f6, #2563eb) !important;
+      }
+
+      /* ChatHeader DevLab: bg-gradient-to-r from-purple-500 to-purple-600 */
+      #edu-bot-container [class*="bg-gradient-to-r"][class*="from-purple-500"] {
+        background: linear-gradient(to right, #a855f7, #9333ea) !important;
+      }
+
+      /* ChatInput send button: bg-gradient-to-br from-emerald-500 to-emerald-600 */
+      /* (same as widget button, already covered) */
+
+      /* Recommendations: bg-gradient-to-r from-emerald-50 to-emerald-100 */
+      #edu-bot-container [class*="bg-gradient-to-r"][class*="from-emerald-50"] {
+        background: linear-gradient(to right, #ecfdf5, #d1fae5) !important;
+      }
+
+      /* Solid backgrounds */
+      #edu-bot-container .bg-white {
+        background-color: #ffffff !important;
+      }
+      #edu-bot-container .bg-gray-50 {
+        background-color: #f9fafb !important;
+      }
+      #edu-bot-container .bg-emerald-500 {
+        background-color: #10b981 !important;
+      }
+      #edu-bot-container .bg-blue-500 {
+        background-color: #3b82f6 !important;
+      }
+      #edu-bot-container .bg-purple-500 {
+        background-color: #a855f7 !important;
+      }
+
+      /* Text colors */
+      #edu-bot-container .text-white {
+        color: #ffffff !important;
+      }
+      #edu-bot-container .text-gray-900 {
+        color: #111827 !important;
+      }
+      #edu-bot-container .text-gray-700 {
+        color: #374151 !important;
+      }
+      #edu-bot-container .text-gray-600 {
+        color: #4b5563 !important;
+      }
+      #edu-bot-container .text-gray-500 {
+        color: #6b7280 !important;
+      }
+      #edu-bot-container .text-emerald-700 {
+        color: #047857 !important;
+      }
+
+      /* Border colors */
+      #edu-bot-container .border-gray-200 {
+        border-color: #e5e7eb !important;
+      }
+      #edu-bot-container .border-gray-300 {
+        border-color: #d1d5db !important;
+      }
+      #edu-bot-container .border-emerald-400 {
+        border-color: #34d399 !important;
+      }
+      #edu-bot-container .border-blue-400 {
+        border-color: #60a5fa !important;
+      }
+      #edu-bot-container .border-purple-400 {
+        border-color: #c084fc !important;
+      }
+      #edu-bot-container .border-emerald-200 {
+        border-color: #a7f3d0 !important;
+      }
+
+      /* Border width */
+      #edu-bot-container .border {
+        border-width: 1px !important;
+      }
+      #edu-bot-container .border-t {
+        border-top-width: 1px !important;
+      }
+      #edu-bot-container .border-b-2 {
+        border-bottom-width: 2px !important;
+      }
+
+      /* Border radius */
+      #edu-bot-container .rounded-full {
+        border-radius: 9999px !important;
+      }
+      #edu-bot-container .rounded-2xl {
+        border-radius: 1rem !important;
+      }
+      #edu-bot-container .rounded-t-2xl {
+        border-top-left-radius: 1rem !important;
+        border-top-right-radius: 1rem !important;
+      }
+
+      /* Shadows - CRITICAL! */
+      #edu-bot-container .shadow-glow-lg {
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.4) !important;
+      }
+      #edu-bot-container .shadow-glow {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.3) !important;
+      }
+      #edu-bot-container .shadow-card-lg {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+      }
+      #edu-bot-container .shadow-card {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+      }
+
+      /* Flexbox */
+      #edu-bot-container .flex {
+        display: flex !important;
+      }
+      #edu-bot-container .inline-flex {
+        display: inline-flex !important;
+      }
+      #edu-bot-container .flex-col {
+        flex-direction: column !important;
+      }
+      #edu-bot-container .flex-1 {
+        flex: 1 1 0% !important;
+      }
+      #edu-bot-container .flex-shrink-0 {
+        flex-shrink: 0 !important;
+      }
+      #edu-bot-container .items-center {
+        align-items: center !important;
+      }
+      #edu-bot-container .justify-center {
+        justify-content: center !important;
+      }
+      #edu-bot-container .justify-between {
+        justify-content: space-between !important;
+      }
+      #edu-bot-container .justify-end {
+        justify-content: flex-end !important;
+      }
+      #edu-bot-container .justify-start {
+        justify-content: flex-start !important;
+      }
+
+      /* Gap */
+      #edu-bot-container .gap-2 {
+        gap: 0.5rem !important;
+      }
+      #edu-bot-container .gap-3 {
+        gap: 0.75rem !important;
+      }
+      #edu-bot-container .gap-4 {
+        gap: 1rem !important;
+      }
+
+      /* Padding */
+      #edu-bot-container .p-4 {
+        padding: 1rem !important;
+      }
+      #edu-bot-container .p-3 {
+        padding: 0.75rem !important;
+      }
+      #edu-bot-container .px-4 {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+      }
+      #edu-bot-container .px-3 {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+      }
+      #edu-bot-container .py-3 {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+      }
+      #edu-bot-container .py-2 {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+      }
+      #edu-bot-container .pl-10 {
+        padding-left: 2.5rem !important;
+      }
+      #edu-bot-container .pr-4 {
+        padding-right: 1rem !important;
+      }
+
+      /* Margin */
+      #edu-bot-container .mb-3 {
+        margin-bottom: 0.75rem !important;
+      }
+      #edu-bot-container .mb-4 {
+        margin-bottom: 1rem !important;
+      }
+      #edu-bot-container .mt-3 {
+        margin-top: 0.75rem !important;
+      }
+
+      /* Overflow */
+      #edu-bot-container .overflow-hidden {
+        overflow: hidden !important;
+      }
+      #edu-bot-container .overflow-y-auto {
+        overflow-y: auto !important;
+      }
+
+      /* Text size */
+      #edu-bot-container .text-sm {
+        font-size: 0.875rem !important;
+        line-height: 1.25rem !important;
+      }
+      #edu-bot-container .text-lg {
+        font-size: 1.125rem !important;
+        line-height: 1.75rem !important;
+      }
+      #edu-bot-container .text-xs {
+        font-size: 0.75rem !important;
+        line-height: 1rem !important;
+      }
+
+      /* Font weight */
+      #edu-bot-container .font-semibold {
+        font-weight: 600 !important;
+      }
+      #edu-bot-container .font-medium {
+        font-weight: 500 !important;
+      }
+      #edu-bot-container .font-bold {
+        font-weight: 700 !important;
+      }
+
+      /* Focus ring */
+      #edu-bot-container .focus-ring:focus {
+        outline: 2px solid transparent !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5) !important;
+      }
+
+      /* Focus outline */
+      #edu-bot-container .focus\\:outline-none:focus {
+        outline: 2px solid transparent !important;
+        outline-offset: 2px !important;
+      }
+
+      /* Focus ring-2 */
+      #edu-bot-container .focus\\:ring-2:focus {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5) !important;
+      }
+
+      /* Focus ring emerald */
+      #edu-bot-container .focus\\:ring-emerald-500:focus {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5) !important;
+      }
+
+      /* Cursor */
+      #edu-bot-container .cursor-pointer {
+        cursor: pointer !important;
+      }
+
+      /* Transition */
+      #edu-bot-container .transition-all {
+        transition-property: all !important;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+        transition-duration: 150ms !important;
+      }
+      #edu-bot-container .transition-colors {
+        transition-property: color, background-color, border-color !important;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+        transition-duration: 150ms !important;
+      }
+
+      /* Hover effects */
+      #edu-bot-container .hover\\:bg-white\\/20:hover {
+        background-color: rgba(255, 255, 255, 0.2) !important;
+      }
+      #edu-bot-container .hover\\:shadow-glow-lg:hover {
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.4) !important;
+      }
+      #edu-bot-container .hover\\:scale-110:hover {
+        transform: scale(1.1) !important;
+      }
+
+      /* Animations */
+      #edu-bot-container .animate-pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+      }
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      #edu-bot-container .animate-bounce {
+        animation: bounce 1s infinite !important;
+      }
+      @keyframes bounce {
+        0%, 100% {
+          transform: translateY(-25%);
+          animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+        }
+        50% {
+          transform: translateY(0);
+          animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+        }
+      }
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* ELEMENT RESETS - Ensure HTML elements render correctly                    */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+      /* Reset container but allow Tailwind */
       #edu-bot-container {
         all: initial !important;
-        position: static !important;
         display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        z-index: auto !important;
-      }
-      
-      /* Reset all child elements */
-      #edu-bot-container *,
-      #edu-bot-container *::before,
-      #edu-bot-container *::after {
-        all: unset !important;
+        position: static !important;
         box-sizing: border-box !important;
       }
-      
-      /* Critical: Restore display properties */
-      #edu-bot-container div { display: block !important; }
-      #edu-bot-container span { display: inline !important; }
-      #edu-bot-container button { display: inline-block !important; cursor: pointer !important; }
-      #edu-bot-container input { display: inline-block !important; }
-      #edu-bot-container img { display: inline-block !important; }
-      #edu-bot-container svg { display: inline-block !important; }
-      
-      /* Restore text properties */
+
+      /* Font family for all elements */
+      #edu-bot-container,
       #edu-bot-container * {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
           'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-        -webkit-font-smoothing: antialiased !important;
-        -moz-osx-font-smoothing: grayscale !important;
       }
-      
-      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      /* FORCE BOT STYLES (High specificity to override microservice CSS)          */
-      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      
-      /* Floating button */
-      #edu-bot-container button[class*="fixed"][class*="bottom"] {
-        position: fixed !important;
-        bottom: 1.5rem !important;
-        right: 1.5rem !important;
-        width: 4rem !important;
-        height: 4rem !important;
-        border-radius: 50% !important;
-        background: linear-gradient(to bottom right, #10b981, #059669) !important;
-        color: white !important;
-        border: none !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
-        z-index: 50 !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+
+      /* Display modes */
+      #edu-bot-container div {
+        display: block !important;
+        box-sizing: border-box !important;
       }
-      
-      /* Chat panel */
-      #edu-bot-container div[class*="fixed"][class*="bottom"][class*="w-96"] {
-        position: fixed !important;
-        bottom: 6rem !important;
-        right: 1.5rem !important;
-        width: 24rem !important;
-        height: 37.5rem !important;
-        background: white !important;
-        border-radius: 1rem !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        z-index: 40 !important;
-        overflow: hidden !important;
-      }
-      
-      /* Chat header - General (emerald) */
-      #edu-bot-container div[class*="chat-header"],
-      #edu-bot-container header {
-        background: linear-gradient(to right, #10b981, #059669) !important;
-        color: white !important;
-        padding: 1rem !important;
-        border-radius: 1rem 1rem 0 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-      }
-      
-      /* Chat header - Assessment Support (blue) */
-      #edu-bot-container [data-mode="ASSESSMENT_SUPPORT"] div[class*="chat-header"],
-      #edu-bot-container [data-mode="ASSESSMENT_SUPPORT"] header {
-        background: linear-gradient(to right, #3b82f6, #2563eb) !important;
-      }
-      
-      /* Chat header - DevLab Support (purple) */
-      #edu-bot-container [data-mode="DEVLAB_SUPPORT"] div[class*="chat-header"],
-      #edu-bot-container [data-mode="DEVLAB_SUPPORT"] header {
-        background: linear-gradient(to right, #a855f7, #9333ea) !important;
-      }
-      
-      /* Messages container */
-      #edu-bot-container div[class*="messages"],
-      #edu-bot-container div[class*="overflow-y-auto"] {
-        flex: 1 !important;
-        overflow-y: auto !important;
-        padding: 1rem !important;
-        background: #f9fafb !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.75rem !important;
-      }
-      
-      /* User message bubble */
-      #edu-bot-container div[class*="message"][class*="user"],
-      #edu-bot-container div[data-message-type="user"] {
-        background: #10b981 !important;
-        color: white !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 1rem !important;
-        max-width: 75% !important;
-        align-self: flex-end !important;
-        word-wrap: break-word !important;
-      }
-      
-      /* Bot message bubble */
-      #edu-bot-container div[class*="message"][class*="bot"],
-      #edu-bot-container div[class*="message"][class*="assistant"],
-      #edu-bot-container div[data-message-type="bot"],
-      #edu-bot-container div[data-message-type="assistant"] {
-        background: white !important;
-        color: #111827 !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 1rem !important;
-        border: 1px solid #e5e7eb !important;
-        max-width: 75% !important;
-        align-self: flex-start !important;
-        word-wrap: break-word !important;
-      }
-      
-      /* Input container */
-      #edu-bot-container div[class*="border-t"] {
-        border-top: 1px solid #e5e7eb !important;
-        padding: 1rem !important;
-        background: white !important;
-        display: flex !important;
-        gap: 0.5rem !important;
-        align-items: center !important;
-      }
-      
-      /* Input field */
-      #edu-bot-container input[type="text"],
-      #edu-bot-container textarea {
-        flex: 1 !important;
-        padding: 0.75rem 1rem !important;
-        border: 1px solid #d1d5db !important;
-        border-radius: 9999px !important;
-        outline: none !important;
-        font-size: 0.875rem !important;
-        background: white !important;
-        color: #111827 !important;
-      }
-      
-      #edu-bot-container input[type="text"]:focus,
-      #edu-bot-container textarea:focus {
-        border-color: #10b981 !important;
-        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
-      }
-      
-      /* Send button */
-      #edu-bot-container button[class*="send"],
-      #edu-bot-container button[type="submit"] {
-        width: 3rem !important;
-        height: 3rem !important;
-        border-radius: 50% !important;
-        background: linear-gradient(to bottom right, #10b981, #059669) !important;
-        color: white !important;
-        border: none !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        box-shadow: 0 0 20px rgba(16, 185, 129, 0.3) !important;
-      }
-      
-      #edu-bot-container button[class*="send"]:hover,
-      #edu-bot-container button[type="submit"]:hover {
-        transform: scale(1.05) !important;
-      }
-      
-      /* Close button */
-      #edu-bot-container button[class*="close"],
-      #edu-bot-container button[aria-label*="close" i] {
-        width: 2rem !important;
-        height: 2rem !important;
-        border-radius: 50% !important;
-        background: rgba(255, 255, 255, 0.2) !important;
-        color: white !important;
-        border: none !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-      }
-      
-      /* Recommendations */
-      #edu-bot-container button[class*="recommendation"] {
-        background: linear-gradient(to bottom right, #ecfdf5, #d1fae5) !important;
-        border: 1px solid #a7f3d0 !important;
-        border-radius: 9999px !important;
-        padding: 0.625rem 1rem !important;
-        color: #047857 !important;
-        font-size: 0.875rem !important;
-        cursor: pointer !important;
+      #edu-bot-container button {
         display: inline-flex !important;
-        align-items: center !important;
-        gap: 0.5rem !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font: inherit !important;
       }
-      
-      #edu-bot-container button[class*="recommendation"]:hover {
-        background: linear-gradient(to bottom right, #d1fae5, #a7f3d0) !important;
+      #edu-bot-container input,
+      #edu-bot-container textarea {
+        display: inline-block !important;
+        box-sizing: border-box !important;
+        font: inherit !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: none !important;
+        border: none !important;
       }
-      
-      /* Ensure SVG icons display correctly */
       #edu-bot-container svg {
         display: inline-block !important;
-        width: 1.25rem !important;
-        height: 1.25rem !important;
+        vertical-align: middle !important;
         fill: currentColor !important;
       }
-      
-      /* Ensure text elements display correctly */
+      #edu-bot-container span {
+        display: inline !important;
+      }
       #edu-bot-container p {
         display: block !important;
         margin: 0 !important;
         padding: 0 !important;
       }
-      
-      #edu-bot-container h1,
-      #edu-bot-container h2,
-      #edu-bot-container h3,
-      #edu-bot-container h4,
-      #edu-bot-container h5,
-      #edu-bot-container h6 {
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        font-weight: 600 !important;
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* BLOCK MICROSERVICE CSS INTERFERENCE                                       */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+      /* Block global background/gradient overrides */
+      #edu-bot-container * {
+        background-image: none !important;
+      }
+
+      /* Re-allow bot gradients */
+      #edu-bot-container [class*="bg-gradient"] {
+        background-image: revert !important;
       }
     `;
     
