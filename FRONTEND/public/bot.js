@@ -351,8 +351,22 @@
       }
       
       /* Responsive width - min() function for ChatPanel */
+      /* Matches Tailwind arbitrary values like w-[min(28rem,calc(100vw-3rem))] */
+      /* Use multiple selectors to catch different class name formats */
+      #edu-bot-container [class*="min(28rem"],
+      #edu-bot-container [class*="w-\\[min("],
       #edu-bot-container [class*="w-[min("] {
         width: min(28rem, calc(100vw - 3rem)) !important;
+        max-width: calc(100vw - 3rem) !important;
+      }
+      
+      /* Ensure responsive width works on small screens */
+      @media (max-width: 28rem) {
+        #edu-bot-container [class*="min(28rem"],
+        #edu-bot-container [class*="w-\\[min("],
+        #edu-bot-container [class*="w-[min("] {
+          width: calc(100vw - 3rem) !important;
+        }
       }
       #edu-bot-container .w-8 {
         width: 2rem !important;
