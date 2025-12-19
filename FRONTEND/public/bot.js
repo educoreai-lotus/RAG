@@ -349,6 +349,11 @@
       #edu-bot-container .w-full {
         width: 100% !important;
       }
+      
+      /* Responsive width - min() function for ChatPanel */
+      #edu-bot-container [class*="w-[min("] {
+        width: min(28rem, calc(100vw - 3rem)) !important;
+      }
       #edu-bot-container .w-8 {
         width: 2rem !important;
       }
