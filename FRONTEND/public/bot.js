@@ -43,7 +43,22 @@
       return;
     }
 
+    console.log('🤖 [EDUCORE Bot] Initializing with config:', config);
+
     const { microservice, userId, token, container = '#edu-bot-container', tenantId = 'default' } = config;
+    
+    // ✅ SAVE CONFIG GLOBALLY
+    window.educoreBotConfig = {
+      autoOpen: config.autoOpen !== undefined ? config.autoOpen : false,  // Default to false
+      containerId: container.replace('#', ''),
+      container: container,
+      apiUrl: config.apiUrl,
+      tenantId: tenantId || 'default',
+      userId: userId || 'anonymous',
+      microservice: microservice,
+    };
+    
+    console.log('✅ [EDUCORE Bot] Config saved:', window.educoreBotConfig);
 
     // Validate required parameters
     if (!microservice) {

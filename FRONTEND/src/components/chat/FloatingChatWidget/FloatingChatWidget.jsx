@@ -143,13 +143,26 @@ const FloatingChatWidget = ({
     }
   }, [embedded, initialMode, mode, dispatch]);
 
-  // Auto-open widget in embedded CHAT MODE
+  // Auto-open widget - Check config before opening
   useEffect(() => {
-    if (embedded && mode === 'chat' && !isOpen) {
-      console.log('🔄 [FloatingChatWidget] Auto-opening widget in embedded CHAT mode');
-      dispatch(setWidgetOpen(true));
+    if (!embedded) return;
+    
+    // Check if we should auto-open
+    const botConfig = window.educoreBotConfig;
+    
+    if (!botConfig) {
+      console.log('⚠️ [FloatingChatWidget] No bot config found, skipping auto-open');
+      return;
     }
-  }, [embedded, mode, isOpen, dispatch]);
+    
+    if (botConfig.autoOpen === true) {
+      console.log('✅ [FloatingChatWidget] Auto-opening (autoOpen: true)');
+      dispatch(setWidgetOpen(true));
+    } else {
+      console.log('⏸️ [FloatingChatWidget] Auto-open disabled (autoOpen: false)');
+      dispatch(setWidgetOpen(false));
+    }
+  }, [embedded, dispatch]);
 
   // Show initial greeting when widget opens
   useEffect(() => {
@@ -258,10 +271,12 @@ const FloatingChatWidget = ({
   }, [embedded, mode, initialMode, isOpen, messages.length, currentMode, hasShownGreeting]);
 
   const handleToggle = () => {
+    console.log('🟢 [FloatingChatWidget] Toggle button clicked, current state:', isOpen);
     dispatch(toggleWidget());
   };
 
   const handleClose = () => {
+    console.log('🔴 [FloatingChatWidget] Close button clicked');
     dispatch(setWidgetOpen(false));
     // Reset to general mode when closing
     if (currentMode !== MODES.GENERAL) {
