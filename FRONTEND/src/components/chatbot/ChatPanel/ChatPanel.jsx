@@ -35,7 +35,7 @@ const ChatPanel = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed bottom-24 right-6 w-[min(28rem,calc(100vw-3rem))] h-[600px] bg-white rounded-2xl shadow-card-lg flex flex-col z-40 overflow-hidden"
+          className="fixed bottom-24 right-6 w-[min(28rem,calc(100vw-3rem))] h-[min(600px,calc(100vh-8rem))] bg-white rounded-2xl shadow-card-lg flex flex-col z-40 overflow-hidden"
           initial={{ opacity: 0, y: 100, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 100, scale: 0.9 }}

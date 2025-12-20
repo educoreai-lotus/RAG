@@ -400,21 +400,64 @@
       #edu-bot-container [style*="height: 600px"] {
         height: 600px !important;
       }
+      
+      /* Responsive height - min() function for ChatPanel */
+      #edu-bot-container [class*="h-[min("],
+      #edu-bot-container [class*="min(600px"] {
+        height: min(600px, calc(100vh - 8rem)) !important;
+        max-height: calc(100vh - 8rem) !important;
+      }
+      
+      /* Ensure panel doesn't overflow viewport */
+      #edu-bot-container .fixed[class*="h-[min("] {
+        max-height: calc(100vh - 8rem) !important;
+      }
 
       /* Max width - ChatMessage */
       #edu-bot-container [class*="max-w-\\[75"] {
         max-width: 75% !important;
       }
 
-      /* Background gradients - CRITICAL! */
-      /* ChatWidgetButton: bg-gradient-to-br from-emerald-500 to-emerald-600 */
-      #edu-bot-container [class*="bg-gradient-to-br"][class*="from-emerald-500"] {
-        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      /* CRITICAL: FORCE EMERALD GRADIENTS - HIGHEST PRIORITY                       */
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      
+      /* ChatHeader emerald gradient - FORCE with highest specificity */
+      #edu-bot-container div.bg-gradient-to-r.from-emerald-500.to-emerald-600,
+      #edu-bot-container div[class*="bg-gradient-to-r"][class*="from-emerald-500"],
+      #edu-bot-container div[class*="from-emerald-500"][class*="to-emerald-600"],
+      #edu-bot-container header[class*="bg-gradient-to-r"][class*="from-emerald-500"] {
+        background: linear-gradient(to right, #10b981, #059669) !important;
+        background-color: #10b981 !important;
+        background-image: linear-gradient(to right, #10b981, #059669) !important;
       }
 
-      /* ChatHeader General: bg-gradient-to-r from-emerald-500 to-emerald-600 */
-      #edu-bot-container [class*="bg-gradient-to-r"][class*="from-emerald-500"] {
-        background: linear-gradient(to right, #10b981, #059669) !important;
+      /* ChatWidgetButton emerald gradient - FORCE */
+      #edu-bot-container button.bg-gradient-to-br.from-emerald-500.to-emerald-600,
+      #edu-bot-container button[class*="bg-gradient-to-br"][class*="from-emerald-500"],
+      #edu-bot-container button[class*="from-emerald-500"][class*="to-emerald-600"] {
+        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+        background-color: #10b981 !important;
+        background-image: linear-gradient(to bottom right, #10b981, #059669) !important;
+      }
+
+      /* Send button emerald gradient - FORCE */
+      #edu-bot-container button[type="submit"],
+      #edu-bot-container button.w-12.h-12[class*="bg-gradient"] {
+        background: linear-gradient(to bottom right, #10b981, #059669) !important;
+        background-color: #10b981 !important;
+        background-image: linear-gradient(to bottom right, #10b981, #059669) !important;
+      }
+      
+      /* Block any teal/cyan colors that might be leaking */
+      #edu-bot-container div[style*="14b8a6"],
+      #edu-bot-container div[style*="teal"],
+      #edu-bot-container button[style*="14b8a6"],
+      #edu-bot-container button[style*="teal"],
+      #edu-bot-container [class*="teal"],
+      #edu-bot-container [class*="cyan"] {
+        background: none !important;
+        background-image: none !important;
       }
 
       /* ChatHeader Assessment: bg-gradient-to-r from-blue-500 to-blue-600 */
