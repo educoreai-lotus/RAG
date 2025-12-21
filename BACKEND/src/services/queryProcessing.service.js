@@ -236,9 +236,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     // STEP 2: If semantic search found good results, USE THEM!
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    const SEMANTIC_SIMILARITY_THRESHOLD = parseFloat(process.env.SEMANTIC_CACHE_THRESHOLD) || 0.80;
+    // Use same threshold as semantic search (0.70) - semanticResult.found already means results passed threshold
+    const SEMANTIC_SIMILARITY_THRESHOLD = parseFloat(process.env.SEMANTIC_CACHE_THRESHOLD) || 0.70;
     
-    if (semanticResult.found && semanticResult.bestSimilarity >= SEMANTIC_SIMILARITY_THRESHOLD && semanticResult.results.length > 0) {
+    if (semanticResult.found && semanticResult.results.length > 0) {
       logger.info('[QUERY PROCESSING] ✅ CACHE HIT! Using semantic search results', {
         query: query.substring(0, 100),
         similarity: semanticResult.bestSimilarity,
@@ -2250,18 +2251,35 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
  * @returns {Promise<Object>} Search results with found flag, results array, and best similarity
  */
 async function performSemanticSearch(query, tenantId) {
-  const SIMILARITY_THRESHOLD = 0.80;
-  const MAX_RESULTS = 10;
+  const SIMILARITY_THRESHOLD = parseFloat(process.env.SEMANTIC_SIMILARITY_THRESHOLD) || 0.70; // Lower threshold for better recall
+  const MAX_RESULTS = 20; // Get more results to filter
   
   try {
-    logger.info('[SEMANTIC SEARCH] Starting search', {
+    logger.info('[SEMANTIC SEARCH] 🔍 Starting search', {
       query: query.substring(0, 100),
-      tenantId: tenantId
+      tenantId: tenantId,
+      threshold: SIMILARITY_THRESHOLD
     });
     
     const prisma = await getPrismaClient();
     
-    // Step 1: Generate embedding for the query
+    // Step 1: First, check what's in the table for this tenant
+    const countCheck = await prisma.$queryRawUnsafe(`
+      SELECT 
+        content_type, 
+        COUNT(*) as count,
+        COUNT(embedding) as with_embedding
+      FROM vector_embeddings
+      WHERE tenant_id = $1
+      GROUP BY content_type
+    `, tenantId);
+    
+    logger.info('[SEMANTIC SEARCH] 📊 Database content for tenant', {
+      tenantId: tenantId,
+      contentTypes: countCheck
+    });
+    
+    // Step 2: Generate embedding for the query
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input: query,
@@ -2271,11 +2289,11 @@ async function performSemanticSearch(query, tenantId) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
     
-    logger.info('[SEMANTIC SEARCH] Query embedding generated', {
+    logger.info('[SEMANTIC SEARCH] ✅ Query embedding generated', {
       dimensions: queryEmbedding.length
     });
     
-    // Step 2: Search vector_embeddings table
+    // Step 3: Search ALL content types in vector_embeddings table (not just microservice_data)
     const results = await prisma.$queryRawUnsafe(`
       SELECT 
         id,
@@ -2294,46 +2312,69 @@ async function performSemanticSearch(query, tenantId) {
       LIMIT ${MAX_RESULTS}
     `, embeddingStr, tenantId);
     
-    logger.info('[SEMANTIC SEARCH] Search completed', {
-      totalResults: results?.length || 0
+    logger.info('[SEMANTIC SEARCH] 📋 Raw search results', {
+      totalFound: results?.length || 0,
+      results: results?.slice(0, 5).map(r => ({
+        id: r.id,
+        content_type: r.content_type,
+        similarity: parseFloat(r.similarity || 0).toFixed(3),
+        contentPreview: (r.content_text || '').substring(0, 50)
+      }))
     });
     
-    // Step 3: Filter by similarity threshold
+    // Step 4: Filter by similarity threshold
     const goodResults = (results || []).filter(r => 
       parseFloat(r.similarity) >= SIMILARITY_THRESHOLD
     );
     
-    // Step 4: Prioritize microservice_data content type
-    const microserviceResults = goodResults.filter(r => 
-      r.content_type === 'microservice_data'
-    );
-    
-    // Use microservice results if available, otherwise use all good results
-    const finalResults = microserviceResults.length > 0 ? microserviceResults : goodResults;
-    
-    const bestSimilarity = finalResults.length > 0 ? parseFloat(finalResults[0].similarity) : 0;
-    
-    logger.info('[SEMANTIC SEARCH] Results filtered', {
-      totalResults: results?.length || 0,
+    logger.info('[SEMANTIC SEARCH] ✅ Filtered results', {
       aboveThreshold: goodResults.length,
-      microserviceData: microserviceResults.length,
+      threshold: SIMILARITY_THRESHOLD,
+      bestSimilarity: goodResults[0] ? parseFloat(goodResults[0].similarity).toFixed(3) : 0,
+      allSimilarities: goodResults.slice(0, 5).map(r => parseFloat(r.similarity).toFixed(3))
+    });
+    
+    if (goodResults.length === 0) {
+      logger.info('[SEMANTIC SEARCH] ❌ No results above threshold', {
+        totalResults: results?.length || 0,
+        bestSimilarityFound: results?.[0] ? parseFloat(results[0].similarity).toFixed(3) : 0,
+        threshold: SIMILARITY_THRESHOLD,
+        recommendation: results?.length > 0 
+          ? `Found ${results.length} results but best similarity ${parseFloat(results[0].similarity).toFixed(3)} is below threshold ${SIMILARITY_THRESHOLD}`
+          : 'No results found in database for this tenant'
+      });
+      
+      return {
+        found: false,
+        results: [],
+        bestSimilarity: results?.[0] ? parseFloat(results[0].similarity) : 0,
+        totalSearched: results?.length || 0
+      };
+    }
+    
+    // Use all good results (don't filter by content_type - use whatever is relevant)
+    const finalResults = goodResults;
+    const bestSimilarity = parseFloat(finalResults[0].similarity);
+    
+    logger.info('[SEMANTIC SEARCH] ✅ Final results ready', {
       finalResults: finalResults.length,
-      bestSimilarity: bestSimilarity,
-      threshold: SIMILARITY_THRESHOLD
+      bestSimilarity: bestSimilarity.toFixed(3),
+      contentTypes: [...new Set(finalResults.map(r => r.content_type))]
     });
     
     return {
-      found: finalResults.length > 0 && bestSimilarity >= SIMILARITY_THRESHOLD,
+      found: true,
       results: finalResults,
       bestSimilarity: bestSimilarity,
       totalSearched: results?.length || 0
     };
     
   } catch (error) {
-    logger.error('[SEMANTIC SEARCH] Error during search', {
+    logger.error('[SEMANTIC SEARCH] ❌ Error during search', {
       error: error.message,
       stack: error.stack,
-      query: query.substring(0, 50)
+      query: query.substring(0, 50),
+      tenantId: tenantId
     });
     
     // Return empty result on error - will fall through to GRPC
@@ -2366,18 +2407,48 @@ async function buildResponseFromSemanticResults(results, query, tenantId) {
       query: query.substring(0, 50)
     });
     
-    // Extract content from results
+    // Extract content from results and include metadata
     const contexts = results.map((r, index) => {
       const content = r.content_text || '';
-      const source = r.metadata?._source_service || 'cached';
+      const source = r.content_type || r.metadata?._source_service || 'cached';
       const similarity = parseFloat(r.similarity) || 0;
+      
+      // Parse metadata if it's a string
+      let metadata = r.metadata;
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch (e) {
+          metadata = {};
+        }
+      }
+      
+      // Build metadata info string
+      let metadataInfo = '';
+      if (metadata) {
+        if (metadata.report_name) metadataInfo += `Report: ${metadata.report_name}\n`;
+        if (metadata.conclusions) {
+          const conclusions = typeof metadata.conclusions === 'string' 
+            ? metadata.conclusions 
+            : JSON.stringify(metadata.conclusions);
+          metadataInfo += `Conclusions: ${conclusions}\n`;
+        }
+        if (metadata.metrics) {
+          const metrics = typeof metadata.metrics === 'string'
+            ? metadata.metrics
+            : JSON.stringify(metadata.metrics);
+          metadataInfo += `Metrics: ${metrics}\n`;
+        }
+        if (metadata._source_service) metadataInfo += `Source Service: ${metadata._source_service}\n`;
+      }
       
       return {
         index: index + 1,
         content: content,
         source: source,
         similarity: similarity,
-        contentId: r.content_id
+        contentId: r.content_id,
+        metadataInfo: metadataInfo
       };
     }).filter(ctx => ctx.content.length > 0);
     
@@ -2386,10 +2457,21 @@ async function buildResponseFromSemanticResults(results, query, tenantId) {
       return null;
     }
     
-    // Build context string for LLM
-    const contextString = contexts.map(ctx => 
-      `[Source ${ctx.index} - ${ctx.source} (similarity: ${(ctx.similarity * 100).toFixed(1)}%)]:\n${ctx.content}`
-    ).join('\n\n---\n\n');
+    // Build context string for LLM with metadata included
+    const contextParts = contexts.map(ctx => {
+      const similarityPercent = (ctx.similarity * 100).toFixed(1);
+      let contextPart = `--- Source ${ctx.index} (${ctx.source}, ${similarityPercent}% match) ---\n`;
+      
+      if (ctx.metadataInfo) {
+        contextPart += `${ctx.metadataInfo}\n`;
+      }
+      
+      contextPart += `${ctx.content}`;
+      
+      return contextPart;
+    });
+    
+    const contextString = contextParts.join('\n\n');
     
     logger.info('[SEMANTIC RESPONSE] Context built', {
       contextsUsed: contexts.length,
@@ -2397,22 +2479,22 @@ async function buildResponseFromSemanticResults(results, query, tenantId) {
     });
     
     // Generate response using LLM
-    const systemPrompt = `You are a helpful assistant providing accurate information based on cached data from the system.
+    const systemPrompt = `You are a helpful assistant answering questions based on the provided context.
 
-Your task:
-1. Answer the user's question based ONLY on the provided context
-2. Be concise, accurate, and helpful
-3. If the context contains the answer, provide it clearly
-4. If the context doesn't fully answer the question, say what you can based on available data
+Rules:
+1. Answer ONLY based on the provided context
+2. If the context contains the answer, provide it clearly and completely
+3. If the context doesn't have enough information, say so
+4. Be concise but complete
+5. Use bullet points or numbered lists when appropriate
+6. Include specific details from the context (numbers, names, dates, etc.)`;
 
-Important: Base your answer strictly on the provided context.`;
-
-    const userPrompt = `Context from cached data:
+    const userPrompt = `Context:
 ${contextString}
 
-User Question: ${query}
+Question: ${query}
 
-Please provide a helpful and accurate answer based on the context above.`;
+Please answer the question based on the context above.`;
 
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
