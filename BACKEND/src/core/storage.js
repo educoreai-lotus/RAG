@@ -33,32 +33,48 @@ class Storage {
       const updatePairs = [];
       const insertValues = [];
       const updateValues = [];
+      const placeholders = []; // Build placeholders with proper casting
       let updateParamIndex = 1; // Start from 1 for UPDATE SET clause (WHERE uses separate params)
 
       // Add tenant_id
       columnValuePairs.push('tenant_id');
       insertValues.push(tenantId);
+      placeholders.push('$1'); // tenant_id
       updatePairs.push(`tenant_id = $${updateParamIndex}`);
       updateValues.push(tenantId);
       updateParamIndex++;
 
       // Add schema fields
+      let insertParamIndex = 2; // Start from 2 (1 is tenant_id)
       for (const [fieldName, fieldType] of Object.entries(schema.data_structure)) {
         const colName = tableManager.sanitizeColumnName(fieldName);
         columnValuePairs.push(colName);
         
         let value = item[fieldName];
+        const isJsonbField = (fieldType === 'object' || fieldType === 'array');
         
         // Convert to JSON string if object/array
-        if ((fieldType === 'object' || fieldType === 'array') && value !== null && value !== undefined) {
+        if (isJsonbField && value !== null && value !== undefined) {
           value = JSON.stringify(value);
         }
         
         insertValues.push(value);
         
+        // Add placeholder with proper casting for JSONB fields
+        if (isJsonbField) {
+          placeholders.push(`$${insertParamIndex}::jsonb`);
+        } else {
+          placeholders.push(`$${insertParamIndex}`);
+        }
+        insertParamIndex++;
+        
         // For update, skip primary key
         if (colName !== pkColumn) {
-          updatePairs.push(`${colName} = $${updateParamIndex}`);
+          if (isJsonbField) {
+            updatePairs.push(`${colName} = $${updateParamIndex}::jsonb`);
+          } else {
+            updatePairs.push(`${colName} = $${updateParamIndex}`);
+          }
           updateValues.push(value);
           updateParamIndex++;
         }
@@ -67,6 +83,8 @@ class Storage {
       // Add content
       columnValuePairs.push('full_content');
       insertValues.push(content);
+      placeholders.push(`$${insertParamIndex}`); // full_content (TEXT)
+      insertParamIndex++;
       updatePairs.push(`full_content = $${updateParamIndex}`);
       updateValues.push(content);
       updateParamIndex++;
@@ -74,6 +92,8 @@ class Storage {
       // Add embedding (as vector)
       columnValuePairs.push('embedding');
       insertValues.push(embeddingStr);
+      placeholders.push(`$${insertParamIndex}::vector`); // embedding (VECTOR)
+      insertParamIndex++;
       updatePairs.push(`embedding = $${updateParamIndex}::vector`);
       updateValues.push(embeddingStr);
       updateParamIndex++;
@@ -81,12 +101,14 @@ class Storage {
       // Add synced_at
       columnValuePairs.push('synced_at');
       insertValues.push(new Date());
+      placeholders.push(`$${insertParamIndex}`); // synced_at (TIMESTAMP)
+      insertParamIndex++;
       updatePairs.push(`synced_at = $${updateParamIndex}`);
       updateValues.push(new Date());
       updateParamIndex++;
 
-      // Build placeholders for INSERT
-      const placeholders = insertValues.map((_, i) => `$${i + 1}`).join(', ');
+      // Build placeholders string for INSERT
+      const placeholdersStr = placeholders.join(', ');
 
       // Build SQL for upsert using ON CONFLICT
       // Note: We need to add a unique constraint on (tenant_id, pk_column) for this to work
@@ -114,12 +136,12 @@ class Storage {
         // Insert new record
         const insertSQL = `
           INSERT INTO ${tableName} (${columnValuePairs.join(', ')})
-          VALUES (${placeholders})
+          VALUES (${placeholdersStr})
         `;
         await prisma.$executeRawUnsafe(insertSQL, ...insertValues);
       }
 
-      logger.debug('Item stored', {
+      logger.info('Item stored successfully', {
         table: tableName,
         tenant_id: tenantId,
         pk_field: pkField,
