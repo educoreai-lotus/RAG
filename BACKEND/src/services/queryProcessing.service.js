@@ -209,6 +209,132 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         : `${tenantEmbeddingCount} embeddings available for this tenant.`,
     });
 
+    // Initialize userProfile (will be populated later if needed)
+    let userProfile = null;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // STEP 1: ALWAYS DO SEMANTIC SEARCH FIRST!
+    // This MUST happen before ANY Coordinator/GRPC decision!
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    logger.info('[QUERY PROCESSING] Starting semantic search FIRST', {
+      query: query.substring(0, 100),
+      tenantId: actualTenantId
+    });
+    
+    const semanticResult = await performSemanticSearch(query, actualTenantId);
+    
+    logger.info('[QUERY PROCESSING] Semantic search completed', {
+      query: query.substring(0, 100),
+      found: semanticResult.found,
+      resultsCount: semanticResult.results?.length || 0,
+      bestSimilarity: semanticResult.bestSimilarity || 0,
+      totalSearched: semanticResult.totalSearched || 0
+    });
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // STEP 2: If semantic search found good results, USE THEM!
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    const SEMANTIC_SIMILARITY_THRESHOLD = parseFloat(process.env.SEMANTIC_CACHE_THRESHOLD) || 0.80;
+    
+    if (semanticResult.found && semanticResult.bestSimilarity >= SEMANTIC_SIMILARITY_THRESHOLD && semanticResult.results.length > 0) {
+      logger.info('[QUERY PROCESSING] ✅ CACHE HIT! Using semantic search results', {
+        query: query.substring(0, 100),
+        similarity: semanticResult.bestSimilarity,
+        resultsCount: semanticResult.results.length,
+        action: 'SKIP_GRPC'
+      });
+      
+      try {
+        // Build response from cached semantic results
+        const cachedResponse = await buildResponseFromSemanticResults(
+          semanticResult.results,
+          query,
+          actualTenantId
+        );
+        
+        if (cachedResponse && cachedResponse.answer) {
+          logger.info('[QUERY PROCESSING] ✅ Response built from cache - NO GRPC!', {
+            answerLength: cachedResponse.answer.length,
+            duration_ms: Date.now() - startTime,
+            similarity: semanticResult.bestSimilarity
+          });
+          
+          // Save query to database for analytics
+          await saveQueryToDatabase({
+            tenantId: actualTenantId,
+            userId: user_id || 'anonymous',
+            sessionId: session_id,
+            queryText: query,
+            answer: cachedResponse.answer,
+            confidenceScore: semanticResult.bestSimilarity,
+            processingTimeMs: Date.now() - startTime,
+            modelVersion: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            isPersonalized: !!userProfile,
+            isCached: true,
+            metadata: {
+              flow: 'semantic_cache',
+              cache_hit: true,
+              grpc_skipped: true,
+              semantic_results_count: semanticResult.results.length,
+              best_similarity: semanticResult.bestSimilarity
+            }
+          }).catch(err => {
+            logger.warn('Failed to save cached query to database', { error: err.message });
+          });
+          
+          // Return cached response - NO GRPC CALL!
+          return {
+            success: true,
+            answer: cachedResponse.answer,
+            sources: semanticResult.results.map(r => ({
+              sourceId: r.content_id || r.contentId,
+              sourceType: r.content_type || r.contentType || 'vector_cache',
+              sourceMicroservice: r.microservice_id || r.microserviceId,
+              title: r.metadata?.title || `${r.content_type || 'cached'}:${r.content_id || r.contentId}`,
+              contentSnippet: (r.content_text || r.contentText || '').substring(0, 200),
+              sourceUrl: r.metadata?.url || `/${r.content_type || 'cached'}/${r.content_id || r.contentId}`,
+              relevanceScore: r.similarity || 0,
+              metadata: r.metadata || {}
+            })),
+            confidence: semanticResult.bestSimilarity,
+            metadata: {
+              flow: 'semantic_cache',
+              cache_hit: true,
+              grpc_skipped: true,
+              semantic_results_count: semanticResult.results.length,
+              best_similarity: semanticResult.bestSimilarity,
+              tenant_id: actualTenantId,
+              processing_time_ms: Date.now() - startTime
+            }
+          };
+        } else {
+          logger.warn('[QUERY PROCESSING] Cache response generation failed - falling back to GRPC', {
+            query: query.substring(0, 100)
+          });
+        }
+      } catch (cacheError) {
+        logger.warn('[QUERY PROCESSING] Cache response generation error - falling back to GRPC', {
+          error: cacheError.message,
+          query: query.substring(0, 100)
+        });
+        // Continue to GRPC flow below
+      }
+    } else {
+      logger.info('[QUERY PROCESSING] Cache miss - continuing to GRPC flow', {
+        query: query.substring(0, 100),
+        hadResults: semanticResult.results?.length > 0,
+        bestSimilarity: semanticResult.bestSimilarity || 0,
+        threshold: SEMANTIC_SIMILARITY_THRESHOLD,
+        reason: semanticResult.results?.length === 0 
+          ? 'No results found' 
+          : semanticResult.bestSimilarity < SEMANTIC_SIMILARITY_THRESHOLD
+            ? `Similarity ${semanticResult.bestSimilarity} below threshold ${SEMANTIC_SIMILARITY_THRESHOLD}`
+            : 'Unknown'
+      });
+    }
+
     // Get or create user profile
     // Pass context.role if provided to set correct role in profile
     let userProfile = null;
@@ -2113,6 +2239,219 @@ ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` 
     const errorMessage = `Query processing failed: ${error.message}`;
     console.error('🚨 [PROCESS QUERY SERVICE] Throwing error:', errorMessage);
     throw new Error(errorMessage);
+  }
+}
+
+/**
+ * Perform semantic search in vector_embeddings
+ * This MUST be called FIRST for every query!
+ * @param {string} query - User query
+ * @param {string} tenantId - Tenant ID
+ * @returns {Promise<Object>} Search results with found flag, results array, and best similarity
+ */
+async function performSemanticSearch(query, tenantId) {
+  const SIMILARITY_THRESHOLD = 0.80;
+  const MAX_RESULTS = 10;
+  
+  try {
+    logger.info('[SEMANTIC SEARCH] Starting search', {
+      query: query.substring(0, 100),
+      tenantId: tenantId
+    });
+    
+    const prisma = await getPrismaClient();
+    
+    // Step 1: Generate embedding for the query
+    const embeddingResponse = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query,
+      dimensions: 1536
+    });
+    
+    const queryEmbedding = embeddingResponse.data[0].embedding;
+    const embeddingStr = `[${queryEmbedding.join(',')}]`;
+    
+    logger.info('[SEMANTIC SEARCH] Query embedding generated', {
+      dimensions: queryEmbedding.length
+    });
+    
+    // Step 2: Search vector_embeddings table
+    const results = await prisma.$queryRawUnsafe(`
+      SELECT 
+        id,
+        tenant_id,
+        microservice_id,
+        content_id,
+        content_type,
+        content_text,
+        metadata,
+        created_at,
+        1 - (embedding <=> $1::vector) as similarity
+      FROM vector_embeddings
+      WHERE tenant_id = $2
+        AND embedding IS NOT NULL
+      ORDER BY embedding <=> $1::vector
+      LIMIT ${MAX_RESULTS}
+    `, embeddingStr, tenantId);
+    
+    logger.info('[SEMANTIC SEARCH] Search completed', {
+      totalResults: results?.length || 0
+    });
+    
+    // Step 3: Filter by similarity threshold
+    const goodResults = (results || []).filter(r => 
+      parseFloat(r.similarity) >= SIMILARITY_THRESHOLD
+    );
+    
+    // Step 4: Prioritize microservice_data content type
+    const microserviceResults = goodResults.filter(r => 
+      r.content_type === 'microservice_data'
+    );
+    
+    // Use microservice results if available, otherwise use all good results
+    const finalResults = microserviceResults.length > 0 ? microserviceResults : goodResults;
+    
+    const bestSimilarity = finalResults.length > 0 ? parseFloat(finalResults[0].similarity) : 0;
+    
+    logger.info('[SEMANTIC SEARCH] Results filtered', {
+      totalResults: results?.length || 0,
+      aboveThreshold: goodResults.length,
+      microserviceData: microserviceResults.length,
+      finalResults: finalResults.length,
+      bestSimilarity: bestSimilarity,
+      threshold: SIMILARITY_THRESHOLD
+    });
+    
+    return {
+      found: finalResults.length > 0 && bestSimilarity >= SIMILARITY_THRESHOLD,
+      results: finalResults,
+      bestSimilarity: bestSimilarity,
+      totalSearched: results?.length || 0
+    };
+    
+  } catch (error) {
+    logger.error('[SEMANTIC SEARCH] Error during search', {
+      error: error.message,
+      stack: error.stack,
+      query: query.substring(0, 50)
+    });
+    
+    // Return empty result on error - will fall through to GRPC
+    return {
+      found: false,
+      results: [],
+      bestSimilarity: 0,
+      totalSearched: 0,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Build LLM response from semantic search results
+ * @param {Array} results - Semantic search results
+ * @param {string} query - User query
+ * @param {string} tenantId - Tenant ID
+ * @returns {Promise<Object|null>} Response with answer or null if failed
+ */
+async function buildResponseFromSemanticResults(results, query, tenantId) {
+  try {
+    if (!results || results.length === 0) {
+      logger.warn('[SEMANTIC RESPONSE] No results to build from');
+      return null;
+    }
+    
+    logger.info('[SEMANTIC RESPONSE] Building response from cached data', {
+      resultsCount: results.length,
+      query: query.substring(0, 50)
+    });
+    
+    // Extract content from results
+    const contexts = results.map((r, index) => {
+      const content = r.content_text || '';
+      const source = r.metadata?._source_service || 'cached';
+      const similarity = parseFloat(r.similarity) || 0;
+      
+      return {
+        index: index + 1,
+        content: content,
+        source: source,
+        similarity: similarity,
+        contentId: r.content_id
+      };
+    }).filter(ctx => ctx.content.length > 0);
+    
+    if (contexts.length === 0) {
+      logger.warn('[SEMANTIC RESPONSE] No valid content in results');
+      return null;
+    }
+    
+    // Build context string for LLM
+    const contextString = contexts.map(ctx => 
+      `[Source ${ctx.index} - ${ctx.source} (similarity: ${(ctx.similarity * 100).toFixed(1)}%)]:\n${ctx.content}`
+    ).join('\n\n---\n\n');
+    
+    logger.info('[SEMANTIC RESPONSE] Context built', {
+      contextsUsed: contexts.length,
+      totalLength: contextString.length
+    });
+    
+    // Generate response using LLM
+    const systemPrompt = `You are a helpful assistant providing accurate information based on cached data from the system.
+
+Your task:
+1. Answer the user's question based ONLY on the provided context
+2. Be concise, accurate, and helpful
+3. If the context contains the answer, provide it clearly
+4. If the context doesn't fully answer the question, say what you can based on available data
+
+Important: Base your answer strictly on the provided context.`;
+
+    const userPrompt = `Context from cached data:
+${contextString}
+
+User Question: ${query}
+
+Please provide a helpful and accurate answer based on the context above.`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+    
+    const answer = completion.choices[0]?.message?.content;
+    
+    if (!answer) {
+      logger.warn('[SEMANTIC RESPONSE] LLM returned empty response');
+      return null;
+    }
+    
+    logger.info('[SEMANTIC RESPONSE] ✅ Response generated successfully', {
+      answerLength: answer.length,
+      contextsUsed: contexts.length
+    });
+    
+    return {
+      answer: answer,
+      contexts: contexts,
+      metadata: {
+        source: 'semantic_cache',
+        contexts_used: contexts.length,
+        best_similarity: contexts[0]?.similarity || 0
+      }
+    };
+    
+  } catch (error) {
+    logger.error('[SEMANTIC RESPONSE] Error building response', {
+      error: error.message,
+      stack: error.stack
+    });
+    return null;
   }
 }
 
