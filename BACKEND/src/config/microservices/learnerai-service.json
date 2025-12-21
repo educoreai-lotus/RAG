@@ -1,7 +1,7 @@
 {
   "service_name": "learnerAI",
-  "description": "LearnerAI service data sync for RAG: courses (learning paths) from Supabase 'courses' table, returned via GRPC Process (realtime + batch).",
-  "version": "1.0.0",
+  "description": "LearnerAI service data sync for RAG: courses (learning paths) from Supabase 'courses' table, returned via GRPC Process (realtime + batch). Recommendations from 'recommendations' table are available for RAG to request on-demand via batch/demand/GRPC (LearnerAI does NOT automatically send recommendations to RAG).",
+  "version": "1.1.0",
   "data_structure": {
     "competency_target_name": "string",
     "user_id": "string",
@@ -12,42 +12,79 @@
     "last_modified_at": "datetime"
   },
   "field_descriptions": {
-    "competency_target_name": "Primary key / course identifier (also used as learning path id).",
-    "user_id": "Learner UUID that owns this course.",
-    "gap_id": "Related skills_gap.gap_id (nullable).",
-    "learning_path": "Prompt-3 structured JSON (path_title, learner_id, total_estimated_duration_hours, learning_modules).",
-    "approved": "Whether the learning path is approved.",
-    "created_at": "When the course record was created.",
-    "last_modified_at": "When the course record was last modified."
+    "competency_target_name": "Primary key / course identifier (also used as learning path id)",
+    "user_id": "Learner UUID that owns this course",
+    "gap_id": "Related skills_gap.gap_id (nullable)",
+    "learning_path": "Prompt-3 structured JSON object with exact field order: path_title → learner_id → total_estimated_duration_hours → learning_modules",
+    "approved": "Whether the learning path is approved (boolean: true/false)",
+    "created_at": "Timestamp when the course record was created",
+    "last_modified_at": "Timestamp when the course record was last modified"
   },
   "sample_data": {
     "competency_target_name": "C++ basics Noam",
     "user_id": "b2b400ed-bc11-4aa9-a89e-f4a00d0f6321",
     "gap_id": "550e8400-e29b-41d4-a716-446655440000",
     "learning_path": {
-      "path_title": "C++ Basics Learning Path",
+      "path_title": "C++ basics Noam",
       "learner_id": "b2b400ed-bc11-4aa9-a89e-f4a00d0f6321",
-      "total_estimated_duration_hours": 12,
+      "total_estimated_duration_hours": 37.5,
       "learning_modules": [
         {
-          "module_title": "Pointers Fundamentals",
-          "module_description": "Understand pointer basics, dereferencing, and memory safety.",
-          "estimated_duration_hours": 3,
-          "skills_covered": [
-            "Pointers (basic usage & referencing)",
-            "Passing by Value vs Passing by Reference"
+          "module_order": 1,
+          "module_title": "C++ Programming Fundamentals",
+          "estimated_duration_hours": 6.5,
+          "skills_in_module": [
+            "Variables and Data Types",
+            "Input and Output (cin, cout)",
+            "Control Flow (if, switch, loops)"
           ],
-          "resources": []
+          "steps": [
+            {
+              "step": 1,
+              "title": "Understanding Variables and Data Types",
+              "description": "Learn the fundamental building blocks of C++: how to declare variables to store different types of data like integers, floating-point numbers, and characters.",
+              "estimatedTime": 1.5,
+              "skills_covered": ["Variables and Data Types"]
+            },
+            {
+              "step": 2,
+              "title": "Basic Input and Output",
+              "description": "Discover how to make your programs interactive by reading input from the user with 'cin' and displaying output to the console with 'cout'.",
+              "estimatedTime": 1,
+              "skills_covered": ["Input and Output (cin, cout)"]
+            }
+          ]
         }
       ]
     },
-    "approved": true,
+    "approved": false,
     "created_at": "2025-12-18T10:00:00.000Z",
     "last_modified_at": "2025-12-18T10:15:00.000Z"
   },
   "notes": [
-    "GRPC realtime mode returns data as a direct array of course records (no wrappers).",
-    "GRPC batch mode returns data as {\"items\": [...], \"page\": n, \"limit\": n, \"total\": n} (no extra wrapper keys).",
-    "This service currently syncs from Supabase table 'courses'."
+    "GRPC Process endpoint syncs courses table only (learning paths).",
+    "learning_path (object) contains:",
+    "  └─ path_title (string): Title of the learning path",
+    "  └─ learner_id (uuid): UUID of the learner this path is for",
+    "  └─ total_estimated_duration_hours (number): Total estimated duration in hours",
+    "  └─ learning_modules (array): Array of module objects, each containing:",
+    "      └─ module_order (number): Order of the module in the path",
+    "      └─ module_title (string): Title of the module",
+    "      └─ estimated_duration_hours (number): Estimated duration of this module in hours",
+    "      └─ skills_in_module (array of strings): List of skill names covered in this module",
+    "      └─ steps (array): Array of step objects, each containing:",
+    "          └─ step (number): Step number within the module",
+    "          └─ title (string): Title of the step",
+    "          └─ description (string): Detailed description of what the step covers",
+    "          └─ estimatedTime (number): Estimated time to complete this step in hours",
+    "          └─ skills_covered (array of strings): List of specific skills covered in this step",
+    "Learning path structure matches Prompt 3 output exactly with field order: path_title → learner_id → total_estimated_duration_hours → learning_modules.",
+    "Module structure: module_order → module_title → estimated_duration_hours → skills_in_module → steps (if present).",
+    "Step structure: step → title → description → estimatedTime → skills_covered.",
+    "gap_id can be null if the learning path was not generated from a skills gap.",
+    "All datetime fields are in ISO 8601 format with UTC timezone.",
+    "Recommendations table data (recommendation_id, user_id, base_course_name, suggested_courses, sent_to_rag, created_at, last_modified_at) is available for RAG to request on-demand via batch/demand/GRPC. LearnerAI does NOT automatically send recommendations to RAG.",
+    "base_course_name in recommendations table matches competency_target_name in courses table.",
+    "sent_to_rag flag is set to true when RAG requests/fetches the recommendation data (not when LearnerAI creates it)."
   ]
 }

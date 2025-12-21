@@ -1,7 +1,7 @@
 {
   "service_name": "directory-service",
   "description": "Manages organizational directory data including companies, employees, departments, teams, and organizational hierarchy for the EDUCORE platform",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "data_structure": {
     "type": "string",
     "company_id": "string",
@@ -40,6 +40,9 @@
     "team_id": "string",
     "team_identifier": "string",
     "team_name": "string",
+    "departments_count": "integer",
+    "teams_count": "integer",
+    "employees_count": "integer",
     "created_at": "datetime",
     "updated_at": "datetime"
   },
@@ -70,7 +73,7 @@
     "status": "Employee status: 'active' or 'inactive'",
     "profile_status": "Profile enrichment status: 'basic', 'enriched', 'approved', or 'rejected'",
     "roles": "Array of role types: 'REGULAR_EMPLOYEE', 'TRAINER', 'TEAM_MANAGER', 'DEPARTMENT_MANAGER', 'DECISION_MAKER'",
-    "teams": "Array of team objects the employee belongs to",
+    "teams": "Array of team objects the employee belongs to, each containing: id (UUID), team_id (string), team_name (string)",
     "bio": "Employee biography generated from enrichment",
     "value_proposition": "Employee value proposition generated from enrichment",
     "enrichment_completed": "Whether profile enrichment has been completed",
@@ -81,6 +84,9 @@
     "team_id": "Unique UUID identifier for the team",
     "team_identifier": "Team ID from CSV (unique within company)",
     "team_name": "Display name of the team",
+    "departments_count": "Total number of departments in the company (organizational_summary only)",
+    "teams_count": "Total number of teams in the company (organizational_summary only)",
+    "employees_count": "Total number of employees in the company (organizational_summary only)",
     "created_at": "Timestamp when the record was created",
     "updated_at": "Timestamp when the record was last updated"
   },
@@ -164,11 +170,13 @@
     "Each entity type has different fields - not all fields are present in every record",
     "Employees can have multiple roles (array of role types)",
     "Employees can belong to multiple teams (array of team objects)",
+    "Each team object in the 'teams' array contains: id (UUID), team_id (string), team_name (string)",
     "Company ID (company_id) maps to tenant_id in the Coordinator/RAG system",
     "Employee roles include: REGULAR_EMPLOYEE, TRAINER, TEAM_MANAGER, DEPARTMENT_MANAGER, DECISION_MAKER",
     "Profile status workflow: 'basic' → 'enriched' → 'approved' or 'rejected'",
     "Department and team identifiers (department_identifier, team_identifier) are from CSV upload and unique within company",
     "Employee identifier (employee_identifier) is from CSV upload and unique within company",
+    "Organizational summary (type: 'organizational_summary') includes counts for departments, teams, and employees",
     "All timestamps are in ISO 8601 format (UTC)"
   ]
 }
