@@ -1,6 +1,7 @@
 /**
  * DATA EXTRACTOR
  * Extracts data from microservice responses based on schema
+ * ⭐ UPDATED: Now supports unlimited nesting depth for objects and arrays
  */
 
 import { logger } from '../utils/logger.util.js';
@@ -197,9 +198,9 @@ class DataExtractor {
 
     switch (fieldType) {
       case 'object':
-        return this.formatObject(label, value);
+        return this.formatObject(label, value, 0); // Start at depth 0
       case 'array':
-        return this.formatArray(label, value);
+        return this.formatArray(label, value, 0);   // Start at depth 0
       case 'datetime':
         return `${label}: ${new Date(value).toLocaleDateString()}`;
       default:
@@ -208,23 +209,42 @@ class DataExtractor {
   }
 
   /**
-   * Format object for content
+   * Format object for content (RECURSIVE - supports unlimited nesting depth)
+   * @param {string} label - Field label
+   * @param {object} obj - Object to format
+   * @param {number} depth - Current nesting depth (for indentation)
    */
-  formatObject(label, obj) {
-    if (!obj || typeof obj !== 'object') {
-      return `${label}: ${obj}`;
+  formatObject(label, obj, depth = 0) {
+    const indent = '  '.repeat(depth);
+    const parts = [`${indent}${label}:`];
+
+    if (obj === null || obj === undefined) {
+      return `${indent}${label}: (empty)`;
     }
 
-    const parts = [`${label}:`];
+    if (typeof obj !== 'object') {
+      return `${indent}${label}: ${obj}`;
+    }
 
     for (const [key, value] of Object.entries(obj)) {
-      if (Array.isArray(value)) {
-        parts.push(`${key}:`);
-        value.forEach((item, i) => parts.push(`${i + 1}. ${item}`));
-      } else if (typeof value === 'object' && value !== null) {
-        parts.push(`${key}: ${JSON.stringify(value)}`);
+      if (value === null || value === undefined) {
+        parts.push(`${indent}  ${key}: (empty)`);
+      } else if (Array.isArray(value)) {
+        // Handle arrays - check if items are objects
+        parts.push(`${indent}  ${key}:`);
+        value.forEach((item, i) => {
+          if (typeof item === 'object' && item !== null) {
+            // ⭐ RECURSIVE: Array of objects
+            parts.push(this.formatObject(`${i + 1}`, item, depth + 2));
+          } else {
+            parts.push(`${indent}    ${i + 1}. ${item}`);
+          }
+        });
+      } else if (typeof value === 'object') {
+        // ⭐ RECURSIVE: Nested object - go deeper!
+        parts.push(this.formatObject(key, value, depth + 1));
       } else {
-        parts.push(`${key}: ${value}`);
+        parts.push(`${indent}  ${key}: ${value}`);
       }
     }
 
@@ -232,13 +252,29 @@ class DataExtractor {
   }
 
   /**
-   * Format array for content
+   * Format array for content (RECURSIVE - supports nested objects in arrays)
+   * @param {string} label - Field label
+   * @param {array} arr - Array to format
+   * @param {number} depth - Current nesting depth (for indentation)
    */
-  formatArray(label, arr) {
+  formatArray(label, arr, depth = 0) {
+    const indent = '  '.repeat(depth);
+    const parts = [`${indent}${label}:`];
+
     if (!Array.isArray(arr)) {
-      return `${label}: ${arr}`;
+      return `${indent}${label}: ${arr}`;
     }
-    return `${label}:\n${arr.map((item, i) => `${i + 1}. ${item}`).join('\n')}`;
+
+    arr.forEach((item, i) => {
+      if (typeof item === 'object' && item !== null) {
+        // ⭐ RECURSIVE: Object inside array
+        parts.push(this.formatObject(`${i + 1}`, item, depth + 1));
+      } else {
+        parts.push(`${indent}  ${i + 1}. ${item}`);
+      }
+    });
+
+    return parts.join('\n');
   }
 }
 
