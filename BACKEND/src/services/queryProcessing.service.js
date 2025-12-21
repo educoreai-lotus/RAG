@@ -2294,6 +2294,7 @@ async function performSemanticSearch(query, tenantId) {
     });
     
     // Step 3: Search ALL content types in vector_embeddings table (not just microservice_data)
+    // Prioritize llm_response content type with a boost factor
     const results = await prisma.$queryRawUnsafe(`
       SELECT 
         id,
@@ -2304,11 +2305,17 @@ async function performSemanticSearch(query, tenantId) {
         content_text,
         metadata,
         created_at,
-        1 - (embedding <=> $1::vector) as similarity
+        1 - (embedding <=> $1::vector) as similarity,
+        CASE 
+          WHEN content_type = 'llm_response' THEN 1.1  -- Boost LLM responses!
+          ELSE 1.0 
+        END as boost
       FROM vector_embeddings
       WHERE tenant_id = $2
         AND embedding IS NOT NULL
-      ORDER BY embedding <=> $1::vector
+      ORDER BY (1 - (embedding <=> $1::vector)) * 
+        CASE WHEN content_type = 'llm_response' THEN 1.1 ELSE 1.0 END
+        DESC
       LIMIT ${MAX_RESULTS}
     `, embeddingStr, tenantId);
     
