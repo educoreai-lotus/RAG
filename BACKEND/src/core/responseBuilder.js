@@ -11,6 +11,14 @@ class ResponseBuilder {
    * Build response for user query
    */
   async buildResponse(items, userQuery, schema) {
+    // 📝 DEBUG: Log response building
+    console.log('📝 [ResponseBuilder] Building response with context:', {
+      itemCount: items.length,
+      queryLength: userQuery.length,
+      schema: schema.service_name,
+      firstItemKeys: items[0] ? Object.keys(items[0]) : 'none',
+    });
+
     // Build context from items
     const context = this.buildContext(items, schema);
 

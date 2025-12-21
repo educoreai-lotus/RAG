@@ -24,6 +24,14 @@ class RealtimeHandler {
         response_envelope
       } = input;
 
+      // 🎯 DEBUG: Log handler entry
+      console.log('🎯 [RealtimeHandler] handle() called!', {
+        source_service: source_service,
+        user_query: user_query?.substring(0, 100),
+        has_response_envelope: !!response_envelope,
+        response_envelope_keys: response_envelope ? Object.keys(response_envelope) : [],
+      });
+
       logger.info('[Real-time] Processing', {
         service: source_service,
         query: user_query,
@@ -38,6 +46,13 @@ class RealtimeHandler {
 
       // 3. Extract data
       const items = dataExtractor.extractItems(response_envelope, schema);
+
+      // 📦 DEBUG: Log extracted items
+      console.log('📦 [RealtimeHandler] Extracted items:', {
+        count: items.length,
+        sample: items[0] ? Object.keys(items[0]) : 'none',
+        firstItemPreview: items[0] ? JSON.stringify(items[0]).substring(0, 200) : 'none',
+      });
 
       if (items.length === 0) {
         return {

@@ -419,7 +419,16 @@ export async function grpcFetchByCategory(category, { query, tenantId, userId = 
       })),
     });
 
-    return contentItems;
+    // Return array-like object with additional properties for handler integration
+    // This maintains backward compatibility (can be used as array) while adding metadata
+    const result = contentItems.slice(); // Create new array
+    result.coordinatorResponse = coordinatorResponse;
+    result.processedResponse = processed;
+    result.targetServices = processed.target_services || [];
+    result.category = category;
+    result.sourceService = processed.target_services?.[0] || category;
+    
+    return result;
   } catch (error) {
     logger.warn('gRPC fallback failed', {
       error: error.message,

@@ -25,6 +25,9 @@ import {
 } from './knowledgeGraph.service.js';
 import { KG_CONFIG } from '../config/knowledgeGraph.config.js';
 import { addMessageToConversation, getConversationHistory } from './conversationCache.service.js';
+// Handler integration imports
+import realtimeHandler from '../handlers/realtimeHandler.js';
+import schemaLoader from '../core/schemaLoader.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -1202,7 +1205,158 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         category: category || 'general',
         itemsCount: grpcContext?.length || 0,
         hasData: !!(grpcContext && grpcContext.length > 0),
+        hasCoordinatorResponse: !!grpcContext?.coordinatorResponse,
       });
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // INTEGRATION: Use realtimeHandler for proper data extraction & response
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      
+      // Check if we got a valid response from Coordinator with envelope
+      if (grpcContext && grpcContext.coordinatorResponse && grpcContext.length > 0) {
+        try {
+          // Determine the source service from the response
+          const sourceService = grpcContext.sourceService 
+            || grpcContext.processedResponse?.successful_service
+            || grpcContext.targetServices?.[0]
+            || category 
+            || 'general';
+          
+          // Normalize service name to match schema file format
+          // Schema files are named like: managementreporting-service.json
+          // Coordinator may return: managementreporting-service or managementreporting
+          let normalizedServiceName = sourceService;
+          if (!normalizedServiceName.endsWith('-service')) {
+            normalizedServiceName = normalizedServiceName + '-service';
+          }
+          // Also try without normalization in case schema uses different format
+          const alternativeServiceName = sourceService;
+          
+          logger.info('🔍 [QUERY PROCESSING] Attempting to use realtimeHandler', {
+            sourceService: normalizedServiceName,
+            alternativeServiceName: alternativeServiceName,
+            hasCoordinatorResponse: !!grpcContext.coordinatorResponse,
+            hasSchema: schemaLoader.hasSchema(normalizedServiceName) || schemaLoader.hasSchema(alternativeServiceName),
+            availableSchemas: schemaLoader.listServices(),
+          });
+          
+          // Check if we have a schema for this service (try both normalized and original)
+          const serviceNameToUse = schemaLoader.hasSchema(normalizedServiceName) 
+            ? normalizedServiceName 
+            : (schemaLoader.hasSchema(alternativeServiceName) ? alternativeServiceName : null);
+          
+          if (serviceNameToUse) {
+            logger.info('✅ [QUERY PROCESSING] Using realtimeHandler for response generation', {
+              sourceService: serviceNameToUse,
+              hasResponse: !!grpcContext.coordinatorResponse,
+            });
+            
+            // Use realtimeHandler for proper extraction and response building
+            const handlerResult = await realtimeHandler.handle({
+              source_service: serviceNameToUse,
+              user_query: query,
+              user_id: user_id,
+              tenant_id: actualTenantId,
+              response_envelope: grpcContext.coordinatorResponse,
+            });
+            
+            if (handlerResult.success && handlerResult.answer) {
+              logger.info('✅ [QUERY PROCESSING] Handler generated response successfully', {
+                sourceService: serviceNameToUse,
+                itemsFound: handlerResult.metadata?.items_returned || 0,
+                answerLength: handlerResult.answer.length,
+              });
+              
+              // Convert handler's response to queryProcessing format
+              const processingTimeMs = Date.now() - startTime;
+              
+              // Build sources from handler metadata
+              const handlerSources = [{
+                sourceId: handlerResult.source?.service || serviceNameToUse,
+                sourceType: handlerResult.source?.service || serviceNameToUse,
+                sourceMicroservice: handlerResult.source?.service || serviceNameToUse,
+                title: handlerResult.source?.description || serviceNameToUse,
+                contentSnippet: handlerResult.answer.substring(0, 200),
+                sourceUrl: '',
+                relevanceScore: 0.9,
+                metadata: {
+                  ...handlerResult.metadata,
+                  via: 'realtime_handler',
+                  items_returned: handlerResult.metadata?.items_returned || 0,
+                },
+              }];
+              
+              // Save query to database
+              try {
+                await saveQueryToDatabase({
+                  tenantId: actualTenantId,
+                  userId: user_id || 'anonymous',
+                  sessionId: session_id,
+                  queryText: query,
+                  answer: handlerResult.answer,
+                  confidenceScore: 0.9,
+                  processingTimeMs,
+                  modelVersion: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                  isPersonalized: !!userProfile,
+                  isCached: false,
+                  sources: handlerSources,
+                  recommendations: [],
+                });
+              } catch (saveError) {
+                logger.warn('Failed to save query to database', {
+                  error: saveError.message,
+                });
+              }
+              
+              // Return handler's response in queryProcessing format
+              return {
+                answer: handlerResult.answer,
+                abstained: false,
+                confidence: 0.9,
+                sources: handlerSources,
+                recommendations: [],
+                conversation_id,
+                metadata: {
+                  processing_time_ms: processingTimeMs,
+                  sources_retrieved: handlerSources.length,
+                  cached: false,
+                  model_version: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                  personalized: !!userProfile,
+                  flow: 'realtime_handler',
+                  tenant_id: actualTenantId,
+                  items_returned: handlerResult.metadata?.items_returned || 0,
+                  conversation_enabled: !!conversation_id,
+                },
+              };
+            } else {
+              logger.warn('⚠️ [QUERY PROCESSING] Handler returned no data, falling back to existing flow', {
+                sourceService: serviceNameToUse,
+                message: handlerResult.message,
+                success: handlerResult.success,
+              });
+              // Fall through to existing flow
+            }
+          } else {
+            logger.debug('ℹ️ [QUERY PROCESSING] No schema for service, using existing flow', {
+              sourceService: normalizedServiceName,
+              alternativeServiceName: alternativeServiceName,
+              availableSchemas: schemaLoader.listServices(),
+            });
+            // Fall through to existing flow
+          }
+        } catch (handlerError) {
+          logger.error('❌ [QUERY PROCESSING] Handler failed, falling back to existing flow', {
+            error: handlerError.message,
+            stack: handlerError.stack,
+            sourceService: grpcContext.sourceService || category,
+          });
+          // Fall through to existing flow
+        }
+      }
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // EXISTING FLOW (Fallback if handler doesn't work or no schema available)
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
       if (grpcContext && grpcContext.length > 0) {
         logger.info('Coordinator returned data', {
@@ -1210,6 +1364,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           user_id,
           category,
           items: grpcContext.length,
+          usingFallback: true,
         });
 
         // Convert Coordinator results into sources format

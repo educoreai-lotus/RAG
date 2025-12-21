@@ -15,6 +15,8 @@ import { criticalDebugLogger } from './middleware/debug-logger.middleware.js';
 import { logger } from './utils/logger.util.js';
 import { isCoordinatorAvailable } from './clients/coordinator.client.js';
 import { startScheduledSync } from './jobs/scheduledSync.js';
+// Ensure schemas are loaded on startup (ragHandler.js also does this, but importing here ensures it)
+import './core/ragHandler.js'; // This will trigger schemaLoader.loadAll()
 import queryRoutes from './routes/query.routes.js';
 import microserviceSupportRoutes from './routes/microserviceSupport.routes.js';
 import recommendationsRoutes from './routes/recommendations.routes.js';
