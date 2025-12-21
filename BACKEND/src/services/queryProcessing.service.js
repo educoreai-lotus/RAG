@@ -337,7 +337,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
 
     // Get or create user profile
     // Pass context.role if provided to set correct role in profile
-    let userProfile = null;
+    // Note: userProfile already declared above (line 213)
     
     if (user_id && user_id !== 'anonymous') {
       try {
