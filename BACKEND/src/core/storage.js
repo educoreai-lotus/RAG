@@ -1,156 +1,143 @@
 /**
  * STORAGE
- * Stores data in database and performs vector searches
+ * Stores data in vector_embeddings table and performs vector searches
  */
 
 import { getPrismaClient } from '../config/database.config.js';
-import tableManager from './tableManager.js';
 import { logger } from '../utils/logger.util.js';
 
 class Storage {
   /**
-   * Store item
+   * Store item with embedding in vector_embeddings table
+   * @param {Object} item - Business data item
+   * @param {string} content - Text content for search
+   * @param {Array} embedding - Vector embedding (1536 dimensions)
+   * @param {string} tenantId - Tenant ID
+   * @param {Object} schema - Service schema
    */
   async store(item, content, embedding, tenantId, schema) {
-    const tableName = tableManager.getTableName(schema.service_name);
     const prisma = await getPrismaClient();
 
     try {
-      // Find primary key for upsert (use first field as primary key identifier)
+      // Get primary key field from schema (first field)
       const pkField = Object.keys(schema.data_structure)[0];
-      const pkColumn = tableManager.sanitizeColumnName(pkField);
-      const pkValue = item[pkField];
+      const contentId = String(item[pkField]);
 
-      if (!pkValue) {
+      if (!contentId) {
         throw new Error(`Primary key field ${pkField} is missing from item`);
       }
 
-      // Convert embedding array to PostgreSQL vector format string
+      // Get or create microservice record
+      const microserviceId = await this.getOrCreateMicroservice(
+        prisma,
+        tenantId,
+        schema.service_name,
+        schema.description
+      );
+
+      // Convert embedding array to PostgreSQL vector format
       const embeddingStr = `[${embedding.join(',')}]`;
 
-      // Build column-value pairs for insertion/update
-      const columnValuePairs = [];
-      const updatePairs = [];
-      const insertValues = [];
-      const updateValues = [];
-      const placeholders = []; // Build placeholders with proper casting
-      let updateParamIndex = 1; // Start from 1 for UPDATE SET clause (WHERE uses separate params)
+      // Prepare metadata (all business data)
+      const metadata = {
+        ...item,
+        _schema_version: schema.version || '1.0.0',
+        _source_service: schema.service_name,
+        _stored_at: new Date().toISOString()
+      };
 
-      // Add tenant_id
-      columnValuePairs.push('tenant_id');
-      insertValues.push(tenantId);
-      placeholders.push('$1'); // tenant_id
-      updatePairs.push(`tenant_id = $${updateParamIndex}`);
-      updateValues.push(tenantId);
-      updateParamIndex++;
+      logger.info('[STORAGE] Storing item in vector_embeddings', {
+        tenantId,
+        microserviceId,
+        contentId,
+        service: schema.service_name,
+        contentLength: content?.length || 0,
+        embeddingLength: embedding?.length || 0
+      });
 
-      // Add schema fields
-      let insertParamIndex = 2; // Start from 2 (1 is tenant_id)
-      for (const [fieldName, fieldType] of Object.entries(schema.data_structure)) {
-        const colName = tableManager.sanitizeColumnName(fieldName);
-        columnValuePairs.push(colName);
-        
-        let value = item[fieldName];
-        const isJsonbField = (fieldType === 'object' || fieldType === 'array');
-        
-        // Convert to JSON string if object/array
-        if (isJsonbField && value !== null && value !== undefined) {
-          value = JSON.stringify(value);
+      // Check if record exists
+      const existing = await prisma.vectorEmbedding.findFirst({
+        where: {
+          tenantId: tenantId,
+          contentId: contentId,
+          microserviceId: microserviceId || undefined
         }
-        
-        insertValues.push(value);
-        
-        // Add placeholder with proper casting for JSONB fields
-        if (isJsonbField) {
-          placeholders.push(`$${insertParamIndex}::jsonb`);
-        } else {
-          placeholders.push(`$${insertParamIndex}`);
-        }
-        insertParamIndex++;
-        
-        // For update, skip primary key
-        if (colName !== pkColumn) {
-          if (isJsonbField) {
-            updatePairs.push(`${colName} = $${updateParamIndex}::jsonb`);
-          } else {
-            updatePairs.push(`${colName} = $${updateParamIndex}`);
-          }
-          updateValues.push(value);
-          updateParamIndex++;
-        }
-      }
+      });
 
-      // Add content
-      columnValuePairs.push('full_content');
-      insertValues.push(content);
-      placeholders.push(`$${insertParamIndex}`); // full_content (TEXT)
-      insertParamIndex++;
-      updatePairs.push(`full_content = $${updateParamIndex}`);
-      updateValues.push(content);
-      updateParamIndex++;
+      if (existing) {
+        // Update existing record
+        await prisma.$executeRawUnsafe(`
+          UPDATE vector_embeddings
+          SET 
+            content_text = $1,
+            embedding = $2::vector,
+            metadata = $3::jsonb,
+            updated_at = NOW()
+          WHERE id = $4
+        `, content, embeddingStr, JSON.stringify(metadata), existing.id);
 
-      // Add embedding (as vector)
-      columnValuePairs.push('embedding');
-      insertValues.push(embeddingStr);
-      placeholders.push(`$${insertParamIndex}::vector`); // embedding (VECTOR)
-      insertParamIndex++;
-      updatePairs.push(`embedding = $${updateParamIndex}::vector`);
-      updateValues.push(embeddingStr);
-      updateParamIndex++;
-
-      // Add synced_at
-      columnValuePairs.push('synced_at');
-      insertValues.push(new Date());
-      placeholders.push(`$${insertParamIndex}`); // synced_at (TIMESTAMP)
-      insertParamIndex++;
-      updatePairs.push(`synced_at = $${updateParamIndex}`);
-      updateValues.push(new Date());
-      updateParamIndex++;
-
-      // Build placeholders string for INSERT
-      const placeholdersStr = placeholders.join(', ');
-
-      // Build SQL for upsert using ON CONFLICT
-      // Note: We need to add a unique constraint on (tenant_id, pk_column) for this to work
-      // For now, we'll use a simpler approach: check then insert/update
-      const checkSQL = `
-        SELECT id FROM ${tableName}
-        WHERE ${pkColumn} = $1 AND tenant_id = $2
-        LIMIT 1
-      `;
-
-      const existing = await prisma.$queryRawUnsafe(checkSQL, pkValue, tenantId);
-
-      if (existing && existing.length > 0) {
-        // Update existing record - build update SQL with proper parameter binding
-        // WHERE clause parameters come after SET parameters
-        const whereParamStart = updateParamIndex;
-        const updateSQL = `
-          UPDATE ${tableName}
-          SET ${updatePairs.join(', ')}
-          WHERE ${pkColumn} = $${whereParamStart} AND tenant_id = $${whereParamStart + 1}
-        `;
-        // Update values already contain all SET values, now add WHERE values
-        await prisma.$executeRawUnsafe(updateSQL, ...updateValues, pkValue, tenantId);
+        logger.info('[STORAGE] Item updated in vector_embeddings', {
+          id: existing.id,
+          contentId,
+          service: schema.service_name
+        });
       } else {
         // Insert new record
-        const insertSQL = `
-          INSERT INTO ${tableName} (${columnValuePairs.join(', ')})
-          VALUES (${placeholdersStr})
-        `;
-        await prisma.$executeRawUnsafe(insertSQL, ...insertValues);
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO vector_embeddings (
+            id,
+            tenant_id,
+            microservice_id,
+            content_id,
+            content_type,
+            embedding,
+            content_text,
+            chunk_index,
+            metadata,
+            created_at,
+            updated_at
+          ) VALUES (
+            gen_random_uuid()::text,
+            $1,
+            $2,
+            $3,
+            $4,
+            $5::vector,
+            $6,
+            $7,
+            $8::jsonb,
+            NOW(),
+            NOW()
+          )
+        `,
+          tenantId,
+          microserviceId,
+          contentId,
+          'microservice_data',
+          embeddingStr,
+          content,
+          0,
+          JSON.stringify(metadata)
+        );
+
+        logger.info('[STORAGE] Item inserted in vector_embeddings', {
+          contentId,
+          service: schema.service_name,
+          tenantId
+        });
       }
 
-      logger.info('Item stored successfully', {
-        table: tableName,
-        tenant_id: tenantId,
-        pk_field: pkField,
-        pk_value: pkValue
+      logger.info('[STORAGE] ✅ Item stored successfully', {
+        table: 'vector_embeddings',
+        contentId,
+        service: schema.service_name,
+        tenantId
       });
+
     } catch (error) {
-      logger.error('Failed to store item', {
-        table: tableName,
-        tenant_id: tenantId,
+      logger.error('[STORAGE] ❌ Failed to store item', {
+        service: schema.service_name,
+        tenantId,
         error: error.message,
         stack: error.stack
       });
@@ -159,10 +146,57 @@ class Storage {
   }
 
   /**
-   * Search using vector similarity
+   * Get or create microservice record
+   */
+  async getOrCreateMicroservice(prisma, tenantId, serviceName, description) {
+    try {
+      // Check if microservice exists
+      let microservice = await prisma.microservice.findFirst({
+        where: {
+          tenantId: tenantId,
+          name: serviceName
+        }
+      });
+
+      if (!microservice) {
+        // Create microservice record
+        microservice = await prisma.microservice.create({
+          data: {
+            tenantId: tenantId,
+            name: serviceName,
+            serviceId: `${serviceName}-${tenantId}`,
+            displayName: serviceName.replace(/-/g, ' ').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            description: description || `Data from ${serviceName}`,
+            isActive: true
+          }
+        });
+
+        logger.info('[STORAGE] Created microservice record', {
+          id: microservice.id,
+          name: serviceName,
+          tenantId
+        });
+      }
+
+      return microservice.id;
+
+    } catch (error) {
+      // If microservice creation fails, return null (optional field)
+      logger.warn('[STORAGE] Could not get/create microservice', {
+        serviceName,
+        tenantId,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Vector similarity search in vector_embeddings
+   * Note: This method is kept for backward compatibility but may not be used
+   * The unifiedVectorSearch service should be used instead
    */
   async vectorSearch(query, embedding, tenantId, schema, options = {}) {
-    const tableName = tableManager.getTableName(schema.service_name);
     const prisma = await getPrismaClient();
 
     const {
@@ -171,24 +205,23 @@ class Storage {
     } = options;
 
     try {
-      // Build column list for selection
-      const columns = Object.keys(schema.data_structure)
-        .map(f => `${tableManager.sanitizeColumnName(f)}`)
-        .join(', ');
-
       // Convert embedding array to PostgreSQL vector format string
       const embeddingStr = `[${embedding.join(',')}]`;
 
-      // Execute search using cosine similarity
-      // Using 1 - (embedding <=> query_embedding) for cosine similarity
-      // Note: $queryRawUnsafe with parameters - embeddingStr must be cast to vector
+      // Execute search using cosine similarity in vector_embeddings table
       const sql = `
         SELECT 
-          ${columns},
-          full_content,
+          id,
+          tenant_id,
+          microservice_id,
+          content_id,
+          content_type,
+          content_text,
+          metadata,
           1 - (embedding <=> $1::vector) as similarity
-        FROM ${tableName}
+        FROM vector_embeddings
         WHERE tenant_id = $2
+          AND content_type = 'microservice_data'
           AND (1 - (embedding <=> $1::vector)) > $3
         ORDER BY embedding <=> $1::vector
         LIMIT $4
@@ -202,16 +235,16 @@ class Storage {
         limit
       );
 
-      logger.debug('Vector search completed', {
-        table: tableName,
+      logger.debug('[STORAGE] Vector search completed', {
+        table: 'vector_embeddings',
         tenant_id: tenantId,
         results_count: result?.length || 0
       });
 
       return result || [];
     } catch (error) {
-      logger.error('Vector search failed', {
-        table: tableName,
+      logger.error('[STORAGE] Vector search failed', {
+        table: 'vector_embeddings',
         tenant_id: tenantId,
         error: error.message,
         stack: error.stack

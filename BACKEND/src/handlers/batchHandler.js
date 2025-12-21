@@ -4,7 +4,6 @@
  */
 
 import schemaLoader from '../core/schemaLoader.js';
-import tableManager from '../core/tableManager.js';
 import dataExtractor from '../core/dataExtractor.js';
 import vectorizer from '../core/vectorizer.js';
 import storage from '../core/storage.js';
@@ -36,10 +35,7 @@ class BatchHandler {
       // 1. Load schema
       const schema = schemaLoader.getSchema(source_service);
 
-      // 2. Ensure table exists
-      await tableManager.ensureTable(schema);
-
-      // 3. Extract items
+      // 2. Extract items (vector_embeddings table already exists)
       const extractedItems = dataExtractor.extractItems(response_envelope, schema);
 
       // 4. Process in parallel batches

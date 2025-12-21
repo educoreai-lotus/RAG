@@ -4,7 +4,6 @@
  */
 
 import schemaLoader from '../core/schemaLoader.js';
-import tableManager from '../core/tableManager.js';
 import dataExtractor from '../core/dataExtractor.js';
 import vectorizer from '../core/vectorizer.js';
 import storage from '../core/storage.js';
@@ -41,10 +40,7 @@ class RealtimeHandler {
       // 1. Load schema
       const schema = schemaLoader.getSchema(source_service);
 
-      // 2. Ensure table exists
-      await tableManager.ensureTable(schema);
-
-      // 3. Extract data
+      // 2. Extract data (vector_embeddings table already exists)
       const items = dataExtractor.extractItems(response_envelope, schema);
 
       // 📦 DEBUG: Log extracted items
