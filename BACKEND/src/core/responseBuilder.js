@@ -19,11 +19,11 @@ class ResponseBuilder {
       firstItemKeys: items[0] ? Object.keys(items[0]) : 'none',
     });
 
-    // Build context from items
+    // Build context from items (for formatted display, if needed)
     const context = this.buildContext(items, schema);
 
-    // Call LLM to generate response
-    const response = await this.callLLM(context, userQuery, schema);
+    // Call LLM to generate response - MUST pass raw items for full data context
+    const response = await this.callLLM(items, userQuery, schema, context);
 
     return response;
   }
@@ -68,8 +68,9 @@ class ResponseBuilder {
 
   /**
    * Call LLM to generate response
+   * MUST include raw data as JSON for full context
    */
-  async callLLM(context, userQuery, schema) {
+  async callLLM(items, userQuery, schema, formattedContext) {
     try {
       const serviceDescription = schema.description || schema.service_name;
       
@@ -77,12 +78,14 @@ class ResponseBuilder {
 Your task is to answer user questions based on the provided context.
 Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.`;
 
-      const userPrompt = `Context from ${serviceDescription}:
-${context}
+      // 🚨 CRITICAL: The LLM MUST receive the full raw data as JSON context!
+      const userPrompt = `Context from microservice:
 
-User question: ${userQuery}
+${JSON.stringify(items, null, 2)}
 
-Please provide a helpful answer based on the context above.`;
+Question: ${userQuery}
+
+Please answer based on the context above.`;
 
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -111,7 +114,7 @@ Please provide a helpful answer based on the context above.`;
       });
 
       // Fallback: return formatted context
-      return `Based on ${schema.description || schema.service_name}:\n\n${context}`;
+      return `Based on ${schema.description || schema.service_name}:\n\n${formattedContext}`;
     }
   }
 }
