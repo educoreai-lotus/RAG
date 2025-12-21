@@ -1249,90 +1249,200 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             logger.info('✅ [QUERY PROCESSING] Using realtimeHandler for response generation', {
               sourceService: serviceNameToUse,
               hasResponse: !!grpcContext.coordinatorResponse,
+              hasProcessedResponse: !!grpcContext.processedResponse,
+              hasBusinessData: !!grpcContext.processedResponse?.business_data,
             });
             
-            // Use realtimeHandler for proper extraction and response building
-            const handlerResult = await realtimeHandler.handle({
-              source_service: serviceNameToUse,
-              user_query: query,
-              user_id: user_id,
-              tenant_id: actualTenantId,
-              response_envelope: grpcContext.coordinatorResponse,
-            });
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // CRITICAL FIX: Build correct response_envelope for handler
+            // Use already-extracted business data from processedResponse
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             
-            if (handlerResult.success && handlerResult.answer) {
-              logger.info('✅ [QUERY PROCESSING] Handler generated response successfully', {
-                sourceService: serviceNameToUse,
-                itemsFound: handlerResult.metadata?.items_returned || 0,
-                answerLength: handlerResult.answer.length,
+            // Get the extracted business data (already extracted by extractBusinessData)
+            let businessData = null;
+            
+            // Priority 1: Get from processedResponse.sources (already extracted)
+            if (grpcContext.processedResponse?.sources && Array.isArray(grpcContext.processedResponse.sources) && grpcContext.processedResponse.sources.length > 0) {
+              businessData = grpcContext.processedResponse.sources;
+              logger.info('🔍 [QUERY PROCESSING] Using sources from processedResponse', {
+                sourcesCount: businessData.length,
               });
-              
-              // Convert handler's response to queryProcessing format
-              const processingTimeMs = Date.now() - startTime;
-              
-              // Build sources from handler metadata
-              const handlerSources = [{
-                sourceId: handlerResult.source?.service || serviceNameToUse,
-                sourceType: handlerResult.source?.service || serviceNameToUse,
-                sourceMicroservice: handlerResult.source?.service || serviceNameToUse,
-                title: handlerResult.source?.description || serviceNameToUse,
-                contentSnippet: handlerResult.answer.substring(0, 200),
-                sourceUrl: '',
-                relevanceScore: 0.9,
-                metadata: {
-                  ...handlerResult.metadata,
-                  via: 'realtime_handler',
-                  items_returned: handlerResult.metadata?.items_returned || 0,
-                },
-              }];
-              
-              // Save query to database
+            }
+            // Priority 2: Get from processedResponse.business_data.data
+            else if (grpcContext.processedResponse?.business_data?.data) {
+              const data = grpcContext.processedResponse.business_data.data;
+              businessData = Array.isArray(data) ? data : [data];
+              logger.info('🔍 [QUERY PROCESSING] Using business_data.data', {
+                dataCount: businessData.length,
+              });
+            }
+            // Priority 3: Get from processedResponse.business_data.sources
+            else if (grpcContext.processedResponse?.business_data?.sources && Array.isArray(grpcContext.processedResponse.business_data.sources)) {
+              businessData = grpcContext.processedResponse.business_data.sources;
+              logger.info('🔍 [QUERY PROCESSING] Using business_data.sources', {
+                sourcesCount: businessData.length,
+              });
+            }
+            // Priority 4: Parse from envelope_json if needed
+            else if (grpcContext.coordinatorResponse?.envelope_json) {
               try {
-                await saveQueryToDatabase({
-                  tenantId: actualTenantId,
-                  userId: user_id || 'anonymous',
-                  sessionId: session_id,
-                  queryText: query,
-                  answer: handlerResult.answer,
-                  confidenceScore: 0.9,
-                  processingTimeMs,
-                  modelVersion: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-                  isPersonalized: !!userProfile,
-                  isCached: false,
-                  sources: handlerSources,
-                  recommendations: [],
-                });
-              } catch (saveError) {
-                logger.warn('Failed to save query to database', {
-                  error: saveError.message,
+                const parsed = typeof grpcContext.coordinatorResponse.envelope_json === 'string'
+                  ? JSON.parse(grpcContext.coordinatorResponse.envelope_json)
+                  : grpcContext.coordinatorResponse.envelope_json;
+                
+                if (parsed.successfulResult?.data) {
+                  const data = parsed.successfulResult.data;
+                  businessData = Array.isArray(data) ? data : [data];
+                  logger.info('🔍 [QUERY PROCESSING] Parsed from envelope_json.successfulResult.data', {
+                    dataCount: businessData.length,
+                  });
+                } else if (parsed.data) {
+                  businessData = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
+                  logger.info('🔍 [QUERY PROCESSING] Parsed from envelope_json.data', {
+                    dataCount: businessData.length,
+                  });
+                } else if (Array.isArray(parsed)) {
+                  businessData = parsed;
+                  logger.info('🔍 [QUERY PROCESSING] Parsed envelope_json as array', {
+                    dataCount: businessData.length,
+                  });
+                }
+              } catch (parseError) {
+                logger.warn('⚠️ [QUERY PROCESSING] Failed to parse envelope_json', {
+                  error: parseError.message,
                 });
               }
-              
-              // Return handler's response in queryProcessing format
-              return {
-                answer: handlerResult.answer,
-                abstained: false,
-                confidence: 0.9,
-                sources: handlerSources,
-                recommendations: [],
-                conversation_id,
-                metadata: {
-                  processing_time_ms: processingTimeMs,
-                  sources_retrieved: handlerSources.length,
-                  cached: false,
-                  model_version: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-                  personalized: !!userProfile,
-                  flow: 'realtime_handler',
-                  tenant_id: actualTenantId,
-                  items_returned: handlerResult.metadata?.items_returned || 0,
-                  conversation_enabled: !!conversation_id,
+            }
+            // Priority 5: Get from processedResponse.envelope.successfulResult.data
+            else if (grpcContext.processedResponse?.envelope?.successfulResult?.data) {
+              const data = grpcContext.processedResponse.envelope.successfulResult.data;
+              businessData = Array.isArray(data) ? data : [data];
+              logger.info('🔍 [QUERY PROCESSING] Using processedResponse.envelope.successfulResult.data', {
+                dataCount: businessData.length,
+              });
+            }
+            
+            logger.info('🔍 [QUERY PROCESSING] Extracted business data for handler', {
+              hasData: !!businessData,
+              isArray: Array.isArray(businessData),
+              count: Array.isArray(businessData) ? businessData.length : 0,
+              sample: Array.isArray(businessData) && businessData[0] ? Object.keys(businessData[0]) : 'none',
+            });
+            
+            // Only proceed with handler if we have data
+            if (businessData && (Array.isArray(businessData) ? businessData.length > 0 : true)) {
+              // Build correct response_envelope format for handler
+              const responseEnvelope = {
+                success: true,
+                successfulResult: {
+                  data: Array.isArray(businessData) ? businessData : [businessData],
                 },
+                data: Array.isArray(businessData) ? businessData : [businessData],
               };
-            } else {
-              logger.warn('⚠️ [QUERY PROCESSING] Handler returned no data, falling back to existing flow', {
+              
+              // 🔍 DEBUG: Log the data being sent to handler
+              console.log('🔍 DEBUG: businessData', JSON.stringify(businessData, null, 2).substring(0, 500));
+              console.log('🔍 DEBUG: responseEnvelope', JSON.stringify(responseEnvelope, null, 2).substring(0, 500));
+              
+              logger.info('✅ [QUERY PROCESSING] Calling realtimeHandler with correct format', {
                 sourceService: serviceNameToUse,
-                message: handlerResult.message,
-                success: handlerResult.success,
+                dataCount: responseEnvelope.data.length,
+                firstItemKeys: responseEnvelope.data[0] ? Object.keys(responseEnvelope.data[0]) : [],
+              });
+              
+              // Use realtimeHandler for proper extraction and response building
+              const handlerResult = await realtimeHandler.handle({
+                source_service: serviceNameToUse,
+                user_query: query,
+                user_id: user_id,
+                tenant_id: actualTenantId,
+                response_envelope: responseEnvelope, // ✅ CORRECT FORMAT!
+              });
+            
+              if (handlerResult.success && handlerResult.answer) {
+                logger.info('✅ [QUERY PROCESSING] Handler generated response successfully', {
+                  sourceService: serviceNameToUse,
+                  itemsFound: handlerResult.metadata?.items_returned || 0,
+                  answerLength: handlerResult.answer?.length || 0,
+                });
+              
+                // Convert handler's response to queryProcessing format
+                const processingTimeMs = Date.now() - startTime;
+                
+                // Build sources from handler metadata
+                const handlerSources = [{
+                  sourceId: handlerResult.source?.service || serviceNameToUse,
+                  sourceType: handlerResult.source?.service || serviceNameToUse,
+                  sourceMicroservice: handlerResult.source?.service || serviceNameToUse,
+                  title: handlerResult.source?.description || serviceNameToUse,
+                  contentSnippet: handlerResult.answer.substring(0, 200),
+                  sourceUrl: '',
+                  relevanceScore: 0.9,
+                  metadata: {
+                    ...handlerResult.metadata,
+                    via: 'realtime_handler',
+                    items_returned: handlerResult.metadata?.items_returned || 0,
+                  },
+                }];
+                
+                // Save query to database
+                try {
+                  await saveQueryToDatabase({
+                    tenantId: actualTenantId,
+                    userId: user_id || 'anonymous',
+                    sessionId: session_id,
+                    queryText: query,
+                    answer: handlerResult.answer,
+                    confidenceScore: 0.9,
+                    processingTimeMs,
+                    modelVersion: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                    isPersonalized: !!userProfile,
+                    isCached: false,
+                    sources: handlerSources,
+                    recommendations: [],
+                  });
+                } catch (saveError) {
+                  logger.warn('Failed to save query to database', {
+                    error: saveError.message,
+                  });
+                }
+                
+                // Return handler's response in queryProcessing format
+                return {
+                  answer: handlerResult.answer,
+                  abstained: false,
+                  confidence: 0.9,
+                  sources: handlerSources,
+                  recommendations: [],
+                  conversation_id,
+                  metadata: {
+                    processing_time_ms: processingTimeMs,
+                    sources_retrieved: handlerSources.length,
+                    cached: false,
+                    model_version: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                    personalized: !!userProfile,
+                    flow: 'realtime_handler',
+                    tenant_id: actualTenantId,
+                    items_returned: handlerResult.metadata?.items_returned || 0,
+                    conversation_enabled: !!conversation_id,
+                  },
+                };
+              } else {
+                logger.warn('⚠️ [QUERY PROCESSING] Handler returned no data, falling back to existing flow', {
+                  sourceService: serviceNameToUse,
+                  message: handlerResult.message,
+                  success: handlerResult.success,
+                });
+                // Fall through to existing flow
+              }
+            } else {
+              logger.warn('⚠️ [QUERY PROCESSING] No business data found for handler', {
+                sourceService: serviceNameToUse,
+                hasProcessedResponse: !!grpcContext.processedResponse,
+                hasBusinessData: !!grpcContext.processedResponse?.business_data,
+                hasSources: !!grpcContext.processedResponse?.sources,
+                hasEnvelopeJson: !!grpcContext.coordinatorResponse?.envelope_json,
+                grpcContextKeys: Object.keys(grpcContext || {}),
               });
               // Fall through to existing flow
             }
