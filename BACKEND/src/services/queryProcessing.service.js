@@ -28,6 +28,7 @@ import { addMessageToConversation, getConversationHistory } from './conversation
 // Handler integration imports
 import realtimeHandler from '../handlers/realtimeHandler.js';
 import schemaLoader from '../core/schemaLoader.js';
+import responseBuilder from '../core/responseBuilder.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -1167,6 +1168,166 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         userPersonalized: !!userLearningContext
       },
     };
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // CACHE CHECK: Use Vector DB results if high quality match found
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    const SIMILARITY_THRESHOLD = parseFloat(process.env.VECTOR_CACHE_THRESHOLD) || 0.85;
+    const MIN_RESULTS_FOR_CACHE = 1;
+    
+    // Check if we have high-quality cached results from Vector DB
+    if (sources && sources.length >= MIN_RESULTS_FOR_CACHE && similarVectors && similarVectors.length > 0) {
+      // Find the best match from sources (which already contain filtered results with similarity)
+      const bestSource = sources.reduce((best, current) => {
+        const currentSimilarity = current.relevanceScore || 0;
+        const bestSimilarity = best.relevanceScore || 0;
+        return currentSimilarity > bestSimilarity ? current : best;
+      }, sources[0]);
+      
+      const bestSimilarity = bestSource.relevanceScore || 0;
+      
+      logger.info('[QUERY PROCESSING] Vector cache check', {
+        query: query.substring(0, 100),
+        resultsCount: similarVectors.length,
+        sourcesCount: sources.length,
+        bestSimilarity: bestSimilarity,
+        threshold: SIMILARITY_THRESHOLD,
+        willUseCache: bestSimilarity >= SIMILARITY_THRESHOLD,
+        filteringReason: filteringContext.reason
+      });
+      
+      // If we have a high-quality match AND no filtering issues, use cached data instead of GRPC
+      if (bestSimilarity >= SIMILARITY_THRESHOLD && filteringContext.reason === 'SUCCESS') {
+        logger.info('[QUERY PROCESSING] ✅ Using Vector DB cache - skipping GRPC!', {
+          query: query.substring(0, 100),
+          similarity: bestSimilarity,
+          resultsCount: similarVectors.length,
+          sourcesCount: sources.length
+        });
+        
+        try {
+          // Build context from cached vector results
+          const cachedContext = sources
+            .map((source, idx) => `[Source ${idx + 1} - ${source.sourceType || 'cached'}]:\n${source.contentSnippet || ''}`)
+            .join('\n\n---\n\n');
+          
+          // Generate answer using LLM with cached context
+          const systemPrompt = `You are a helpful assistant providing information based on cached data from the vector database.
+Your task is to answer user questions based on the provided context.
+Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.
+Always base your answer on the provided context.`;
+
+          const userPrompt = `Context from cached data:
+${cachedContext}
+
+User question: ${query}
+
+Please provide a helpful answer based on the context above.`;
+
+          const completion = await openai.chat.completions.create({
+            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000
+          });
+          
+          const cachedAnswer = completion.choices[0]?.message?.content || '';
+          
+          if (cachedAnswer && cachedAnswer.length > 0) {
+            logger.info('[QUERY PROCESSING] ✅ Cache response generated successfully', {
+              answerLength: cachedAnswer.length,
+              sourcesUsed: sources.length,
+              similarity: bestSimilarity
+            });
+            
+            // Save query to database for analytics
+            await saveQueryToDatabase({
+              tenantId: actualTenantId,
+              userId: user_id || 'anonymous',
+              sessionId: session_id,
+              queryText: query,
+              answer: cachedAnswer,
+              confidenceScore: bestSimilarity,
+              processingTimeMs: Date.now() - startTime,
+              modelVersion: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+              isPersonalized: !!userProfile,
+              isCached: true,
+              metadata: {
+                flow: 'vector_cache',
+                cache_hit: true,
+                similarity: bestSimilarity,
+                sources_count: sources.length,
+                vector_results_count: similarVectors.length,
+                category: category || 'general'
+              }
+            }).catch(err => {
+              logger.warn('Failed to save cached query to database', { error: err.message });
+            });
+            
+            // Return cached response - NO GRPC CALL!
+            return {
+              success: true,
+              answer: cachedAnswer,
+              sources: sources.map(s => ({
+                sourceId: s.sourceId,
+                sourceType: s.sourceType,
+                sourceMicroservice: s.sourceMicroservice,
+                title: s.title,
+                contentSnippet: s.contentSnippet,
+                sourceUrl: s.sourceUrl,
+                relevanceScore: s.relevanceScore,
+                metadata: s.metadata
+              })),
+              confidence: bestSimilarity,
+              metadata: {
+                flow: 'vector_cache',
+                cache_hit: true,
+                similarity: bestSimilarity,
+                sources_count: sources.length,
+                vector_results_count: similarVectors.length,
+                tenant_id: actualTenantId,
+                category: category || 'general',
+                kgEnhanced: (kgRelations?.length || 0) > 0,
+                userPersonalized: !!userLearningContext
+              }
+            };
+          } else {
+            logger.warn('[QUERY PROCESSING] Cache response generation failed - falling back to GRPC', {
+              query: query.substring(0, 100)
+            });
+          }
+        } catch (cacheError) {
+          logger.warn('[QUERY PROCESSING] Cache response generation error - falling back to GRPC', {
+            error: cacheError.message,
+            query: query.substring(0, 100)
+          });
+          // Continue to GRPC call below
+        }
+      } else {
+        logger.info('[QUERY PROCESSING] Vector cache miss - calling GRPC', {
+          query: query.substring(0, 100),
+          hasVectorResults: similarVectors?.length > 0,
+          bestSimilarity: bestSimilarity || 0,
+          threshold: SIMILARITY_THRESHOLD,
+          filteringReason: filteringContext.reason,
+          reason: bestSimilarity < SIMILARITY_THRESHOLD 
+            ? 'Similarity below threshold' 
+            : filteringContext.reason !== 'SUCCESS'
+              ? `Filtering reason: ${filteringContext.reason}`
+              : 'Unknown'
+        });
+      }
+    } else {
+      logger.info('[QUERY PROCESSING] Vector cache miss - no results found, calling GRPC', {
+        query: query.substring(0, 100),
+        hasSources: sources?.length > 0,
+        hasVectorResults: similarVectors?.length > 0
+      });
+    }
 
     // Step 3: Decision layer - Check if Coordinator is needed
     // grpcFetchByCategory now includes shouldCallCoordinator() decision internally
