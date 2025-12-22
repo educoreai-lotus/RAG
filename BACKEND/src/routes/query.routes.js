@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { submitQuery } from '../controllers/query.controller.js';
+import { optionalAuth } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -54,8 +55,13 @@ router.options('/query', (req, res) => {
 /**
  * POST /api/v1/query
  * Process a RAG query and return AI-generated answer
+ * 
+ * Authentication: Optional (supports dummy tokens for testing)
+ * - If dummy token provided and enabled: Uses dummy user context
+ * - If no token: Allows anonymous access
+ * - If JWT token provided: Validates JWT (when implemented)
  */
-router.post('/query', submitQuery);
+router.post('/query', optionalAuth, submitQuery);
 
 export default router;
 
