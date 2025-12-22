@@ -50,8 +50,11 @@ export async function authenticateRequest(req, res, next) {
       }
 
       // Optional: Extra protection for production
-      if (process.env.NODE_ENV === 'production' && process.env.DUMMY_TOKEN_ALLOW_IN_PRODUCTION !== 'true') {
-        logger.error('⛔ [AUTH] Dummy token attempted in production!', {
+      // If DUMMY_TOKEN_ENABLED=true, allow it even in production (user explicitly enabled it)
+      // Only block if explicitly set to block in production
+      if (process.env.NODE_ENV === 'production' && 
+          process.env.DUMMY_TOKEN_BLOCK_IN_PRODUCTION === 'true') {
+        logger.error('⛔ [AUTH] Dummy token blocked in production!', {
           path: req.path,
           user_id: dummyUser.user_id,
         });
