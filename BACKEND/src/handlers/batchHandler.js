@@ -141,6 +141,38 @@ class BatchHandler {
           schema
         );
         results.push({ success: true });
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // NEW: Build Knowledge Graph (optional, non-blocking)
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+          const kgBuilder = await import('../services/kgBuilder.service.js');
+          const kgBuilderService = kgBuilder.default;
+          
+          // Get contentId same way as storage.store() does
+          const pkField = Object.keys(schema.data_structure)[0];
+          const contentId = String(items[i][pkField]);
+          
+          if (contentId) {
+            // Don't await - run in background
+            kgBuilderService.buildFromContent(
+              contentId,
+              contents[i],
+              { source_service: schema.service_name, batch_processed: true },
+              tenantId
+            ).catch(kgError => {
+              logger.debug('[Batch] KG build failed (non-critical)', {
+                contentId: contentId,
+                error: kgError.message
+              });
+            });
+          }
+          
+        } catch (kgError) {
+          // Skip KG if not available
+          logger.debug('[Batch] KG service not available');
+        }
+
       } catch (error) {
         logger.warn('[Batch] Store failed for item', {
           error: error.message,

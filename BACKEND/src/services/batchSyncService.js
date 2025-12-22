@@ -309,6 +309,80 @@ export async function syncService(serviceName, options = {}) {
 }
 
 /**
+ * Build response envelope in expected format
+ * ⚠️ ADD this method if it doesn't exist
+ */
+function buildResponseEnvelope(responseData) {
+  try {
+    // Format 1: Already has data.items structure
+    if (responseData?.data?.items) {
+      return {
+        success: true,
+        data: responseData.data,
+        metadata: responseData.metadata || {}
+      };
+    }
+    
+    // Format 2: Direct array
+    if (Array.isArray(responseData?.data)) {
+      return {
+        success: true,
+        data: {
+          items: responseData.data,
+          page: responseData.page || 1,
+          total: responseData.total || responseData.data.length
+        },
+        metadata: responseData.metadata || {}
+      };
+    }
+    
+    // Format 3: Has successfulResult (Coordinator format)
+    if (responseData?.successfulResult?.data) {
+      const data = responseData.successfulResult.data;
+      return {
+        success: true,
+        data: {
+          items: Array.isArray(data) ? data : data.items || [data],
+          page: data.page || 1,
+          total: data.total || (Array.isArray(data) ? data.length : 1)
+        },
+        metadata: responseData.metadata || {}
+      };
+    }
+    
+    // Format 4: Raw array
+    if (Array.isArray(responseData)) {
+      return {
+        success: true,
+        data: {
+          items: responseData,
+          page: 1,
+          total: responseData.length
+        },
+        metadata: {}
+      };
+    }
+    
+    // Fallback
+    return {
+      success: false,
+      data: { items: [], page: 1, total: 0 },
+      metadata: {}
+    };
+    
+  } catch (error) {
+    logger.warn('[BatchSyncService] buildResponseEnvelope error', {
+      error: error.message
+    });
+    return {
+      success: false,
+      data: { items: [], page: 1, total: 0 },
+      metadata: {}
+    };
+  }
+}
+
+/**
  * Update internal data store with synced data
  * This can be extended to:
  * - Store in vector DB for embeddings
@@ -348,6 +422,55 @@ async function updateDataStore(serviceName, data) {
     //     synced_at: new Date(),
     //   })),
     // });
+
+    // ════════════════════════════════════════════════════════════════
+    // NEW CODE START - Add this AFTER existing validation/logging
+    // ════════════════════════════════════════════════════════════════
+    
+    // Build response envelope for batchHandler
+    let responseEnvelope;
+    try {
+      responseEnvelope = buildResponseEnvelope(data);
+    } catch (envelopeError) {
+      logger.warn('[BatchSyncService] Failed to build envelope, continuing', {
+        error: envelopeError.message
+      });
+      responseEnvelope = { success: false, data: { items: [] } };
+    }
+    
+    // Call batchHandler to process and store data
+    let handlerResult = { success: false };
+    
+    try {
+      const batchHandlerModule = await import('../handlers/batchHandler.js');
+      const batchHandler = batchHandlerModule.default;
+      
+      // Get tenant ID from environment or use default
+      // TODO: Extract tenant_id from data if available in future
+      const tenantId = process.env.DEFAULT_TENANT_ID || 'default-tenant';
+      
+      handlerResult = await batchHandler.handle({
+        source_service: serviceName,
+        tenant_id: tenantId,
+        response_envelope: responseEnvelope
+      });
+      
+      logger.info('[BatchSyncService] batchHandler completed', {
+        service: serviceName,
+        success: handlerResult.success,
+        processed: handlerResult.processed
+      });
+      
+    } catch (handlerError) {
+      // Don't fail the whole sync if handler fails
+      logger.warn('[BatchSyncService] batchHandler failed, continuing', {
+        error: handlerError.message
+      });
+    }
+    
+    // ════════════════════════════════════════════════════════════════
+    // NEW CODE END
+    // ════════════════════════════════════════════════════════════════
 
   } catch (error) {
     logger.error('[BatchSync] Failed to update data store', {

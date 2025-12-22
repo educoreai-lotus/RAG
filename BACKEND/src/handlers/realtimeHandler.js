@@ -168,6 +168,35 @@ Source: ${schema.service_name}
         service: schema.service_name
       });
 
+      // ════════════════════════════════════════════════════════════════════════════
+      // NEW: Build Knowledge Graph (optional, non-blocking)
+      // ════════════════════════════════════════════════════════════════════════════
+      try {
+        const kgBuilder = await import('../services/kgBuilder.service.js');
+        const kgBuilderService = kgBuilder.default;
+        
+        // Generate uniqueContentId same way as in storeInVectorEmbeddings
+        const queryHash = crypto.createHash('md5').update(userQuery).digest('hex').substring(0, 16);
+        const uniqueContentId = `${schema.service_name}-${queryHash}`;
+        
+        // Run in background, don't await
+        kgBuilderService.buildFromContent(
+          uniqueContentId,
+          contentToVectorize,
+          metadata,
+          tenantId
+        ).catch(kgError => {
+          // Just log, don't fail
+          logger.debug('[RealtimeHandler] KG build failed (non-critical)', {
+            error: kgError.message
+          });
+        });
+        
+      } catch (kgImportError) {
+        // KG service not available, skip silently
+        logger.debug('[RealtimeHandler] KG service not available');
+      }
+
     } catch (error) {
       logger.warn('[RealtimeHandler] Failed to store LLM response', {
         error: error.message
