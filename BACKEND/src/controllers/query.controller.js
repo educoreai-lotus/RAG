@@ -153,8 +153,9 @@ export async function submitQuery(req, res, next) {
     const { query, tenant_id, conversation_id, context = {}, options = {} } = validation.value;
 
     // CRITICAL: Validate and fix tenant_id at entry point
-    // This ensures we never use the wrong tenant ID
-    let validatedTenantId = tenant_id;
+    // Priority: req.tenantId (from auth middleware) > tenant_id from body > default
+    // This ensures we use the tenant_id from authentication (e.g., dummy token) if available
+    let validatedTenantId = req.tenantId || tenant_id;
     if (!validatedTenantId || validatedTenantId === 'default.local') {
       // If tenant_id is 'default.local' or empty, resolve to correct tenant
       validatedTenantId = validateAndFixTenantId(validatedTenantId || 'default.local');
