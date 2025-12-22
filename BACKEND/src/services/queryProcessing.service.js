@@ -2038,24 +2038,15 @@ Please provide a helpful answer based on the context above.`;
       }
     }
 
-    // Try to identify the microservice from context (check for sourceMicroservice in metadata)
-    let microserviceName = 'the microservice';
-    const contextMatch = retrievedContext.match(/sourceMicroservice[":\s]+([^,\n}]+)/i) || 
-                        retrievedContext.match(/Source Service[":\s]+([^,\n}]+)/i) ||
-                        retrievedContext.match(/microservice[":\s]+([^,\n}]+)/i);
-    if (contextMatch && contextMatch[1]) {
-      microserviceName = contextMatch[1].trim().replace(/['"]/g, '');
-    }
-    
     // Generate answer using OpenAI with retrieved context (STRICT RAG)
     const systemPrompt = `You are a helpful AI assistant for the EDUCORE learning platform.
 Strict RAG rules you MUST follow:
 - Use ONLY the content under "Context from knowledge base".
 - Do NOT use outside knowledge or make assumptions.
-- If the context does not contain the requested information, clearly state that the information was retrieved from ${microserviceName} and that ${microserviceName} does not contain this data. Do not fabricate details.
+- If the context does not contain the requested information, clearly state that EDUCORE does not include it and do not fabricate details.
 ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` : ''}`;
     
-    const userPrompt = `Context retrieved from ${microserviceName}:\n${retrievedContext}\n\nQuestion: ${query}\n\nAnswer ONLY with facts from the context above. If ${microserviceName} does not contain the requested information, clearly state that the data was retrieved from ${microserviceName} and that ${microserviceName} does not have this information.`;
+    const userPrompt = `Context from knowledge base:\n${retrievedContext}\n\nQuestion: ${query}\n\nAnswer ONLY with facts from the context above. If the context is insufficient, say so (without adding external knowledge).`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
