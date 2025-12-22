@@ -634,7 +634,7 @@ export async function routeRequest({ tenant_id, user_id, query_text, metadata = 
  * @param {number} params.page - Page number for pagination (default: 1)
  * @param {number} params.limit - Items per page (default: 1000)
  * @param {string} params.since - ISO date string for incremental sync (optional)
- * @param {string} params.tenant_id - Tenant identifier (default: 'rag-system')
+ * @param {string} params.tenant_id - Tenant identifier (default: from DEFAULT_TENANT_ID env var or '5a1cb1d2-343c-438c-9f4b-76f0f1aac59d')
  * @param {string} params.user_id - User identifier (default: 'system')
  * @returns {Promise<Object|null>} RouteResponse or null if disabled/error
  */
@@ -644,7 +644,7 @@ export async function batchSync({
   page = 1,
   limit = 1000,
   since = null,
-  tenant_id = 'rag-system',
+  tenant_id = process.env.DEFAULT_TENANT_ID || '5a1cb1d2-343c-438c-9f4b-76f0f1aac59d',
   user_id = 'system'
 }) {
   // ⭐ ADD THIS AT THE START

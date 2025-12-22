@@ -293,6 +293,8 @@ export async function syncService(serviceName, options = {}) {
           page,
           limit: BATCH_SYNC_LIMIT,
           since,
+          tenant_id: process.env.DEFAULT_TENANT_ID || '5a1cb1d2-343c-438c-9f4b-76f0f1aac59d',
+          user_id: 'system'
         });
 
         // ⭐ ADD THIS AFTER batchSync call
@@ -644,7 +646,7 @@ async function updateDataStore(serviceName, data) {
       
       // Get tenant ID from environment or use default
       // TODO: Extract tenant_id from data if available in future
-      const tenantId = process.env.DEFAULT_TENANT_ID || 'default-tenant';
+      const tenantId = process.env.DEFAULT_TENANT_ID || '5a1cb1d2-343c-438c-9f4b-76f0f1aac59d';
       
       handlerResult = await batchHandler.handle({
         source_service: serviceName,
