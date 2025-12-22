@@ -73,19 +73,21 @@ class ResponseBuilder {
   async callLLM(items, userQuery, schema, formattedContext) {
     try {
       const serviceDescription = schema.description || schema.service_name;
+      const serviceName = schema.service_name || 'the microservice';
       
       const systemPrompt = `You are a helpful assistant providing information from ${serviceDescription}.
-Your task is to answer user questions based on the provided context.
-Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.`;
+Your task is to answer user questions based on the provided context from the ${serviceName} microservice.
+Be concise, accurate, and helpful. 
+IMPORTANT: If the context doesn't contain enough information, clearly state that the information was retrieved from ${serviceName} and that ${serviceName} does not contain the requested data.`;
 
       // 🚨 CRITICAL: The LLM MUST receive the full raw data as JSON context!
-      const userPrompt = `Context from microservice:
+      const userPrompt = `Context retrieved from ${serviceName} microservice:
 
 ${JSON.stringify(items, null, 2)}
 
 Question: ${userQuery}
 
-Please answer based on the context above.`;
+Please answer based on the context above. If the ${serviceName} microservice does not contain the requested information, clearly state that the data was retrieved from ${serviceName} and that ${serviceName} does not have this information.`;
 
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
