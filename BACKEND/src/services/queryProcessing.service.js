@@ -25,6 +25,7 @@ import {
 } from './knowledgeGraph.service.js';
 import { KG_CONFIG } from '../config/knowledgeGraph.config.js';
 import { addMessageToConversation, getConversationHistory } from './conversationCache.service.js';
+import { shouldSaveResponse } from '../utils/responseValidation.util.js';
 // Handler integration imports
 import realtimeHandler from '../handlers/realtimeHandler.js';
 import schemaLoader from '../core/schemaLoader.js';
@@ -2563,6 +2564,22 @@ async function saveQueryToDatabase({
   recommendations,
 }) {
   try {
+    // ═══════════════════════════════════════════════════════════════
+    // CHECK IF RESPONSE SHOULD BE SAVED (skip negative/insufficient responses)
+    // ═══════════════════════════════════════════════════════════════
+    const saveCheck = shouldSaveResponse(answer);
+    
+    if (!saveCheck.shouldSave) {
+      logger.info('[QueryProcessing] ⏭️ Skipping save - negative/insufficient response', {
+        reason: saveCheck.reason,
+        answerPreview: answer?.substring(0, 100),
+        query: queryText?.substring(0, 50),
+        tenantId
+      });
+      // Don't save negative responses to query table
+      return null;
+    }
+
     const prisma = await getPrismaClient();
 
     const queryRecord = await prisma.query.create({

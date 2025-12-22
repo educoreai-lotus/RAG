@@ -10,6 +10,7 @@ import storage from '../core/storage.js';
 import responseBuilder from '../core/responseBuilder.js';
 import { logger } from '../utils/logger.util.js';
 import { getPrismaClient } from '../config/database.config.js';
+import { shouldSaveResponse } from '../utils/responseValidation.util.js';
 import crypto from 'crypto';
 
 class RealtimeHandler {
@@ -67,19 +68,40 @@ class RealtimeHandler {
         schema
       );
 
-      // 5. Store LLM RESPONSE (not raw data!) in background
-      this.storeLLMResponseInBackground(
-        llmResponse,           // ← The LLM answer!
-        user_query,            // ← The original query
-        items,                 // ← Raw data for metadata
-        tenant_id,
-        schema
-      ).catch(error => {
-        logger.warn('[Real-time] Background store failed', {
-          service: source_service,
-          error: error.message
+      // ═══════════════════════════════════════════════════════════════
+      // 5. CHECK IF RESPONSE SHOULD BE SAVED
+      // ═══════════════════════════════════════════════════════════════
+      const saveCheck = shouldSaveResponse(llmResponse);
+
+      if (!saveCheck.shouldSave) {
+        logger.info('[RealtimeHandler] ⏭️ Skipping storage - negative/insufficient response', {
+          reason: saveCheck.reason,
+          answerPreview: llmResponse?.substring(0, 100),
+          query: user_query?.substring(0, 50),
+          service: source_service
         });
-      });
+        // Still return the response to user, just don't save it
+      } else {
+        // 6. Store LLM RESPONSE (not raw data!) in background
+        this.storeLLMResponseInBackground(
+          llmResponse,           // ← The LLM answer!
+          user_query,            // ← The original query
+          items,                 // ← Raw data for metadata
+          tenant_id,
+          schema
+        ).catch(error => {
+          logger.warn('[Real-time] Background store failed', {
+            service: source_service,
+            error: error.message
+          });
+        });
+
+        logger.debug('[RealtimeHandler] ✅ Response will be saved', {
+          reason: saveCheck.reason,
+          answerLength: llmResponse?.length,
+          service: source_service
+        });
+      }
 
       logger.info('[Real-time] Completed', {
         service: source_service,
