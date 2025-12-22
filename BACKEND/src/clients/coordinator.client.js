@@ -878,6 +878,59 @@ export async function batchSync({
       });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 🔍 DEBUG LOGGING: Coordinator Response Analysis
+    // ═══════════════════════════════════════════════════════════════════════════════
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔍 [COORD-CLIENT] Coordinator Response Received');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔍 [COORD-CLIENT] Response type:', typeof response);
+    console.log('🔍 [COORD-CLIENT] Response keys:', Object.keys(response || {}));
+    console.log('🔍 [COORD-CLIENT] response.success:', response?.success);
+    console.log('🔍 [COORD-CLIENT] response.envelope_json exists:', !!response?.envelope_json);
+    console.log('🔍 [COORD-CLIENT] response.envelope_json length:', response?.envelope_json?.length);
+    
+    if (response?.envelope_json) {
+      try {
+        const parsed = JSON.parse(response.envelope_json);
+        console.log('🔍 [COORD-CLIENT] Parsed envelope keys:', Object.keys(parsed || {}));
+        console.log('🔍 [COORD-CLIENT] parsed.success:', parsed?.success);
+        console.log('🔍 [COORD-CLIENT] parsed.data exists:', !!parsed?.data);
+        console.log('🔍 [COORD-CLIENT] parsed.data type:', typeof parsed?.data);
+        console.log('🔍 [COORD-CLIENT] parsed.payload exists:', !!parsed?.payload);
+        console.log('🔍 [COORD-CLIENT] parsed.payload?.data exists:', !!parsed?.payload?.data);
+        
+        // Check for data in various locations
+        const possibleDataLocations = {
+          'parsed.data': parsed?.data,
+          'parsed.data.items': parsed?.data?.items,
+          'parsed.payload': parsed?.payload,
+          'parsed.payload.data': parsed?.payload?.data,
+          'parsed.payload.data.items': parsed?.payload?.data?.items,
+          'parsed.successfulResult': parsed?.successfulResult,
+          'parsed.successfulResult.data': parsed?.successfulResult?.data,
+        };
+        
+        for (const [location, value] of Object.entries(possibleDataLocations)) {
+          if (value) {
+            const isArray = Array.isArray(value);
+            const length = isArray ? value.length : (typeof value === 'object' ? Object.keys(value).length : 'N/A');
+            console.log(`🔍 [COORD-CLIENT] ${location}: exists=${!!value}, isArray=${isArray}, length=${length}`);
+          }
+        }
+        
+        // Log first item if exists
+        const dataArray = parsed?.data?.items || parsed?.data || parsed?.payload?.data?.items || parsed?.payload?.data || [];
+        if (Array.isArray(dataArray) && dataArray.length > 0) {
+          console.log('🔍 [COORD-CLIENT] First item keys:', Object.keys(dataArray[0] || {}));
+          console.log('🔍 [COORD-CLIENT] First item preview:', JSON.stringify(dataArray[0]).substring(0, 200));
+        }
+      } catch (e) {
+        console.log('🔍 [COORD-CLIENT] Failed to parse envelope_json:', e.message);
+      }
+    }
+    console.log('═══════════════════════════════════════════════════════════');
+
     return response;
   } catch (error) {
     const processingTime = Date.now() - startTime;

@@ -68,6 +68,168 @@ async function getServicesToSync() {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BATCH-SPECIFIC DATA EXTRACTION
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * This function extracts data ONLY for batch sync responses.
+ * It is SEPARATE from real-time query extraction logic.
+ * 
+ * DO NOT use this for real-time queries!
+ * DO NOT modify coordinatorResponseParser.service.js!
+ * 
+ * Coordinator BATCH response format:
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "items": [...],    ← Primary location for batch data
+ *     "page": 1,
+ *     "limit": 1000,
+ *     "total": 5000
+ *   }
+ * }
+ * 
+ * @param {string} envelopeJson - JSON string of envelope from Coordinator
+ * @param {string} serviceName - Name of the service being synced
+ * @param {number} page - Current page number
+ * @returns {Object} Object with pageData, extractedFrom, and paginationInfo
+ */
+function extractBatchSyncData(envelopeJson, serviceName, page) {
+  let pageData = [];
+  let extractedFrom = null;
+  let paginationInfo = {
+    hasMore: false,
+    total: 0,
+    page: page,
+    limit: 1000
+  };
+
+  if (!envelopeJson) {
+    logger.warn('[BatchSync:Extract] No envelope_json received', {
+      service: serviceName,
+      page
+    });
+    return { pageData, extractedFrom, paginationInfo };
+  }
+
+  try {
+    const envelope = JSON.parse(envelopeJson);
+    
+    logger.debug('[BatchSync:Extract] Parsing batch envelope', {
+      service: serviceName,
+      page,
+      envelopeKeys: Object.keys(envelope || {}),
+      hasData: !!envelope.data,
+      dataType: typeof envelope.data
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // BATCH-SPECIFIC DATA EXTRACTION (Priority Order)
+    // ═══════════════════════════════════════════════════════════════
+    // 
+    // These paths are specific to Coordinator's BATCH response format.
+    // Real-time queries use different paths handled elsewhere.
+    // ═══════════════════════════════════════════════════════════════
+
+    // Priority 1: envelope.data.items (Coordinator BATCH format - MAIN PATH)
+    if (envelope.data?.items && Array.isArray(envelope.data.items)) {
+      pageData = envelope.data.items;
+      extractedFrom = 'envelope.data.items';
+      
+      // Extract pagination from envelope.data
+      paginationInfo.total = envelope.data.total || 0;
+      paginationInfo.page = envelope.data.page || page;
+      paginationInfo.limit = envelope.data.limit || 1000;
+      paginationInfo.hasMore = envelope.data.has_more || 
+                               (paginationInfo.page * paginationInfo.limit) < paginationInfo.total;
+    }
+    // Priority 2: envelope.data as direct array
+    else if (Array.isArray(envelope.data)) {
+      pageData = envelope.data;
+      extractedFrom = 'envelope.data (direct array)';
+      
+      // Try to get pagination from metadata
+      paginationInfo.total = envelope.metadata?.total || envelope.total || pageData.length;
+      paginationInfo.hasMore = envelope.metadata?.has_more || envelope.has_more || false;
+    }
+    // Priority 3: envelope.successfulResult.data.items (wrapped format)
+    else if (envelope.successfulResult?.data?.items && Array.isArray(envelope.successfulResult.data.items)) {
+      pageData = envelope.successfulResult.data.items;
+      extractedFrom = 'envelope.successfulResult.data.items';
+      
+      paginationInfo.total = envelope.successfulResult.data.total || 0;
+      paginationInfo.hasMore = envelope.successfulResult.metadata?.has_more || false;
+    }
+    // Priority 4: envelope.successfulResult.data as direct array
+    else if (Array.isArray(envelope.successfulResult?.data)) {
+      pageData = envelope.successfulResult.data;
+      extractedFrom = 'envelope.successfulResult.data (direct array)';
+      
+      paginationInfo.total = envelope.successfulResult.total || pageData.length;
+      paginationInfo.hasMore = envelope.successfulResult.has_more || false;
+    }
+    // Priority 5: envelope.items (direct items)
+    else if (Array.isArray(envelope.items)) {
+      pageData = envelope.items;
+      extractedFrom = 'envelope.items';
+      
+      paginationInfo.total = envelope.total || pageData.length;
+      paginationInfo.hasMore = envelope.has_more || false;
+    }
+    // Priority 6: envelope as root array
+    else if (Array.isArray(envelope)) {
+      pageData = envelope;
+      extractedFrom = 'envelope (root array)';
+      
+      paginationInfo.total = pageData.length;
+      paginationInfo.hasMore = false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // LOG EXTRACTION RESULT
+    // ═══════════════════════════════════════════════════════════════
+
+    if (pageData.length > 0) {
+      logger.info('[BatchSync:Extract] ✅ Data extracted successfully', {
+        service: serviceName,
+        page,
+        extractedFrom,
+        itemCount: pageData.length,
+        paginationInfo,
+        firstItemKeys: Object.keys(pageData[0] || {}).slice(0, 5)
+      });
+    } else {
+      logger.warn('[BatchSync:Extract] ⚠️ No data found in batch envelope', {
+        service: serviceName,
+        page,
+        envelopeKeys: Object.keys(envelope || {}),
+        dataExists: !!envelope.data,
+        dataType: typeof envelope.data,
+        dataKeys: envelope.data ? Object.keys(envelope.data) : [],
+        checkedPaths: [
+          'envelope.data.items',
+          'envelope.data (array)',
+          'envelope.successfulResult.data.items',
+          'envelope.successfulResult.data (array)',
+          'envelope.items',
+          'envelope (root array)'
+        ]
+      });
+    }
+
+  } catch (parseError) {
+    logger.error('[BatchSync:Extract] ❌ Failed to parse envelope JSON', {
+      service: serviceName,
+      page,
+      error: parseError.message,
+      envelopeLength: envelopeJson?.length
+    });
+  }
+
+  return { pageData, extractedFrom, paginationInfo };
+}
+
+/**
  * Sync a single microservice with pagination support
  * @param {string} serviceName - Name of the microservice to sync
  * @param {Object} options - Sync options
@@ -143,6 +305,16 @@ export async function syncService(serviceName, options = {}) {
           has_target_services: !!response?.target_services,
         });
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // 🔍 DEBUG LOGGING: Batch Sync Service Response Processing
+        // ═══════════════════════════════════════════════════════════════════════════════
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('🔍 [BATCH-SVC] Processing response for:', serviceName);
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('🔍 [BATCH-SVC] response exists:', !!response);
+        console.log('🔍 [BATCH-SVC] response type:', typeof response);
+        console.log('🔍 [BATCH-SVC] response.envelope_json:', !!response?.envelope_json);
+
         if (!response) {
           logger.warn('⚠️ [BATCH SYNC] No response from Coordinator', {
             service: serviceName,
@@ -171,28 +343,24 @@ export async function syncService(serviceName, options = {}) {
           break;
         }
 
-        // Extract data from response
-        const envelopeJson = response.envelope_json;
-        let pageData = [];
+        // ═══════════════════════════════════════════════════════════════
+        // BATCH-SPECIFIC DATA EXTRACTION
+        // Uses separate extraction logic from real-time queries
+        // ═══════════════════════════════════════════════════════════════
+        const { pageData, extractedFrom, paginationInfo } = extractBatchSyncData(
+          response.envelope_json,
+          serviceName,
+          page
+        );
 
-        if (envelopeJson) {
-          try {
-            const envelope = JSON.parse(envelopeJson);
-            if (envelope.payload?.data) {
-              pageData = Array.isArray(envelope.payload.data) 
-                ? envelope.payload.data 
-                : [envelope.payload.data];
-            }
-          } catch (parseError) {
-            logger.warn('[BatchSync] Failed to parse envelope JSON', {
-              service: serviceName,
-              page,
-              error: parseError.message,
-            });
-          }
-        }
+        // Log extraction result for debugging
+        console.log('🔍 [BATCH-SVC] Batch extraction result:', {
+          extractedFrom,
+          itemCount: pageData.length,
+          paginationInfo
+        });
 
-        // Check if there's more data (based on response or data count)
+        // Check if there's more data (based on extracted pagination info or data count)
         const itemsInPage = pageData.length;
         totalItems += itemsInPage;
         allData.push(...pageData);
@@ -202,30 +370,42 @@ export async function syncService(serviceName, options = {}) {
           page,
           items_in_page: itemsInPage,
           total_items: totalItems,
+          extractedFrom,
+          paginationInfo,
         });
 
         // Determine if there's more data
-        // Coordinator may indicate this via normalized_fields or we infer from data count
-        const normalizedFields = response.normalized_fields || {};
-        const hasMoreFlag = normalizedFields.has_more === 'true' || normalizedFields.has_more === true;
-        
-        if (hasMoreFlag) {
-          hasMore = true;
-          page++;
-        } else if (itemsInPage < BATCH_SYNC_LIMIT) {
-          // If we got fewer items than requested, assume no more pages
-          hasMore = false;
+        // Priority: Use pagination info from extraction, then fallback to normalized_fields
+        if (paginationInfo.hasMore !== undefined && paginationInfo.hasMore !== null) {
+          // Use pagination info from batch extraction
+          hasMore = paginationInfo.hasMore;
+          if (hasMore) {
+            page++;
+          }
         } else {
-          // Got full page, assume there might be more
-          // But limit to prevent infinite loops
-          if (page >= 100) {
-            logger.warn('[BatchSync] Reached max pages limit, stopping', {
-              service: serviceName,
-              maxPages: 100,
-            });
+          // Fallback: Check normalized_fields (legacy support)
+          const normalizedFields = response.normalized_fields || {};
+          const hasMoreFlag = normalizedFields.has_more === 'true' || normalizedFields.has_more === true;
+          
+          if (hasMoreFlag) {
+            hasMore = true;
+            page++;
+          } else if (itemsInPage < BATCH_SYNC_LIMIT) {
+            // If we got fewer items than requested, assume no more pages
             hasMore = false;
           } else {
-            page++;
+            // Got full page, assume there might be more
+            // But limit to prevent infinite loops
+            if (page >= 100) {
+              logger.warn('[BatchSync] Reached max pages limit, stopping', {
+                service: serviceName,
+                maxPages: 100,
+              });
+              hasMore = false;
+            } else {
+              hasMore = true;
+              page++;
+            }
           }
         }
 
@@ -394,6 +574,23 @@ function buildResponseEnvelope(responseData) {
  * @param {Array} data - Array of data items to store
  */
 async function updateDataStore(serviceName, data) {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🔍 DEBUG LOGGING: Update Data Store
+  // ═══════════════════════════════════════════════════════════════════════════════
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔍 [UPDATE-STORE] Called for:', serviceName);
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔍 [UPDATE-STORE] data exists:', !!data);
+  console.log('🔍 [UPDATE-STORE] data type:', typeof data);
+  console.log('🔍 [UPDATE-STORE] data isArray:', Array.isArray(data));
+  console.log('🔍 [UPDATE-STORE] data length:', data?.length || 0);
+  
+  if (data?.length > 0) {
+    console.log('🔍 [UPDATE-STORE] First item keys:', Object.keys(data[0] || {}));
+    console.log('🔍 [UPDATE-STORE] First item preview:', JSON.stringify(data[0]).substring(0, 200));
+  }
+  console.log('═══════════════════════════════════════════════════════════');
+
   try {
     logger.info('[BatchSync] Updating data store', {
       service: serviceName,
