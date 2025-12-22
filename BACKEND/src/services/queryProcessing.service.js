@@ -404,7 +404,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     }
 
     // 1) QUERY CLASSIFICATION
-    let { isEducore, category } = isEducoreQuery(query);
+    let { isEducore, category, reason } = isEducoreQuery(query);
     
     // If query contains user names but wasn't classified as EDUCORE, treat it as EDUCORE
     const hasUserNames = ['eden', 'levi', 'adi', 'cohen', 'noa', 'bar', 'עדן', 'לוי', 'עדי', 'כהן', 'נועה', 'בר']
@@ -416,6 +416,7 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       });
       isEducore = true;
       category = 'users';
+      reason = 'user_name_detected';
     }
     
     logger.info('Query classification result', {
@@ -423,7 +424,10 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       user_id,
       isEducore,
       category,
+      reason: reason || 'unknown',
       hasUserNames,
+      queryPreview: query ? query.substring(0, 100) : 'N/A',
+      classification: isEducore ? 'EDUCORE → Coordinator' : 'non-EDUCORE → OpenAI',
     });
 
     // Non-EDUCORE queries → go straight to OpenAI (general knowledge)
