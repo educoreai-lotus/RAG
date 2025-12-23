@@ -2362,6 +2362,77 @@ async function performSemanticSearch(query, tenantId) {
     
     const prisma = await getPrismaClient();
     
+    // Special handling for platform suggestions queries - direct search FIRST
+    const queryLower = query.toLowerCase().trim();
+    let directPlatformResult = null;
+    
+    // Check if query matches platform suggestion patterns
+    const isAboutQuery = queryLower === 'about' || 
+                        queryLower === 'about the platform' ||
+                        (queryLower.includes('about') && queryLower.length < 30);
+    
+    const isHowToStartQuery = (queryLower.includes('how to start') || 
+                               queryLower === 'how to start') &&
+                              !queryLower.includes('what to do');
+    
+    const isHowManyTestQuery = queryLower.includes('how many test') ||
+                               queryLower.includes('test need to attempt');
+    
+    const isWhatToDoAfterLoginQuery = queryLower.includes('what to do after logging') ||
+                                      queryLower.includes('what to do after login');
+    
+    if (isAboutQuery || isHowToStartQuery || isHowManyTestQuery || isWhatToDoAfterLoginQuery) {
+      try {
+        // Determine which content ID to fetch
+        let targetContentId = null;
+        if (isAboutQuery) {
+          targetContentId = 'platform-content-1';
+        } else if (isHowToStartQuery) {
+          targetContentId = 'platform-content-2';
+        } else if (isHowManyTestQuery) {
+          targetContentId = 'platform-content-3';
+        } else if (isWhatToDoAfterLoginQuery) {
+          targetContentId = 'platform-content-4';
+        }
+        
+        if (targetContentId) {
+          const platformContent = await prisma.vectorEmbedding.findFirst({
+            where: {
+              tenantId: tenantId,
+              contentId: targetContentId,
+              contentType: 'documentation'
+            },
+          });
+          
+          if (platformContent) {
+            // Prisma returns camelCase fields, convert to snake_case for consistency with SQL results
+            directPlatformResult = {
+              id: platformContent.id,
+              tenant_id: platformContent.tenantId,
+              microservice_id: platformContent.microserviceId || null,
+              content_id: platformContent.contentId,
+              content_type: platformContent.contentType,
+              content_text: platformContent.contentText,
+              metadata: platformContent.metadata || {},
+              created_at: platformContent.createdAt || new Date(),
+              similarity: 0.90, // High similarity for direct matches
+              boost: 1.0
+            };
+            
+            logger.info('[SEMANTIC SEARCH] ✅ Found platform content via direct search', {
+              query: query.substring(0, 100),
+              contentId: targetContentId,
+              similarity: 0.90
+            });
+          }
+        }
+      } catch (directSearchError) {
+        logger.warn('[SEMANTIC SEARCH] Direct platform search failed, continuing with vector search', {
+          error: directSearchError.message
+        });
+      }
+    }
+    
     // Step 1: First, check what's in the table for this tenant
     const countCheck = await prisma.$queryRawUnsafe(`
       SELECT 
@@ -2428,8 +2499,19 @@ async function performSemanticSearch(query, tenantId) {
       }))
     });
     
-    // Step 4: Filter by similarity threshold
-    const goodResults = (results || []).filter(r => 
+    // Step 4: Add direct platform result if found (with highest priority)
+    let allResults = results || [];
+    if (directPlatformResult) {
+      // Add direct platform result at the beginning with highest similarity
+      allResults = [directPlatformResult, ...allResults];
+      logger.info('[SEMANTIC SEARCH] ✅ Added direct platform result', {
+        contentId: directPlatformResult.content_id,
+        similarity: directPlatformResult.similarity
+      });
+    }
+    
+    // Step 5: Filter by similarity threshold
+    const goodResults = allResults.filter(r => 
       parseFloat(r.similarity) >= SIMILARITY_THRESHOLD
     );
     
@@ -2437,7 +2519,8 @@ async function performSemanticSearch(query, tenantId) {
       aboveThreshold: goodResults.length,
       threshold: SIMILARITY_THRESHOLD,
       bestSimilarity: goodResults[0] ? parseFloat(goodResults[0].similarity).toFixed(3) : 0,
-      allSimilarities: goodResults.slice(0, 5).map(r => parseFloat(r.similarity).toFixed(3))
+      allSimilarities: goodResults.slice(0, 5).map(r => parseFloat(r.similarity).toFixed(3)),
+      hasDirectResult: !!directPlatformResult
     });
     
     if (goodResults.length === 0) {
