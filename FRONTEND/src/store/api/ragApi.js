@@ -156,6 +156,8 @@ export const ragApi = createApi({
         return `/api/v1/personalized/recommendations/${userId}${queryString ? `?${queryString}` : ''}`;
       },
       providesTags: ['Recommendation'],
+      // Cache for 5 minutes to improve performance
+      keepUnusedDataFor: 300,
     }),
   }),
 });

@@ -100,6 +100,36 @@ const FloatingChatWidget = ({
   }, [embedded, userId, token, tenantId, dispatch]);
   
   const [recommendations, setRecommendations] = useState([]);
+  
+  // Platform suggestions that are always available (no API call needed)
+  const platformSuggestions = [
+    {
+      id: 'suggestion-about',
+      type: 'button',
+      label: 'About',
+      description: 'Learn about the platform and its features',
+      reason: 'Platform information',
+      priority: 15,
+      metadata: { 
+        source: 'platform_suggestion',
+        query: 'about the platform',
+        action: 'query'
+      },
+    },
+    {
+      id: 'suggestion-how-to-start',
+      type: 'button',
+      label: 'How to Start',
+      description: 'Get started guide for employees, managers, HR, and trainers',
+      reason: 'Getting started',
+      priority: 14,
+      metadata: { 
+        source: 'platform_suggestion',
+        query: 'how to start with the platform',
+        action: 'query'
+      },
+    }
+  ];
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
   const [submitQuery, { isLoading: isQueryLoading }] = useSubmitQueryMutation();
   
@@ -182,43 +212,14 @@ const FloatingChatWidget = ({
       dispatch(addMessage(greeting));
       setHasShownGreeting(true);
       
-      // Show initial recommendations only after greeting (before conversation starts)
-      // Use API recommendations if available, otherwise use client-side generator
-      setTimeout(() => {
-        // For anonymous users, always use client-side recommendations
-        if (currentUserId === 'anonymous') {
-          setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
-          return;
-        }
-        
-        // Check if API recommendations are available and not in error state
-        if (!recommendationsError && apiRecommendations?.recommendations && apiRecommendations.recommendations.length > 0) {
-          // Convert API recommendations to component format
-          const formattedRecs = apiRecommendations.recommendations.map((rec) => ({
-            id: rec.id,
-            type: rec.type || 'button',
-            label: rec.label || rec.title,
-            description: rec.description,
-            reason: rec.reason,
-            priority: rec.priority,
-            metadata: rec.metadata,
-          }));
-          setRecommendations(formattedRecs);
-        } else {
-          // Fallback to client-side recommendations (always show something)
-          console.log('Using fallback recommendations:', { 
-            hasApiData: !!apiRecommendations, 
-            error: recommendationsError,
-            isAnonymous: currentUserId === 'anonymous',
-            isLoading: isLoadingRecommendations
-          });
-          setRecommendations(getModeSpecificRecommendations(MODES.GENERAL, [greeting]));
-        }
-      }, 500);
+      // Show platform suggestions immediately (no API call needed)
+      // API recommendations will be added when they arrive
+      setRecommendations(platformSuggestions);
     }
   }, [isOpen, hasShownGreeting, messages.length, currentMode, dispatch, embedded, mode, apiRecommendations, recommendationsError, currentUserId, isLoadingRecommendations]);
 
   // Update recommendations when API data arrives (for logged-in users)
+  // Combine platform suggestions with API recommendations
   useEffect(() => {
     // Only update if user is logged in, widget is open, and we have API data
     if (currentUserId !== 'anonymous' && isOpen && !isLoadingRecommendations && !recommendationsError) {
@@ -233,10 +234,17 @@ const FloatingChatWidget = ({
           priority: rec.priority,
           metadata: rec.metadata,
         }));
-        setRecommendations(formattedRecs);
+        
+        // Combine platform suggestions with API recommendations
+        // Platform suggestions should appear first (they have higher priority)
+        const combined = [...platformSuggestions, ...formattedRecs]
+          .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+          .slice(0, 7); // Limit total recommendations
+        
+        setRecommendations(combined);
       } else if (apiRecommendations && (!apiRecommendations.recommendations || apiRecommendations.recommendations.length === 0)) {
-        // API returned empty recommendations, use fallback
-        setRecommendations(getModeSpecificRecommendations(currentMode, messages));
+        // API returned empty recommendations, keep platform suggestions
+        setRecommendations(platformSuggestions);
       }
     }
   }, [apiRecommendations, isLoadingRecommendations, recommendationsError, currentUserId, isOpen, currentMode, messages]);
