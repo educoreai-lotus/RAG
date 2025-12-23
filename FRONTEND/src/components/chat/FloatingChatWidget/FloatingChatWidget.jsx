@@ -235,9 +235,13 @@ const FloatingChatWidget = ({
           metadata: rec.metadata,
         }));
         
-        // Combine platform suggestions with API recommendations
+        // Filter out platform suggestions from API recommendations to avoid duplicates
+        const platformSuggestionIds = platformSuggestions.map(s => s.id);
+        const filteredApiRecs = formattedRecs.filter(rec => !platformSuggestionIds.includes(rec.id));
+        
+        // Combine platform suggestions with API recommendations (no duplicates)
         // Platform suggestions should appear first (they have higher priority)
-        const combined = [...platformSuggestions, ...formattedRecs]
+        const combined = [...platformSuggestions, ...filteredApiRecs]
           .sort((a, b) => (b.priority || 0) - (a.priority || 0))
           .slice(0, 7); // Limit total recommendations
         
