@@ -52,11 +52,12 @@ const LOTUS_DOMAIN = 'lotustechhub.com';
 const LOTUS_COMPANY_NAME = 'Lotus TechHub';
 
 // Platform content to add
+// Each section between "-----------------------------------------------" is one paragraph
 const platformContent = `ABOUT
 
 The platform is an intelligent corporate learning system that unifies people, skills, and content into one continuous learning experience. It enables organizations to design personalized learning paths, create and enrich learning materials, practice and assess knowledge, and measure learning effectiveness in real time. AI-driven engines continuously analyze progress, identify skill gaps, and adapt each learner's journey, while a smart contextual assistant connects organizational knowledge to clear explanations, summaries, and actionable recommendations—turning learning into a measurable, targeted, and business-driven process.
 
-__________________________________________
+-----------------------------------------------
 
 HOW TO START
 
@@ -68,17 +69,17 @@ HR Start by defining organizational roles, competencies, and learning objectives
 
 Trainer Begin by designing structured learning paths and creating or refining learning content. Build lessons, exercises, and assessments, and continuously improve them based on learner feedback and performance insights. The system helps ensure high-quality content that adapts to different learner levels and organizational needs.
 
-___________
+-----------------------------------------------
 
-how many test need to attempt in order to fill a gap
+how many test need to attempt in order to fill a gap?
 
 A skill gap is closed based on demonstrated competency, not on a fixed number of test attempts. The system evaluates mastery using multiple signals such as assessment results, practical exercises, and performance consistency over time. Simple skills may be validated with a single strong assessment, while broader or critical skills usually require two to three successful evaluations across different contexts.
 
 In addition, to complete and officially close a learning path, the learner must pass a final assessment at the end of the course. This final test serves as a comprehensive validation that the required knowledge and skills have been fully acquired. Only after successfully passing this end-of-course assessment is the learning path marked as completed and the associated skill gap considered closed.
 
-_________________________
+-----------------------------------------------
 
-what to do after logging in / How to Start & What to Do With a Learning Path
+what to do after logging in / How to Start & What to Do With a Learning Path?
 
 Start by selecting or accepting a learning path that matches your role, goals, or identified skill gaps. Review the path overview to understand the objectives, expected outcomes, and completion criteria. Then follow the path step by step: study the learning materials, complete the required exercises, and take the assessments as they appear along the way.
 
@@ -86,59 +87,57 @@ As you progress, track your performance and feedback to see where you are improv
 
 /**
  * Split content into meaningful paragraphs
+ * Handles separators like "-----------------------------------------------" or "___________"
+ * Each section between separators becomes one paragraph
  */
 function splitIntoParagraphs(content) {
   const paragraphs = [];
   
-  // First, split by separator lines (like "___________" or "__________________________________________")
-  const separatorPattern = /\n\s*_{5,}\s*\n/g;
+  // Split by separator lines (dashes or underscores, at least 5 characters)
+  // Pattern matches: newline, optional whitespace, dashes/underscores (5+), optional whitespace, newline
+  const separatorPattern = /\n\s*[-_]{5,}\s*\n/g;
+  
+  // Split content by separators - each section becomes one paragraph
   const sections = content.split(separatorPattern);
   
   for (const section of sections) {
-    // Split by double newlines first (paragraph breaks)
-    const doubleNewlineSplits = section.split(/\n\s*\n/);
+    const trimmedSection = section.trim();
+    if (!trimmedSection) continue;
     
-    for (const doubleSplit of doubleNewlineSplits) {
-      // Split by single newlines but keep related content together
-      const lines = doubleSplit.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-      
-      if (lines.length === 0) continue;
-      
-      let currentParagraph = '';
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Check if this is a heading (all caps, short, or starts a new topic)
-        const isHeading = (line.length < 50 && line === line.toUpperCase() && line.length > 3) ||
-                         (i === 0 && line.length < 100);
-        
-        if (isHeading && currentParagraph.length > 0) {
-          // Save previous paragraph and start new one
-          paragraphs.push(currentParagraph.trim());
-          currentParagraph = line;
-        } else {
-          // Continue building paragraph
-          if (currentParagraph.length > 0) {
-            currentParagraph += ' ' + line;
-          } else {
-            currentParagraph = line;
-          }
-        }
-      }
-      
-      // Add last paragraph if exists
-      if (currentParagraph.trim().length > 0) {
-        paragraphs.push(currentParagraph.trim());
-      }
+    // Clean up the section: remove extra newlines, normalize whitespace
+    // But preserve the structure (headings and content)
+    const lines = trimmedSection.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    
+    if (lines.length === 0) continue;
+    
+    // Join all lines into one paragraph, preserving structure
+    // If first line is a heading (all caps, short), keep it as heading
+    const firstLine = lines[0];
+    const isHeading = firstLine.length < 60 && 
+                     firstLine === firstLine.toUpperCase() && 
+                     firstLine.length > 2 &&
+                     !firstLine.includes('?');
+    
+    let paragraph;
+    if (isHeading && lines.length > 1) {
+      // Heading + content - combine with double newline between heading and content
+      const heading = firstLine;
+      const content = lines.slice(1).join(' ');
+      paragraph = `${heading}\n\n${content}`.trim();
+    } else {
+      // Regular paragraph - join all lines with spaces
+      paragraph = lines.join(' ').trim();
+    }
+    
+    // Only add if paragraph is meaningful (at least 20 characters)
+    if (paragraph.length >= 20 && !paragraph.match(/^[-_]{5,}$/)) {
+      paragraphs.push(paragraph);
     }
   }
   
-  // Filter out very short paragraphs (less than 20 characters) and clean up
-  return paragraphs
-    .map(p => p.trim())
-    .filter(p => p.length >= 20)
-    .filter(p => !p.match(/^_{5,}$/)); // Remove separator-only lines
+  return paragraphs;
 }
 
 /**

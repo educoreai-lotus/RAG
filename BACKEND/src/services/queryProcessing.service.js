@@ -609,21 +609,51 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       });
       
       // Special handling for platform suggestions queries
-      // If query is "about" or "how to start", search for platform-content directly
+      // If query is "about", "how to start", "how many test", or "what to do after logging in"
+      // search for platform-content directly
       const queryForEmbeddingLower = queryForEmbedding.toLowerCase().trim();
-      const isAboutQuery = queryForEmbeddingLower === 'about' || queryForEmbeddingLower === 'about the platform';
-      const isHowToStartQuery = queryForEmbeddingLower === 'how to start' || queryForEmbeddingLower === 'how to start with the platform';
+      const originalQueryLower = query.toLowerCase().trim();
+      
+      const isAboutQuery = queryForEmbeddingLower.includes('about') && 
+                          (queryForEmbeddingLower === 'about' || 
+                           queryForEmbeddingLower === 'about the platform' ||
+                           originalQueryLower.includes('about'));
+      
+      const isHowToStartQuery = (queryForEmbeddingLower.includes('how to start') || 
+                                 originalQueryLower.includes('how to start')) &&
+                                !queryForEmbeddingLower.includes('what to do');
+      
+      const isHowManyTestQuery = queryForEmbeddingLower.includes('how many test') ||
+                                 queryForEmbeddingLower.includes('test need to attempt') ||
+                                 originalQueryLower.includes('how many test');
+      
+      const isWhatToDoAfterLoginQuery = queryForEmbeddingLower.includes('what to do after logging') ||
+                                        queryForEmbeddingLower.includes('what to do after login') ||
+                                        originalQueryLower.includes('what to do after');
       
       let directPlatformResults = [];
-      if (isAboutQuery || isHowToStartQuery) {
+      if (isAboutQuery || isHowToStartQuery || isHowManyTestQuery || isWhatToDoAfterLoginQuery) {
         try {
           const prisma = await getPrismaClient();
+          
+          // Determine which content ID to fetch
+          let targetContentId = null;
+          if (isAboutQuery) {
+            targetContentId = 'platform-content-1';
+          } else if (isHowToStartQuery) {
+            targetContentId = 'platform-content-2';
+          } else if (isHowManyTestQuery) {
+            targetContentId = 'platform-content-3';
+          } else if (isWhatToDoAfterLoginQuery) {
+            targetContentId = 'platform-content-4';
+          }
+          
           const platformContent = await prisma.vectorEmbedding.findMany({
             where: {
               tenantId: actualTenantId,
-              contentId: {
-                startsWith: 'platform-content-'
-              },
+              ...(targetContentId ? { contentId: targetContentId } : {
+                contentId: { startsWith: 'platform-content-' }
+              }),
               contentType: 'documentation'
             },
             select: {
@@ -635,15 +665,15 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             orderBy: {
               createdAt: 'asc'
             },
-            take: isAboutQuery ? 1 : 5 // "about" gets first paragraph, "how to start" gets more
+            take: 1 // Each query gets one specific paragraph
           });
           
           if (platformContent.length > 0) {
-            directPlatformResults = platformContent.map((item, index) => ({
+            directPlatformResults = platformContent.map((item) => ({
               contentId: item.contentId,
               contentText: item.contentText,
               contentType: item.contentType,
-              similarity: isAboutQuery ? 0.85 : 0.80 - (index * 0.05), // High similarity for direct matches
+              similarity: 0.90, // High similarity for direct matches (all platform suggestions get same high score)
               metadata: item.metadata
             }));
             
