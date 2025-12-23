@@ -79,6 +79,36 @@ export async function generatePersonalizedRecommendations(
       }
     }
 
+    // Generate platform suggestions (always included)
+    const platformSuggestions = [
+      {
+        id: 'suggestion-about',
+        type: 'button',
+        label: 'About',
+        description: 'Learn about the platform and its features',
+        reason: 'Platform information',
+        priority: 15,
+        metadata: { 
+          source: 'platform_suggestion',
+          query: 'about',
+          action: 'query'
+        },
+      },
+      {
+        id: 'suggestion-how-to-start',
+        type: 'button',
+        label: 'How to Start',
+        description: 'Get started guide for employees, managers, HR, and trainers',
+        reason: 'Getting started',
+        priority: 14,
+        metadata: { 
+          source: 'platform_suggestion',
+          query: 'how to start',
+          action: 'query'
+        },
+      }
+    ];
+
     // Generate recommendations based on mode
     let recommendations = [];
 
@@ -112,6 +142,11 @@ export async function generatePersonalizedRecommendations(
         );
       }
     }
+
+    // Always prepend platform suggestions to recommendations
+    recommendations = [...platformSuggestions, ...recommendations]
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, limit);
 
     logger.info('Generated personalized recommendations', {
       tenantId,

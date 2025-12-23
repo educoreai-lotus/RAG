@@ -499,9 +499,10 @@ const FloatingChatWidget = ({
   };
 
   const handleSelectRecommendation = (item) => {
-    // Send the recommendation label as a user message.
+    // Send the recommendation query from metadata if available, otherwise use label
     // The backend will retrieve the guide content from the database (vector_embeddings).
-    handleSendMessage(item.label);
+    const query = item.metadata?.query || item.label;
+    handleSendMessage(query);
   };
 
   return (
