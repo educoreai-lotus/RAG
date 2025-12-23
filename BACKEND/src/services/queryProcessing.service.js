@@ -610,9 +610,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       
       // Special handling for platform suggestions queries
       // If query is "about" or "how to start", search for platform-content directly
-      const queryLower = queryForEmbedding.toLowerCase().trim();
-      const isAboutQuery = queryLower === 'about' || queryLower === 'about the platform';
-      const isHowToStartQuery = queryLower === 'how to start' || queryLower === 'how to start with the platform';
+      const queryForEmbeddingLower = queryForEmbedding.toLowerCase().trim();
+      const isAboutQuery = queryForEmbeddingLower === 'about' || queryForEmbeddingLower === 'about the platform';
+      const isHowToStartQuery = queryForEmbeddingLower === 'how to start' || queryForEmbeddingLower === 'how to start with the platform';
       
       let directPlatformResults = [];
       if (isAboutQuery || isHowToStartQuery) {
