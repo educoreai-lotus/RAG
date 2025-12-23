@@ -2367,19 +2367,30 @@ async function performSemanticSearch(query, tenantId) {
     let directPlatformResult = null;
     
     // Check if query matches platform suggestion patterns
+    // More flexible matching to catch all variations
     const isAboutQuery = queryLower === 'about' || 
                         queryLower === 'about the platform' ||
-                        (queryLower.includes('about') && queryLower.length < 30);
+                        queryLower.startsWith('about the platform') ||
+                        (queryLower.includes('about') && queryLower.length < 50 && !queryLower.includes('what to do'));
     
-    const isHowToStartQuery = (queryLower.includes('how to start') || 
-                               queryLower === 'how to start') &&
-                              !queryLower.includes('what to do');
+    const isHowToStartQuery = queryLower.includes('how to start') &&
+                              !queryLower.includes('what to do') &&
+                              !queryLower.includes('after logging');
     
     const isHowManyTestQuery = queryLower.includes('how many test') ||
                                queryLower.includes('test need to attempt');
     
     const isWhatToDoAfterLoginQuery = queryLower.includes('what to do after logging') ||
                                       queryLower.includes('what to do after login');
+    
+    logger.info('[SEMANTIC SEARCH] Checking platform query patterns', {
+      query: query.substring(0, 100),
+      queryLower,
+      isAboutQuery,
+      isHowToStartQuery,
+      isHowManyTestQuery,
+      isWhatToDoAfterLoginQuery
+    });
     
     if (isAboutQuery || isHowToStartQuery || isHowManyTestQuery || isWhatToDoAfterLoginQuery) {
       try {
@@ -2506,14 +2517,22 @@ async function performSemanticSearch(query, tenantId) {
       allResults = [directPlatformResult, ...allResults];
       logger.info('[SEMANTIC SEARCH] ✅ Added direct platform result', {
         contentId: directPlatformResult.content_id,
-        similarity: directPlatformResult.similarity
+        similarity: directPlatformResult.similarity,
+        threshold: SIMILARITY_THRESHOLD,
+        willPassThreshold: directPlatformResult.similarity >= SIMILARITY_THRESHOLD
+      });
+    } else {
+      logger.info('[SEMANTIC SEARCH] ⚠️ No direct platform result found', {
+        query: query.substring(0, 100),
+        queryLower
       });
     }
     
     // Step 5: Filter by similarity threshold
-    const goodResults = allResults.filter(r => 
-      parseFloat(r.similarity) >= SIMILARITY_THRESHOLD
-    );
+    const goodResults = allResults.filter(r => {
+      const similarity = parseFloat(r.similarity);
+      return similarity >= SIMILARITY_THRESHOLD;
+    });
     
     logger.info('[SEMANTIC SEARCH] ✅ Filtered results', {
       aboveThreshold: goodResults.length,
@@ -2524,10 +2543,28 @@ async function performSemanticSearch(query, tenantId) {
     });
     
     if (goodResults.length === 0) {
+      // Special case: If we have a direct platform result but it didn't pass threshold,
+      // return it anyway (it has high similarity 0.90, should always pass)
+      if (directPlatformResult) {
+        logger.info('[SEMANTIC SEARCH] ⚠️ No results above threshold, but using direct platform result', {
+          directResultSimilarity: directPlatformResult.similarity,
+          threshold: SIMILARITY_THRESHOLD,
+          contentId: directPlatformResult.content_id
+        });
+        
+        return {
+          found: true,
+          results: [directPlatformResult],
+          bestSimilarity: directPlatformResult.similarity,
+          totalSearched: (results?.length || 0) + 1
+        };
+      }
+      
       logger.info('[SEMANTIC SEARCH] ❌ No results above threshold', {
         totalResults: results?.length || 0,
         bestSimilarityFound: results?.[0] ? parseFloat(results[0].similarity).toFixed(3) : 0,
         threshold: SIMILARITY_THRESHOLD,
+        hasDirectResult: !!directPlatformResult,
         recommendation: results?.length > 0 
           ? `Found ${results.length} results but best similarity ${parseFloat(results[0].similarity).toFixed(3)} is below threshold ${SIMILARITY_THRESHOLD}`
           : 'No results found in database for this tenant'
