@@ -90,7 +90,7 @@ export async function generatePersonalizedRecommendations(
         priority: 15,
         metadata: { 
           source: 'platform_suggestion',
-          query: 'about',
+          query: 'about the platform',
           action: 'query'
         },
       },
@@ -103,7 +103,7 @@ export async function generatePersonalizedRecommendations(
         priority: 14,
         metadata: { 
           source: 'platform_suggestion',
-          query: 'how to start',
+          query: 'how to start with the platform',
           action: 'query'
         },
       }

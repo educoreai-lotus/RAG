@@ -1,0 +1,32 @@
+===========================================
+העתק את כל הקוד הזה והדבק בקונסול של DEVLAB
+===========================================
+
+שלבים:
+1. פתח DEVLAB בדפדפן
+2. לחץ F12 (או Right-click → Inspect)
+3. לחץ על הטאב "Console"
+4. העתק את כל הקוד למטה
+5. הדבק בקונסול ולחץ Enter
+
+===========================================
+
+localStorage.setItem('auth-token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjIxMGRjN2E3LTk4MDgtNDQ1Yy04ZWI3LTUxYzIxNzMzOTE5YyIsImVtYWlsIjoidGVzdEBkZXZsYWIuY29tIiwibmFtZSI6IlRlc3QgVXNlciIsInJvbGUiOiJsZWFybmVyIiwidGVuYW50X2lkIjoiZGV2bGFiIiwidGVuYW50X2RvbWFpbiI6ImRldmxhYi5lZHVjb3JlLmNvbSIsInBlcm1pc3Npb25zIjpbXSwiZXhwIjo5OTk5OTk5OTk5fQ.dummy_signature_for_testing_only');
+localStorage.setItem('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjIxMGRjN2E3LTk4MDgtNDQ1Yy04ZWI3LTUxYzIxNzMzOTE5YyIsImVtYWlsIjoidGVzdEBkZXZsYWIuY29tIiwibmFtZSI6IlRlc3QgVXNlciIsInJvbGUiOiJsZWFybmVyIiwidGVuYW50X2lkIjoiZGV2bGFiIiwidGVuYW50X2RvbWFpbiI6ImRldmxhYi5lZHVjb3JlLmNvbSIsInBlcm1pc3Npb25zIjpbXSwiZXhwIjo5OTk5OTk5OTk5fQ.dummy_signature_for_testing_only');
+if (window.initializeEducoreBot) {
+  window.initializeEducoreBot({
+    microservice: 'DEVLAB',
+    userId: '210dc7a7-9808-445c-8eb7-51c217e3919c',
+    token: localStorage.getItem('auth-token'),
+    tenantId: 'devlab'
+  });
+  console.log('✅ Bot initialized! Check bottom-right corner.');
+} else {
+  console.error('❌ Bot script not loaded! Add <script src="https://rag-production-3a4c.up.railway.app/embed/bot.js"></script> to HTML');
+}
+
+===========================================
+אם רואים ✅ Bot initialized! → הכל עבד!
+אם רואים ❌ Bot script not loaded! → צריך להוסיף את הסקריפט ל-HTML
+===========================================
+

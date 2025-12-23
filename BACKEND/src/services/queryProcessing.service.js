@@ -608,6 +608,56 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         embedding_dimensions: queryEmbedding?.length || 0,
       });
       
+      // Special handling for platform suggestions queries
+      // If query is "about" or "how to start", search for platform-content directly
+      const queryLower = queryForEmbedding.toLowerCase().trim();
+      const isAboutQuery = queryLower === 'about' || queryLower === 'about the platform';
+      const isHowToStartQuery = queryLower === 'how to start' || queryLower === 'how to start with the platform';
+      
+      let directPlatformResults = [];
+      if (isAboutQuery || isHowToStartQuery) {
+        try {
+          const prisma = await getPrismaClient();
+          const platformContent = await prisma.vectorEmbedding.findMany({
+            where: {
+              tenantId: actualTenantId,
+              contentId: {
+                startsWith: 'platform-content-'
+              },
+              contentType: 'documentation'
+            },
+            select: {
+              contentId: true,
+              contentText: true,
+              contentType: true,
+              metadata: true
+            },
+            orderBy: {
+              createdAt: 'asc'
+            },
+            take: isAboutQuery ? 1 : 5 // "about" gets first paragraph, "how to start" gets more
+          });
+          
+          if (platformContent.length > 0) {
+            directPlatformResults = platformContent.map((item, index) => ({
+              contentId: item.contentId,
+              contentText: item.contentText,
+              contentType: item.contentType,
+              similarity: isAboutQuery ? 0.85 : 0.80 - (index * 0.05), // High similarity for direct matches
+              metadata: item.metadata
+            }));
+            
+            logger.info('Found platform content via direct search', {
+              query: queryForEmbedding,
+              results: directPlatformResults.length
+            });
+          }
+        } catch (directSearchError) {
+          logger.warn('Direct platform search failed, falling back to vector search', {
+            error: directSearchError.message
+          });
+        }
+      }
       
       // Use unified vector search service
       // Run vector search and user context in parallel for better performance
@@ -626,7 +676,21 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           : Promise.resolve(null)
       ]);
 
-      similarVectors = vectorSearchResults;
+      // Combine direct platform results with vector search results
+      // Direct platform results have priority (higher similarity)
+      if (directPlatformResults.length > 0) {
+        similarVectors = [...directPlatformResults, ...vectorSearchResults]
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, max_results);
+        
+        logger.info('Combined direct platform results with vector search', {
+          direct_results: directPlatformResults.length,
+          vector_results: vectorSearchResults.length,
+          combined: similarVectors.length
+        });
+      } else {
+        similarVectors = vectorSearchResults;
+      }
       
       // Track initial results
       filteringContext.vectorResultsFound = similarVectors.length;
