@@ -63,13 +63,22 @@ export function isNegativeResponse(answer) {
     /i couldn'?t find (any )?(relevant )?information/i,
     /i could not find (any )?(relevant )?information/i,
     /the context doesn'?t contain (enough|sufficient|relevant)/i,
+    /the context does not (provide|contain|have) (any )?(information|data|details)/i,
+    /does not provide (any )?(information|data|details)/i,
     /no (data|information|content) (was )?(found|available|provided)/i,
     /there is no (data|information|content)/i,
+    
+    // Null/empty values
+    /(is|are|was|were) (listed as|set to|marked as|shows as) null/i,
+    /(is|are|was|were) null/i,
+    /value is null/i,
+    /(field|property|attribute) (is|are) null/i,
     
     // Insufficient context
     /insufficient (information|data|context)/i,
     /not enough (information|data|context)/i,
     /doesn'?t contain (enough|sufficient) information/i,
+    /does not contain (enough|sufficient|any) (information|data)/i,
     
     // Cannot generate
     /i (could|can) ?not generate a (proper )?response/i,
@@ -81,7 +90,11 @@ export function isNegativeResponse(answer) {
     /^unfortunately,? (i |the |there |no )/i,
     
     // Based on context fallback (empty response indicator)
-    /^based on (the )?(available |provided )?(context|information):?\s*$/i
+    /^based on (the )?(available |provided )?(context|information):?\s*$/i,
+    
+    // Context does not provide patterns
+    /the context does not provide/i,
+    /context does not (have|contain|include|show)/i
   ];
 
   // ═══════════════════════════════════════════════════════════════
