@@ -241,6 +241,80 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
     const SEMANTIC_SIMILARITY_THRESHOLD = parseFloat(process.env.SEMANTIC_CACHE_THRESHOLD) || 0.70;
     
     if (semanticResult.found && semanticResult.results.length > 0) {
+      // Check if this is a platform suggestion query with direct content
+      const queryLower = query.toLowerCase().trim();
+      const isPlatformSuggestion = semanticResult.results.some(r => 
+        (r.content_id || r.contentId || '').startsWith('platform-content-')
+      );
+      
+      // If it's a platform suggestion, return direct answer without LLM
+      if (isPlatformSuggestion) {
+        const platformResult = semanticResult.results.find(r => 
+          (r.content_id || r.contentId || '').startsWith('platform-content-')
+        );
+        
+        if (platformResult) {
+          const directAnswer = platformResult.content_text || platformResult.contentText || '';
+          
+          logger.info('[QUERY PROCESSING] ✅ PLATFORM SUGGESTION - Returning direct answer without LLM', {
+            query: query.substring(0, 100),
+            contentId: platformResult.content_id || platformResult.contentId,
+            answerLength: directAnswer.length,
+            similarity: semanticResult.bestSimilarity,
+            action: 'DIRECT_RESPONSE_NO_LLM'
+          });
+          
+          // Save query to database for analytics
+          await saveQueryToDatabase({
+            tenantId: actualTenantId,
+            userId: user_id || 'anonymous',
+            sessionId: session_id,
+            queryText: query,
+            answer: directAnswer,
+            confidenceScore: semanticResult.bestSimilarity,
+            processingTimeMs: Date.now() - startTime,
+            modelVersion: 'direct_platform_content',
+            isPersonalized: !!userProfile,
+            isCached: true,
+            metadata: {
+              flow: 'platform_suggestion_direct',
+              cache_hit: true,
+              grpc_skipped: true,
+              llm_skipped: true,
+              semantic_results_count: semanticResult.results.length,
+              best_similarity: semanticResult.bestSimilarity,
+              content_id: platformResult.content_id || platformResult.contentId
+            }
+          }).catch(err => {
+            logger.warn('Failed to save platform suggestion query to database', { error: err.message });
+          });
+          
+          // Return direct response - NO LLM, NO GRPC!
+          return {
+            success: true,
+            answer: directAnswer,
+            sources: [{
+              sourceId: platformResult.content_id || platformResult.contentId,
+              sourceType: platformResult.content_type || platformResult.contentType || 'documentation',
+              sourceMicroservice: platformResult.microservice_id || platformResult.microserviceId,
+              title: platformResult.metadata?.title || `Platform: ${platformResult.content_id || platformResult.contentId}`,
+              contentSnippet: directAnswer.substring(0, 200),
+              sourceUrl: platformResult.metadata?.url || `/documentation/${platformResult.content_id || platformResult.contentId}`,
+              relevanceScore: platformResult.similarity || semanticResult.bestSimilarity,
+              metadata: platformResult.metadata || {}
+            }],
+            confidence: semanticResult.bestSimilarity,
+            recommendations: null,
+            metadata: {
+              flow: 'platform_suggestion_direct',
+              llm_used: false,
+              grpc_called: false,
+              direct_content: true
+            }
+          };
+        }
+      }
+      
       logger.info('[QUERY PROCESSING] ✅ CACHE HIT! Using semantic search results', {
         query: query.substring(0, 100),
         similarity: semanticResult.bestSimilarity,
