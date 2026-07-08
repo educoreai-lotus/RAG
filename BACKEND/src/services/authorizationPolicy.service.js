@@ -143,7 +143,8 @@ export function logAuthorizationPolicyDecision(decision) {
     return;
   }
 
-  logger.info('[AuthorizationPolicy] decision', {
+  // Single-line JSON so Railway shows the full decision object in the message
+  const safeDecision = {
     mode: decision.mode,
     sourceServiceRaw: decision.sourceServiceRaw || undefined,
     sourceService: decision.sourceService,
@@ -158,5 +159,7 @@ export function logAuthorizationPolicyDecision(decision) {
     organizationId: decision.organizationId || undefined,
     route: decision.route || undefined,
     method: decision.method || undefined,
-  });
+  };
+
+  logger.info(`[AuthorizationPolicy] decision ${JSON.stringify(safeDecision)}`);
 }

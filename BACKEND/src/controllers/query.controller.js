@@ -182,7 +182,8 @@ export async function submitQuery(req, res, next) {
 
     // Phase 2: preserve source_service for future policy (log-only; no enforcement)
     const sourceService = source_service || null;
-    logger.info('[SourceService] received', {
+    // Single-line JSON so Railway shows the full object in the message
+    logger.info(`[SourceService] received ${JSON.stringify({
       source_service: sourceService || undefined,
       route: req.originalUrl || req.path,
       method: req.method,
@@ -191,7 +192,7 @@ export async function submitQuery(req, res, next) {
       authPrimaryRole: req.auth?.primaryRole || undefined,
       authIsSystemAdmin: req.auth?.isSystemAdmin,
       authIsTrainer: req.auth?.isTrainer,
-    });
+    })}`);
 
     // Phase 3: evaluate authorization policy in log-only mode (never blocks)
     const authorizationPolicy = evaluateAuthorizationPolicy({
