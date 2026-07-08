@@ -8,6 +8,10 @@ import { assessmentSupport, devlabSupport } from './microserviceSupport.controll
 import { validate, schemas } from '../utils/validation.util.js';
 import { logger } from '../utils/logger.util.js';
 import { validateAndFixTenantId, logTenantAtEntryPoint } from '../utils/tenant-validation.util.js';
+import {
+  evaluateAuthorizationPolicy,
+  logAuthorizationPolicyDecision,
+} from '../services/authorizationPolicy.service.js';
 import Joi from 'joi';
 
 /**
@@ -188,6 +192,17 @@ export async function submitQuery(req, res, next) {
       authIsSystemAdmin: req.auth?.isSystemAdmin,
       authIsTrainer: req.auth?.isTrainer,
     });
+
+    // Phase 3: evaluate authorization policy in log-only mode (never blocks)
+    const authorizationPolicy = evaluateAuthorizationPolicy({
+      auth: req.auth || null,
+      sourceService,
+      query,
+      route: req.originalUrl || req.path,
+      method: req.method,
+    });
+    req.authorizationPolicy = authorizationPolicy;
+    logAuthorizationPolicyDecision(authorizationPolicy);
 
     // Generate conversation_id if not provided
     const finalConversationId = conversation_id || generateConversationId();
