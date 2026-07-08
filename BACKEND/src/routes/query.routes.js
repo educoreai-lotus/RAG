@@ -6,6 +6,7 @@
 import express from 'express';
 import { submitQuery } from '../controllers/query.controller.js';
 import { optionalAuth } from '../middleware/auth.middleware.js';
+import { coordinatorAuthMiddleware } from '../middleware/coordinatorAuth.middleware.js';
 
 const router = express.Router();
 
@@ -61,7 +62,7 @@ router.options('/query', (req, res) => {
  * - If no token: Allows anonymous access
  * - If JWT token provided: Validates JWT (when implemented)
  */
-router.post('/query', optionalAuth, submitQuery);
+router.post('/query', coordinatorAuthMiddleware, optionalAuth, submitQuery);
 
 export default router;
 
