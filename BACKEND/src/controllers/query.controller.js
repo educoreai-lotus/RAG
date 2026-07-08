@@ -28,6 +28,8 @@ const queryRequestSchema = Joi.object({
   query: schemas.query, // Now max(2000) instead of max(1000)
   tenant_id: Joi.string().min(1).default('default'),
   conversation_id: Joi.string().optional(), // Optional conversation identifier for multi-turn conversations
+  // Phase 2: preserve host microservice label (optional; no enum/enforcement)
+  source_service: Joi.string().trim().max(100).optional(),
   context: Joi.object({
     user_id: schemas.userId, // Now default('anonymous') instead of required
     session_id: schemas.sessionId,
@@ -150,7 +152,7 @@ export async function submitQuery(req, res, next) {
       });
     }
 
-    const { query, tenant_id, conversation_id, context = {}, options = {} } = validation.value;
+    const { query, tenant_id, conversation_id, context = {}, options = {}, source_service } = validation.value;
 
     // CRITICAL: Validate and fix tenant_id at entry point
     // Priority: req.tenantId (from auth middleware) > tenant_id from body > default
@@ -174,6 +176,19 @@ export async function submitQuery(req, res, next) {
     // Extract user role from headers or context
     const user_role = context.role || req.headers['x-user-role'] || req.user?.role || null;
 
+    // Phase 2: preserve source_service for future policy (log-only; no enforcement)
+    const sourceService = source_service || null;
+    logger.info('[SourceService] received', {
+      source_service: sourceService || undefined,
+      route: req.originalUrl || req.path,
+      method: req.method,
+      hasVerifiedAuth: !!req.auth,
+      authValid: req.auth?.valid,
+      authPrimaryRole: req.auth?.primaryRole || undefined,
+      authIsSystemAdmin: req.auth?.isSystemAdmin,
+      authIsTrainer: req.auth?.isTrainer,
+    });
+
     // Generate conversation_id if not provided
     const finalConversationId = conversation_id || generateConversationId();
     
@@ -195,6 +210,7 @@ export async function submitQuery(req, res, next) {
       metaSource,
       supportModeFlag,
       conversation_id: finalConversationId,
+      source_service: sourceService || undefined,
     });
     const result = await processQuery({
       query,
@@ -204,6 +220,8 @@ export async function submitQuery(req, res, next) {
         user_id,
         session_id,
         role: user_role, // Pass role through context
+        // Phase 2: available for future policy; processQuery does not act on it yet
+        ...(sourceService ? { source_service: sourceService } : {}),
       },
       options,
       conversation_id: finalConversationId, // Pass conversation_id to processQuery

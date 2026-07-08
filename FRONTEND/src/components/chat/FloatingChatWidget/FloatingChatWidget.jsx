@@ -403,9 +403,11 @@ const FloatingChatWidget = ({
           sessionStorage.setItem('chatbot_session_id', sessionId);
           
           // CRITICAL: Log what we're sending
+          // source_service: host microservice from initializeEducoreBot (CHAT only; not support)
           const requestPayload = {
             query: text,
             tenant_id: currentTenantId,
+            ...(microservice ? { source_service: String(microservice) } : {}),
             context: {
               user_id: currentUserId,
               session_id: sessionId,
