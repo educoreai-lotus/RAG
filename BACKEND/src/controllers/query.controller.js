@@ -239,21 +239,6 @@ export async function submitQuery(req, res, next) {
       isTrainer: hasVerifiedAuth && req.auth.isTrainer === true,
     };
 
-    logger.info(
-      `[ANSWER DISCLOSURE DEBUG] controller_verified_auth ${JSON.stringify({
-        route: req.originalUrl || req.path,
-        queryPreview:
-          typeof query === 'string'
-            ? query.substring(0, 120)
-            : null,
-        conversationId: finalConversationId,
-        isAuthenticated: verifiedAuthContext.isAuthenticated,
-        primaryRole: verifiedAuthContext.primaryRole,
-        isSystemAdmin: verifiedAuthContext.isSystemAdmin,
-        isTrainer: verifiedAuthContext.isTrainer,
-      })}`
-    );
-
     const result = await processQuery({
       query,
       tenant_id: validatedTenantId, // Use validated tenant ID

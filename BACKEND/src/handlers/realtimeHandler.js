@@ -27,20 +27,6 @@ class RealtimeHandler {
         verifiedAuthContext = null
       } = input;
 
-      logger.info(
-        `[ANSWER DISCLOSURE DEBUG] realtime_handler_received_auth ${JSON.stringify({
-          sourceService: source_service,
-          queryPreview:
-            typeof user_query === 'string'
-              ? user_query.substring(0, 120)
-              : null,
-          isAuthenticated: verifiedAuthContext?.isAuthenticated === true,
-          primaryRole: verifiedAuthContext?.primaryRole || null,
-          isSystemAdmin: verifiedAuthContext?.isSystemAdmin === true,
-          isTrainer: verifiedAuthContext?.isTrainer === true
-        })}`
-      );
-
       // 🎯 DEBUG: Log handler entry
       console.log('🎯 [RealtimeHandler] handle() called!', {
         source_service: source_service,
@@ -82,17 +68,6 @@ class RealtimeHandler {
         user_query,
         schema,
         verifiedAuthContext
-      );
-
-      logger.info(
-        `[ANSWER DISCLOSURE DEBUG] realtime_handler_llm_result ${JSON.stringify({
-          sourceService: source_service,
-          queryPreview:
-            typeof user_query === 'string'
-              ? user_query.substring(0, 120)
-              : null,
-          answerLength: typeof llmResponse === 'string' ? llmResponse.length : null
-        })}`
       );
 
       // ═══════════════════════════════════════════════════════════════
