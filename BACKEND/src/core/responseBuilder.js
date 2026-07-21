@@ -12,6 +12,21 @@ class ResponseBuilder {
    * Build response for user query
    */
   async buildResponse(items, userQuery, schema, verifiedAuthContext = null) {
+    logger.info(
+      `[ANSWER DISCLOSURE DEBUG] response_builder_received_auth ${JSON.stringify({
+        service: schema?.service_name || null,
+        queryPreview:
+          typeof userQuery === 'string'
+            ? userQuery.substring(0, 120)
+            : null,
+        itemCount: Array.isArray(items) ? items.length : null,
+        isAuthenticated: verifiedAuthContext?.isAuthenticated === true,
+        primaryRole: verifiedAuthContext?.primaryRole || null,
+        isSystemAdmin: verifiedAuthContext?.isSystemAdmin === true,
+        isTrainer: verifiedAuthContext?.isTrainer === true
+      })}`
+    );
+
     // 📝 DEBUG: Log response building
     console.log('📝 [ResponseBuilder] Building response with context:', {
       itemCount: items.length,
@@ -74,12 +89,52 @@ class ResponseBuilder {
   async callLLM(items, userQuery, schema, formattedContext, verifiedAuthContext = null) {
     try {
       const serviceDescription = schema.description || schema.service_name;
+      const answerDisclosureBlock =
+        buildAnswerDisclosureBlock(verifiedAuthContext);
+
+      logger.info(
+        `[ANSWER DISCLOSURE DEBUG] disclosure_block_built ${JSON.stringify({
+          service: schema?.service_name || null,
+          queryPreview:
+            typeof userQuery === 'string'
+              ? userQuery.substring(0, 120)
+              : null,
+          blockLength: answerDisclosureBlock.length,
+          containsVerifiedUserContext:
+            answerDisclosureBlock.includes('VERIFIED USER CONTEXT'),
+          containsDisclosureRules:
+            answerDisclosureBlock.includes('ANSWER DISCLOSURE RULES'),
+          containsAuthenticatedStatus:
+            answerDisclosureBlock.includes('Authentication status: authenticated'),
+          containsRegularRole:
+            answerDisclosureBlock.includes(
+              `Primary role: ${verifiedAuthContext?.primaryRole || 'unavailable'}`
+            ),
+          containsSystemAdminFalse:
+            answerDisclosureBlock.includes('System administrator: false')
+        })}`
+      );
       
       const systemPrompt = `You are a helpful assistant providing information from ${serviceDescription}.
 Your task is to answer user questions based on the provided context.
 Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.
 
-${buildAnswerDisclosureBlock(verifiedAuthContext)}`;
+${answerDisclosureBlock}`;
+
+      logger.info(
+        `[ANSWER DISCLOSURE DEBUG] final_system_prompt ${JSON.stringify({
+          service: schema?.service_name || null,
+          queryPreview:
+            typeof userQuery === 'string'
+              ? userQuery.substring(0, 120)
+              : null,
+          systemPromptLength: systemPrompt.length,
+          includesDisclosureBlock:
+            systemPrompt.includes('ANSWER DISCLOSURE RULES'),
+          includesVerifiedUserContext:
+            systemPrompt.includes('VERIFIED USER CONTEXT')
+        })}`
+      );
 
       // 🚨 CRITICAL: The LLM MUST receive the full raw data as JSON context!
       const userPrompt = `Context from microservice:
@@ -89,6 +144,22 @@ ${JSON.stringify(items, null, 2)}
 Question: ${userQuery}
 
 Please answer based on the context above.`;
+
+      logger.info(
+        `[ANSWER DISCLOSURE DEBUG] llm_call_start ${JSON.stringify({
+          service: schema?.service_name || null,
+          queryPreview:
+            typeof userQuery === 'string'
+              ? userQuery.substring(0, 120)
+              : null,
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          temperature: 0.7,
+          maxTokens: 1000,
+          systemPromptIncludesDisclosure:
+            systemPrompt.includes('ANSWER DISCLOSURE RULES'),
+          itemCount: Array.isArray(items) ? items.length : null
+        })}`
+      );
 
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -101,6 +172,27 @@ Please answer based on the context above.`;
       });
 
       const answer = completion.choices[0]?.message?.content || 'I could not generate a response.';
+
+      if (
+        schema?.service_name === 'managementreporting-service' &&
+        verifiedAuthContext?.isAuthenticated === true &&
+        verifiedAuthContext?.isSystemAdmin === false
+      ) {
+        logger.info(
+          `[ANSWER DISCLOSURE DEBUG] llm_raw_answer ${JSON.stringify({
+            service: schema?.service_name || null,
+            queryPreview:
+              typeof userQuery === 'string'
+                ? userQuery.substring(0, 120)
+                : null,
+            answer,
+            answerLength: answer.length,
+            isAuthenticated: verifiedAuthContext?.isAuthenticated === true,
+            primaryRole: verifiedAuthContext?.primaryRole || null,
+            isSystemAdmin: verifiedAuthContext?.isSystemAdmin === true
+          })}`
+        );
+      }
 
       logger.debug('LLM response generated', {
         service: schema.service_name,
@@ -115,6 +207,17 @@ Please answer based on the context above.`;
         query: userQuery,
         error: error.message
       });
+
+      logger.info(
+        `[ANSWER DISCLOSURE DEBUG] llm_fallback_used ${JSON.stringify({
+          service: schema?.service_name || null,
+          queryPreview:
+            typeof userQuery === 'string'
+              ? userQuery.substring(0, 120)
+              : null,
+          errorMessage: error?.message || 'unknown_error'
+        })}`
+      );
 
       // Fallback: return formatted context
       return `Based on ${schema.description || schema.service_name}:\n\n${formattedContext}`;

@@ -1744,6 +1744,21 @@ Please provide a helpful answer based on the context above.`;
               });
               
               // Use realtimeHandler for proper extraction and response building
+              logger.info(
+                `[ANSWER DISCLOSURE DEBUG] process_query_forwarding_to_realtime ${JSON.stringify({
+                  queryPreview:
+                    typeof query === 'string'
+                      ? query.substring(0, 120)
+                      : null,
+                  conversationId: conversation_id,
+                  sourceService: serviceNameToUse,
+                  isAuthenticated: verifiedAuthContext?.isAuthenticated === true,
+                  primaryRole: verifiedAuthContext?.primaryRole || null,
+                  isSystemAdmin: verifiedAuthContext?.isSystemAdmin === true,
+                  isTrainer: verifiedAuthContext?.isTrainer === true,
+                })}`
+              );
+
               const handlerResult = await realtimeHandler.handle({
                 source_service: serviceNameToUse,
                 user_query: query,
@@ -1752,6 +1767,22 @@ Please provide a helpful answer based on the context above.`;
                 response_envelope: responseEnvelope, // ✅ CORRECT FORMAT!
                 verifiedAuthContext,
               });
+
+              logger.info(
+                `[ANSWER DISCLOSURE DEBUG] realtime_handler_result_received ${JSON.stringify({
+                  queryPreview:
+                    typeof query === 'string'
+                      ? query.substring(0, 120)
+                      : null,
+                  conversationId: conversation_id,
+                  sourceService: serviceNameToUse,
+                  success: handlerResult?.success === true,
+                  answerLength:
+                    typeof handlerResult?.answer === 'string'
+                      ? handlerResult.answer.length
+                      : null,
+                })}`
+              );
             
               if (handlerResult.success && handlerResult.answer) {
                 logger.info('✅ [QUERY PROCESSING] Handler generated response successfully', {
