@@ -30,6 +30,7 @@ import { shouldSaveResponse } from '../utils/responseValidation.util.js';
 import realtimeHandler from '../handlers/realtimeHandler.js';
 import schemaLoader from '../core/schemaLoader.js';
 import responseBuilder from '../core/responseBuilder.js';
+import { buildAnswerDisclosureBlock } from '../utils/answerDisclosure.util.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -126,7 +127,7 @@ function generateNoResultsMessage(userQuery, filteringContext) {
  * @param {string} params.conversation_id - Optional conversation identifier for multi-turn conversations
  * @returns {Promise<Object>} Query response with answer, sources, confidence, metadata, conversation_id
  */
-export async function processQuery({ query, tenant_id, context = {}, options = {}, conversation_id = null }) {
+export async function processQuery({ query, tenant_id, context = {}, options = {}, conversation_id = null, verifiedAuthContext = null }) {
   const startTime = Date.now();
   const { user_id, session_id } = context;
   const {
@@ -253,7 +254,8 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
         const cachedResponse = await buildResponseFromSemanticResults(
           semanticResult.results,
           query,
-          actualTenantId
+          actualTenantId,
+          verifiedAuthContext
         );
         
         if (cachedResponse && cachedResponse.answer) {
@@ -459,7 +461,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
       const completion = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
-          { role: 'system', content: 'You are a friendly assistant. Provide a concise, helpful answer.' },
+          { role: 'system', content: `You are a friendly assistant. Provide a concise, helpful answer.
+
+${buildAnswerDisclosureBlock(verifiedAuthContext)}` },
           ...conversationHistory, // Include conversation history
           { role: 'user', content: query },
         ],
@@ -1442,7 +1446,9 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           const systemPrompt = `You are a helpful assistant providing information based on cached data from the vector database.
 Your task is to answer user questions based on the provided context.
 Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.
-Always base your answer on the provided context.`;
+Always base your answer on the provided context.
+
+${buildAnswerDisclosureBlock(verifiedAuthContext)}`;
 
           const userPrompt = `Context from cached data:
 ${cachedContext}
@@ -1744,6 +1750,7 @@ Please provide a helpful answer based on the context above.`;
                 user_id: user_id,
                 tenant_id: actualTenantId,
                 response_envelope: responseEnvelope, // ✅ CORRECT FORMAT!
+                verifiedAuthContext,
               });
             
               if (handlerResult.success && handlerResult.answer) {
@@ -2143,6 +2150,7 @@ Strict RAG rules you MUST follow:
 - Use ONLY the content under "Context from knowledge base".
 - Do NOT use outside knowledge or make assumptions.
 - If the context does not contain the requested information, clearly state that EDUCORE does not include it and do not fabricate details.
+${buildAnswerDisclosureBlock(verifiedAuthContext)}
 ${personalizationContext ? `\nPersonalization hints: ${personalizationContext}` : ''}`;
     
     const userPrompt = `Context from knowledge base:\n${retrievedContext}\n\nQuestion: ${query}\n\nAnswer ONLY with facts from the context above. If the context is insufficient, say so (without adding external knowledge).`;
@@ -2621,7 +2629,7 @@ async function performSemanticSearch(query, tenantId) {
  * @param {string} tenantId - Tenant ID
  * @returns {Promise<Object|null>} Response with answer or null if failed
  */
-async function buildResponseFromSemanticResults(results, query, tenantId) {
+async function buildResponseFromSemanticResults(results, query, tenantId, verifiedAuthContext = null) {
   try {
     if (!results || results.length === 0) {
       logger.warn('[SEMANTIC RESPONSE] No results to build from');
@@ -2713,7 +2721,9 @@ Rules:
 3. If the context doesn't have enough information, say so
 4. Be concise but complete
 5. Use bullet points or numbered lists when appropriate
-6. Include specific details from the context (numbers, names, dates, etc.)`;
+6. Include specific details from the context (numbers, names, dates, etc.)
+
+${buildAnswerDisclosureBlock(verifiedAuthContext)}`;
 
     const userPrompt = `Context:
 ${contextString}

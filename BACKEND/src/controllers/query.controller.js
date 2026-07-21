@@ -228,6 +228,17 @@ export async function submitQuery(req, res, next) {
       conversation_id: finalConversationId,
       source_service: sourceService || undefined,
     });
+
+    const hasVerifiedAuth = req.auth?.valid === true;
+    const verifiedAuthContext = {
+      isAuthenticated: hasVerifiedAuth,
+      directoryUserId: hasVerifiedAuth ? req.auth.directoryUserId || null : null,
+      organizationId: hasVerifiedAuth ? req.auth.organizationId || null : null,
+      primaryRole: hasVerifiedAuth ? req.auth.primaryRole || null : null,
+      isSystemAdmin: hasVerifiedAuth && req.auth.isSystemAdmin === true,
+      isTrainer: hasVerifiedAuth && req.auth.isTrainer === true,
+    };
+
     const result = await processQuery({
       query,
       tenant_id: validatedTenantId, // Use validated tenant ID
@@ -241,6 +252,7 @@ export async function submitQuery(req, res, next) {
       },
       options,
       conversation_id: finalConversationId, // Pass conversation_id to processQuery
+      verifiedAuthContext,
     });
 
     // Return response - ensure it's JSON serializable

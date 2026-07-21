@@ -23,7 +23,8 @@ class RealtimeHandler {
         user_query,
         user_id,
         tenant_id,
-        response_envelope
+        response_envelope,
+        verifiedAuthContext = null
       } = input;
 
       // 🎯 DEBUG: Log handler entry
@@ -65,7 +66,8 @@ class RealtimeHandler {
       const llmResponse = await responseBuilder.buildResponse(
         items,
         user_query,
-        schema
+        schema,
+        verifiedAuthContext
       );
 
       // ═══════════════════════════════════════════════════════════════

@@ -5,12 +5,13 @@
 
 import { openai } from '../config/openai.config.js';
 import { logger } from '../utils/logger.util.js';
+import { buildAnswerDisclosureBlock } from '../utils/answerDisclosure.util.js';
 
 class ResponseBuilder {
   /**
    * Build response for user query
    */
-  async buildResponse(items, userQuery, schema) {
+  async buildResponse(items, userQuery, schema, verifiedAuthContext = null) {
     // 📝 DEBUG: Log response building
     console.log('📝 [ResponseBuilder] Building response with context:', {
       itemCount: items.length,
@@ -23,7 +24,7 @@ class ResponseBuilder {
     const context = this.buildContext(items, schema);
 
     // Call LLM to generate response - MUST pass raw items for full data context
-    const response = await this.callLLM(items, userQuery, schema, context);
+    const response = await this.callLLM(items, userQuery, schema, context, verifiedAuthContext);
 
     return response;
   }
@@ -70,13 +71,15 @@ class ResponseBuilder {
    * Call LLM to generate response
    * MUST include raw data as JSON for full context
    */
-  async callLLM(items, userQuery, schema, formattedContext) {
+  async callLLM(items, userQuery, schema, formattedContext, verifiedAuthContext = null) {
     try {
       const serviceDescription = schema.description || schema.service_name;
       
       const systemPrompt = `You are a helpful assistant providing information from ${serviceDescription}.
 Your task is to answer user questions based on the provided context.
-Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.`;
+Be concise, accurate, and helpful. If the context doesn't contain enough information, say so.
+
+${buildAnswerDisclosureBlock(verifiedAuthContext)}`;
 
       // 🚨 CRITICAL: The LLM MUST receive the full raw data as JSON context!
       const userPrompt = `Context from microservice:
