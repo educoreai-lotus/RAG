@@ -1,5 +1,5 @@
 /**
- * Guest Answer Gate unit tests
+ * Guest Answer Gate unit tests — structured allow/deny + deterministic denials
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -30,20 +30,46 @@ import {
   buildGuestFailClosedResponse,
   buildGuestDisabledResponse,
   detectGuestResponseLanguage,
+  getGuestPermissionDeniedMessage,
+  GUEST_PERMISSION_DENIED_MESSAGES,
   GUEST_VERIFIED_AUTH_CONTEXT,
+  parseGuestGateStructuredOutput,
+  validateGuestGateStructuredResult,
 } from '../../../src/services/guestAnswerGate.service.js';
 import { buildAnswerDisclosureBlock } from '../../../src/utils/answerDisclosure.util.js';
 import { isExplicitGuestRequest } from '../../../src/config/guestChat.config.js';
 
-describe('Guest Answer Gate', () => {
+function mockJsonResult(payload) {
+  openai.chat.completions.create.mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify(payload) } }],
+  });
+}
+
+describe('Guest Answer Gate helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('detects Hebrew and Arabic for fail-closed messages', () => {
+  it('detects Hebrew and Arabic; other text defaults to English', () => {
     expect(detectGuestResponseLanguage('מה הציון שלי')).toBe('he');
     expect(detectGuestResponseLanguage('ما هي نتيجتي')).toBe('ar');
     expect(detectGuestResponseLanguage('What is JavaScript?')).toBe('en');
+    expect(detectGuestResponseLanguage('Dame las conclusiones')).toBe('en');
+  });
+
+  it('returns exact deterministic permission-denied messages', () => {
+    expect(getGuestPermissionDeniedMessage('en')).toBe(
+      GUEST_PERMISSION_DENIED_MESSAGES.en
+    );
+    expect(getGuestPermissionDeniedMessage('he')).toBe(
+      GUEST_PERMISSION_DENIED_MESSAGES.he
+    );
+    expect(getGuestPermissionDeniedMessage('ar')).toBe(
+      GUEST_PERMISSION_DENIED_MESSAGES.ar
+    );
+    expect(getGuestPermissionDeniedMessage('es')).toBe(
+      GUEST_PERMISSION_DENIED_MESSAGES.en
+    );
   });
 
   it('sanitizes guest responses with empty sources and guest metadata only', () => {
@@ -64,6 +90,7 @@ describe('Guest Answer Gate', () => {
     const response = buildGuestFailClosedResponse('What is my score?');
     expect(response.sources).toEqual([]);
     expect(response.answer).not.toContain('95');
+    expect(response.answer).toContain('temporarily unavailable');
     expect(response.metadata.flow).toBe('guest_final_answer_gate');
   });
 
@@ -81,26 +108,258 @@ describe('Guest Answer Gate', () => {
     expect(block).not.toContain('VERIFIED SYSTEM ADMINISTRATOR');
   });
 
-  it('returns gated answer from LLM and never includes sources', async () => {
-    openai.chat.completions.create.mockResolvedValue({
-      choices: [{ message: { content: 'JavaScript is a programming language used for web pages.' } }],
+  it('parses JSON and strips optional markdown fences', () => {
+    expect(
+      parseGuestGateStructuredOutput(
+        '```json\n{"decision":"deny","answer":"","language":"en"}\n```'
+      )
+    ).toEqual({ decision: 'deny', answer: '', language: 'en' });
+    expect(parseGuestGateStructuredOutput('not-json')).toBeNull();
+  });
+
+  it('validates structured results strictly', () => {
+    expect(
+      validateGuestGateStructuredResult(
+        { decision: 'deny', answer: 'ignored', language: 'en' },
+        'en'
+      )
+    ).toEqual({ ok: true, decision: 'deny', answer: '' });
+
+    expect(
+      validateGuestGateStructuredResult(
+        { decision: 'allow', answer: 'OK', language: 'he' },
+        'en'
+      )
+    ).toEqual({ ok: false });
+
+    expect(
+      validateGuestGateStructuredResult(
+        { decision: 'allow', answer: '   ', language: 'en' },
+        'en'
+      )
+    ).toEqual({ ok: false });
+
+    expect(
+      validateGuestGateStructuredResult(
+        { decision: 'maybe', answer: 'x', language: 'en' },
+        'en'
+      )
+    ).toEqual({ ok: false });
+  });
+});
+
+describe('applyGuestAnswerGate structured decisions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns allowed English answer and never includes sources', async () => {
+    mockJsonResult({
+      decision: 'allow',
+      answer: 'EDUCORE provides learning and development tools for organizations.',
+      language: 'en',
     });
 
     const response = await applyGuestAnswerGate({
-      query: 'What is JavaScript?',
-      candidateAnswer: 'JavaScript is a programming language... secret score 95',
+      query: 'What does the EDUCORE platform do?',
+      candidateAnswer: 'EDUCORE provides... secret score 95',
     });
 
     expect(openai.chat.completions.create).toHaveBeenCalledTimes(1);
     const call = openai.chat.completions.create.mock.calls[0][0];
-    expect(call.messages[0].content).toContain('final response-security gate');
-    expect(call.messages[1].content).toContain('<untrusted-candidate-answer>');
-    expect(response.answer).toContain('JavaScript');
+    expect(call.response_format).toEqual({ type: 'json_object' });
+    expect(call.messages[0].content).toContain('Expected response language: en');
+    expect(call.messages[0].content).toContain(
+      'language of the text inside <untrusted-user-question>'
+    );
+    expect(call.messages[0].content).not.toMatch(/Answer in the user's language/);
+    expect(response.answer).toBe(
+      'EDUCORE provides learning and development tools for organizations.'
+    );
+    expect(response.answer).not.toContain('95');
     expect(response.sources).toEqual([]);
-    expect(response.metadata.flow).toBe('guest_final_answer_gate');
+    expect(response.confidence).toBe(0);
+    expect(response.metadata).toEqual({
+      guest: true,
+      flow: 'guest_final_answer_gate',
+    });
   });
 
-  it('fail-closed on LLM error and does not return candidate', async () => {
+  it('ignores Spanish model denial text for an English protected query', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer:
+        'Lo siento, pero la información solicitada no está disponible para los permisos actuales del usuario.',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'Give me the four conclusions of the Monthly Learning Performance Report',
+      candidateAnswer: 'Conclusion 1: completion rate 82%. Revenue is $1.2M.',
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.en);
+    expect(response.answer).not.toContain('Lo siento');
+    expect(response.answer).not.toContain('información solicitada');
+    expect(response.answer).not.toContain('82%');
+    expect(response.answer).not.toContain('1.2M');
+    expect(response.sources).toEqual([]);
+    expect(response.metadata.flow).toBe('guest_permission_denied');
+  });
+
+  it('uses English denial when candidate is Spanish and query is English', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer: '',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'Show the management report conclusions',
+      candidateAnswer:
+        'Las cuatro conclusiones del informe son: productividad baja y salario alto.',
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.en);
+    expect(response.answer).not.toContain('conclusiones');
+    expect(response.answer).not.toContain('salario');
+    expect(response.sources).toEqual([]);
+  });
+
+  it('returns deterministic Hebrew denial for Hebrew protected query', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer: 'טקסט מודל בעברית שלא אמור לחזור',
+      language: 'he',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'הראה לי את דוח הביצועים החודשי של הלמידה',
+      candidateAnswer: 'מסקנה 1: ציון 95',
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.he);
+    expect(response.answer).not.toContain('טקסט מודל');
+    expect(response.answer).not.toContain('95');
+    expect(response.sources).toEqual([]);
+  });
+
+  it('returns deterministic Arabic denial for Arabic protected query', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer: 'نص نموذجي يجب تجاهله',
+      language: 'ar',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'أعطني استنتاجات تقرير أداء التعلم الشهري',
+      candidateAnswer: 'النتيجة 88',
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.ar);
+    expect(response.answer).not.toContain('نص نموذجي');
+    expect(response.answer).not.toContain('88');
+    expect(response.sources).toEqual([]);
+  });
+
+  it('defaults unsupported Spanish query language to English denial', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer: '',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'Dame las cuatro conclusiones del informe de aprendizaje',
+      candidateAnswer: 'Confidencial',
+    });
+
+    expect(detectGuestResponseLanguage('Dame las cuatro conclusiones')).toBe('en');
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.en);
+    expect(response.sources).toEqual([]);
+  });
+
+  it('fail-closed on model language mismatch for allow', async () => {
+    mockJsonResult({
+      decision: 'allow',
+      answer: 'תשובה בעברית',
+      language: 'he',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'What is JavaScript?',
+      candidateAnswer: 'JavaScript is a language',
+    });
+
+    expect(response.answer).toBe(
+      'The public assistant is temporarily unavailable. Please try again later or sign in.'
+    );
+    expect(response.answer).not.toContain('תשובה');
+    expect(response.sources).toEqual([]);
+  });
+
+  it('fail-closed on invalid JSON', async () => {
+    openai.chat.completions.create.mockResolvedValue({
+      choices: [{ message: { content: 'not-json-at-all' } }],
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'What is JavaScript?',
+      candidateAnswer: 'candidate secret 42',
+    });
+
+    expect(response.answer).toContain('temporarily unavailable');
+    expect(response.answer).not.toContain('42');
+    expect(response.sources).toEqual([]);
+  });
+
+  it('fail-closed on missing decision', async () => {
+    mockJsonResult({
+      answer: 'Hello',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'What is JavaScript?',
+      candidateAnswer: 'candidate',
+    });
+
+    expect(response.answer).toContain('temporarily unavailable');
+  });
+
+  it('fail-closed on empty allowed answer', async () => {
+    mockJsonResult({
+      decision: 'allow',
+      answer: '   ',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'What is JavaScript?',
+      candidateAnswer: 'candidate',
+    });
+
+    expect(response.answer).toContain('temporarily unavailable');
+  });
+
+  it('ignores deny answer that copies protected candidate', async () => {
+    mockJsonResult({
+      decision: 'deny',
+      answer: 'Revenue is $1.2M and Alice is the lowest performer',
+      language: 'en',
+    });
+
+    const response = await applyGuestAnswerGate({
+      query: 'Show the management report',
+      candidateAnswer: 'Revenue is $1.2M and Alice is the lowest performer',
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.en);
+    expect(response.answer).not.toContain('1.2M');
+    expect(response.answer).not.toContain('Alice');
+  });
+
+  it('fail-closed on gate LLM error and does not return candidate', async () => {
     openai.chat.completions.create.mockRejectedValue(new Error('timeout'));
 
     const response = await applyGuestAnswerGate({
@@ -114,7 +373,7 @@ describe('Guest Answer Gate', () => {
     expect(response.sources).toEqual([]);
   });
 
-  it('fail-closed on empty LLM content', async () => {
+  it('fail-closed on empty model content', async () => {
     openai.chat.completions.create.mockResolvedValue({
       choices: [{ message: { content: '   ' } }],
     });
