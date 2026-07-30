@@ -1,9 +1,9 @@
 /**
  * EDUCORE Bot Embedding Script
- * 
+ *
  * This script allows microservices to embed the chatbot widget
  * by adding a simple SCRIPT tag to their pages.
- * 
+ *
  * Usage:
  * 1. Add container: <div id="edu-bot-container"></div>
  * 2. Load script: <script src="https://your-rag-service.com/embed/bot.js"></script>
@@ -25,17 +25,59 @@
   let botConfig = null;
   let botInstance = null;
 
+  var GUEST_SOURCE_SERVICE = 'NAUTH_PUBLIC';
+  var GUEST_SESSION_STORAGE_KEY = 'educore_guest_session_id';
+
+  function hasRealToken(token) {
+    return typeof token === 'string' && token.trim().length > 0;
+  }
+
+  function clearRagAuthStorage() {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('tenant_id');
+  }
+
+  function clearGuestSessionStorage() {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.removeItem(GUEST_SESSION_STORAGE_KEY);
+  }
+
+  function createGuestSessionId() {
+    var random =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : String(Date.now()) + '_' + Math.random().toString(36).slice(2, 12);
+    return 'guest_session_' + random;
+  }
+
+  function ensureGuestSessionId() {
+    if (typeof sessionStorage === 'undefined') {
+      return createGuestSessionId();
+    }
+    var existing = sessionStorage.getItem(GUEST_SESSION_STORAGE_KEY);
+    if (existing && existing.indexOf('guest_session_') === 0) {
+      return existing;
+    }
+    var created = createGuestSessionId();
+    sessionStorage.setItem(GUEST_SESSION_STORAGE_KEY, created);
+    return created;
+  }
+
   /**
    * Initialize the EDUCORE Bot widget
    * @param {Object} config - Configuration object
    * @param {string} config.microservice - Microservice identifier
    *   SUPPORT MODE: "ASSESSMENT", "DEVLAB"
-   *   CHAT MODE: "DIRECTORY", "COURSE_BUILDER", "CONTENT_STUDIO", "SKILLS_ENGINE", 
+   *   CHAT MODE: "DIRECTORY", "COURSE_BUILDER", "CONTENT_STUDIO", "SKILLS_ENGINE",
    *              "LEARNER_AI", "LEARNING_ANALYTICS", "HR_MANAGEMENT_REPORTING", or any other name
-   * @param {string} config.userId - Authenticated user ID
-   * @param {string} config.token - JWT or session token
+   *   GUEST CHAT: "NAUTH_PUBLIC" with allowGuest: true (no token)
+   * @param {string} [config.userId] - Authenticated user ID (required unless guest mode)
+   * @param {string} [config.token] - JWT or session token (required unless guest mode)
+   * @param {boolean} [config.allowGuest] - Explicit guest mode for NAUTH_PUBLIC only
    * @param {string} config.container - CSS selector for mount point (default: "#edu-bot-container")
-   * @param {string} config.tenantId - Optional tenant ID (default: "default")
+   * @param {string} config.tenantId - Optional tenant ID (default: "default") for authenticated hosts
    */
   window.initializeEducoreBot = function(config) {
     if (!config) {
@@ -45,20 +87,17 @@
 
     console.log('🤖 [EDUCORE Bot] Initializing with config:', config);
 
-    const { microservice, userId, token, container = '#edu-bot-container', tenantId = 'default' } = config;
-    
-    // ✅ SAVE CONFIG GLOBALLY
-    window.educoreBotConfig = {
-      autoOpen: config.autoOpen !== undefined ? config.autoOpen : false,  // Default to false
-      containerId: container.replace('#', ''),
-      container: container,
-      apiUrl: config.apiUrl,
-      tenantId: tenantId || 'default',
-      userId: userId || 'anonymous',
-      microservice: microservice,
-    };
-    
-    console.log('✅ [EDUCORE Bot] Config saved:', window.educoreBotConfig);
+    var microservice = config.microservice;
+    var userId = config.userId;
+    var token = config.token;
+    var container = config.container || '#edu-bot-container';
+    var tenantId = config.tenantId !== undefined ? config.tenantId : 'default';
+    var allowGuest = config.allowGuest === true;
+    var realToken = hasRealToken(token);
+    var microserviceUpper = microservice ? String(microservice).toUpperCase() : '';
+    // Real token always wins; allowGuest alone never activates guest mode.
+    var isGuestMode =
+      allowGuest && !realToken && microserviceUpper === GUEST_SOURCE_SERVICE;
 
     // Validate required parameters
     if (!microservice) {
@@ -66,48 +105,86 @@
       return;
     }
 
-    if (!userId) {
-      console.error('EDUCORE Bot: "userId" parameter is required');
-      return;
+    if (!isGuestMode) {
+      if (!userId) {
+        console.error('EDUCORE Bot: "userId" parameter is required');
+        return;
+      }
+
+      if (!token) {
+        console.error('EDUCORE Bot: "token" parameter is required');
+        return;
+      }
     }
 
-    if (!token) {
-      console.error('EDUCORE Bot: "token" parameter is required');
-      return;
+    // Prevent duplicate widgets on re-init
+    if (botInstance) {
+      window.destroyEducoreBot();
     }
+
+    // ✅ SAVE CONFIG GLOBALLY
+    window.educoreBotConfig = {
+      autoOpen: config.autoOpen !== undefined ? config.autoOpen : false,
+      containerId: container.replace('#', ''),
+      container: container,
+      apiUrl: config.apiUrl,
+      microservice: microservice,
+      guestMode: isGuestMode,
+      tenantId: isGuestMode ? null : (tenantId || 'default'),
+      userId: isGuestMode ? null : (userId || 'anonymous'),
+    };
+
+    console.log('✅ [EDUCORE Bot] Config saved:', window.educoreBotConfig);
 
     // Microservices that use SUPPORT MODE (forward to microservice API)
-    const supportModeMicroservices = ['ASSESSMENT', 'DEVLAB'];
-    
-    // All other microservices use CHAT MODE (RAG - regular chat)
-    // Supported CHAT MODE microservices:
-    // - DIRECTORY
-    // - COURSE_BUILDER
-    // - CONTENT_STUDIO
-    // - SKILLS_ENGINE
-    // - LEARNER_AI
-    // - LEARNING_ANALYTICS
-    // - HR_MANAGEMENT_REPORTING
-    // - Any other microservice name (case-insensitive)
-    // 
-    // Assessment and DevLab → SUPPORT MODE
-    // All others → CHAT MODE (RAG)
+    var supportModeMicroservices = ['ASSESSMENT', 'DEVLAB'];
 
     // Locate the mount point
-    const mountElement = document.querySelector(container);
+    var mountElement = document.querySelector(container);
     if (!mountElement) {
-      console.error(`EDUCORE Bot: Container "${container}" not found in DOM`);
+      console.error('EDUCORE Bot: Container "' + container + '" not found in DOM');
       return;
     }
 
-    // Store configuration
+    if (isGuestMode) {
+      clearRagAuthStorage();
+      var guestSessionId = ensureGuestSessionId();
+
+      botConfig = {
+        microservice: microserviceUpper,
+        userId: null,
+        token: null,
+        tenantId: null,
+        guestMode: true,
+        guestSessionId: guestSessionId,
+        container: container,
+        mountElement: mountElement,
+      };
+
+      startBotWidget({
+        mode: 'chat',
+        microservice: botConfig.microservice,
+        userId: null,
+        token: null,
+        tenantId: null,
+        guestMode: true,
+        guestSessionId: guestSessionId,
+        mountPoint: mountElement,
+      });
+      return;
+    }
+
+    // Authenticated path (unchanged behavior): clear guest-only session first
+    clearGuestSessionStorage();
+
     botConfig = {
-      microservice: microservice.toUpperCase(),
-      userId,
-      token,
-      tenantId,
-      container,
-      mountElement,
+      microservice: microserviceUpper,
+      userId: userId,
+      token: token,
+      tenantId: tenantId,
+      guestMode: false,
+      container: container,
+      mountElement: mountElement,
     };
 
     // Store token for API calls
@@ -120,8 +197,8 @@
     }
 
     // Determine mode: SUPPORT MODE for Assessment/DevLab, CHAT MODE for others
-    const isSupportMode = supportModeMicroservices.includes(botConfig.microservice);
-    
+    var isSupportMode = supportModeMicroservices.indexOf(botConfig.microservice) !== -1;
+
     // Start the bot widget
     startBotWidget({
       mode: isSupportMode ? 'support' : 'chat',
@@ -129,6 +206,7 @@
       userId: botConfig.userId,
       token: botConfig.token,
       tenantId: botConfig.tenantId,
+      guestMode: false,
       mountPoint: mountElement,
     });
   };
@@ -138,7 +216,7 @@
    * @param {Object} options - Widget options
    */
   function startBotWidget(options) {
-    const { mode, microservice, userId, token, tenantId, mountPoint } = options;
+    const { mode, microservice, userId, token, tenantId, mountPoint, guestMode = false, guestSessionId = null } = options;
 
     // Determine mode based on microservice
     // SUPPORT MODE: Assessment, DevLab → forward to microservice API
@@ -157,7 +235,7 @@
       }
     } else {
       // CHAT MODE (RAG) - for all other microservices
-      // Supports: DIRECTORY, COURSE_BUILDER, CONTENT_STUDIO, SKILLS_ENGINE, 
+      // Supports: DIRECTORY, COURSE_BUILDER, CONTENT_STUDIO, SKILLS_ENGINE,
       //           LEARNER_AI, LEARNING_ANALYTICS, HR_MANAGEMENT_REPORTING, and any other microservice
       widgetMode = 'GENERAL'; // Use general RAG mode
     }
@@ -169,7 +247,7 @@
     // Load the bot React component
     // Note: This assumes the bot bundle is already loaded
     // In production, you would load the bundle dynamically here
-    
+
     // For now, we'll create a placeholder that will be replaced
     // when the React component loads
     mountPoint.innerHTML = '<div id="' + botId + '-root"></div>';
@@ -180,6 +258,8 @@
       config: botConfig,
       widgetMode,
       mode: mode, // 'support' or 'chat'
+      guestMode: !!guestMode,
+      guestSessionId: guestSessionId || null,
       mountPoint: mountPoint.querySelector(`#${botId}-root`),
     };
 
@@ -190,7 +270,8 @@
         microservice,
         widgetMode,
         mode: mode,
-        userId,
+        userId: guestMode ? null : userId,
+        guestMode: !!guestMode,
       },
     });
     document.dispatchEvent(initEvent);
@@ -205,10 +286,10 @@
    */
   function loadBotBundle(instance) {
     // Get the base URL from the current script
-    const scriptSrc = document.currentScript?.src || 
+    const scriptSrc = document.currentScript?.src ||
                      document.querySelector('script[src*="bot.js"]')?.src;
     const baseUrl = scriptSrc ? scriptSrc.substring(0, scriptSrc.lastIndexOf('/')) : '';
-    
+
     // CRITICAL: Set backend URL globally so microservices can use it
     // Extract backend URL from script src (e.g., https://rag-backend.com/embed/bot.js -> https://rag-backend.com)
     if (baseUrl && !window.EDUCORE_BACKEND_URL) {
@@ -218,7 +299,7 @@
       console.log('🤖 EDUCORE Bot: Backend URL detected:', backendUrl);
       console.log('🤖 EDUCORE Bot: Microservices can use window.EDUCORE_BACKEND_URL for API calls');
     }
-    
+
     const bundleUrl = `${baseUrl}/bot-bundle.js`;
 
     // Check if bundle is already loaded
@@ -251,23 +332,23 @@
       console.error('EDUCORE Bot: React initialization function not found.');
       return;
     }
-    
+
     // Get the mount point
     const mountPoint = instance.mountPoint;
-    
+
     if (!mountPoint) {
       console.error('EDUCORE Bot: Mount point not found');
       return;
     }
-    
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // NO SHADOW DOM - Just create container
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
+
     const botContainer = document.createElement('div');
     botContainer.id = 'bot-root';
     mountPoint.appendChild(botContainer);
-    
+
     // Initialize React in regular DOM
     window.EDUCORE_BOT_INIT_REACT({
       mountPoint: botContainer,
@@ -275,7 +356,7 @@
       widgetMode: instance.widgetMode,
       mode: instance.mode,
     });
-    
+
     console.log('✅ EDUCORE Bot: Initialized (regular DOM)');
   }
 
@@ -283,19 +364,31 @@
    * Destroy the bot instance
    */
   window.destroyEducoreBot = function() {
+    const wasGuest = !!(botInstance && botInstance.guestMode);
+
     if (botInstance) {
       // Clean up React component if needed
       if (window.EDUCORE_BOT_DESTROY) {
         window.EDUCORE_BOT_DESTROY(botInstance.id);
       }
-      
+
       // Clear mount point
       if (botInstance.mountPoint && botInstance.mountPoint.parentElement) {
         botInstance.mountPoint.parentElement.innerHTML = '';
       }
-      
+
       botInstance = null;
       botConfig = null;
+    }
+
+    // Guest session is always safe to clear; RAG auth keys only when destroying a guest instance
+    // so authenticated destroy behavior remains unchanged.
+    clearGuestSessionStorage();
+    if (wasGuest) {
+      clearRagAuthStorage();
+      if (window.educoreBotConfig) {
+        window.educoreBotConfig = null;
+      }
     }
   };
 
@@ -312,7 +405,7 @@
     if (document.getElementById('educore-bot-isolation')) {
       return;
     }
-    
+
     const isolationStyles = document.createElement('style');
     isolationStyles.id = 'educore-bot-isolation';
     isolationStyles.textContent = `
@@ -364,7 +457,7 @@
       #edu-bot-container .w-full {
         width: 100% !important;
       }
-      
+
       /* Responsive width - min() function for ChatPanel */
       /* Matches Tailwind arbitrary values like w-[min(28rem,calc(100vw-3rem))] */
       /* Use multiple selectors to catch different class name formats */
@@ -374,7 +467,7 @@
         width: min(28rem, calc(100vw - 3rem)) !important;
         max-width: calc(100vw - 3rem) !important;
       }
-      
+
       /* Ensure responsive width works on small screens */
       @media (max-width: 28rem) {
         #edu-bot-container [class*="min(28rem"],
@@ -415,14 +508,14 @@
       #edu-bot-container [style*="height: 600px"] {
         height: 600px !important;
       }
-      
+
       /* Responsive height - min() function for ChatPanel */
       #edu-bot-container [class*="h-[min("],
       #edu-bot-container [class*="min(600px"] {
         height: min(600px, calc(100vh - 8rem)) !important;
         max-height: calc(100vh - 8rem) !important;
       }
-      
+
       /* Ensure panel doesn't overflow viewport */
       #edu-bot-container .fixed[class*="h-[min("] {
         max-height: calc(100vh - 8rem) !important;
@@ -436,7 +529,7 @@
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       /* CRITICAL: FORCE EMERALD GRADIENTS - HIGHEST PRIORITY                       */
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      
+
       /* ChatHeader emerald gradient - FORCE with highest specificity */
       #edu-bot-container div.bg-gradient-to-r.from-emerald-500.to-emerald-600,
       #edu-bot-container div[class*="bg-gradient-to-r"][class*="from-emerald-500"],
@@ -463,7 +556,7 @@
         background-color: #10b981 !important;
         background-image: linear-gradient(to bottom right, #10b981, #059669) !important;
       }
-      
+
       /* Block any teal/cyan colors that might be leaking */
       #edu-bot-container div[style*="14b8a6"],
       #edu-bot-container div[style*="teal"],
@@ -854,7 +947,7 @@
         background-image: revert !important;
       }
     `;
-    
+
     document.head.appendChild(isolationStyles);
     console.log('🛡️ EDUCORE Bot: CSS isolation layer added');
   }

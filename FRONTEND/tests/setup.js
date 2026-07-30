@@ -2,6 +2,7 @@
  * Test setup file
  */
 
+import { jest } from '@jest/globals';
 import '@testing-library/jest-dom';
 
 // Mock window.matchMedia

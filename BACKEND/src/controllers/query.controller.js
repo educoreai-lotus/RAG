@@ -12,6 +12,11 @@ import {
   evaluateAuthorizationPolicy,
   logAuthorizationPolicyDecision,
 } from '../services/authorizationPolicy.service.js';
+import { isGuestChatEnabled, GUEST_SOURCE_SERVICE, isExplicitGuestRequest } from '../config/guestChat.config.js';
+import {
+  applyGuestAnswerGate,
+  buildGuestDisabledResponse,
+} from '../services/guestAnswerGate.service.js';
 import Joi from 'joi';
 
 /**
@@ -34,6 +39,8 @@ const queryRequestSchema = Joi.object({
   conversation_id: Joi.string().optional(), // Optional conversation identifier for multi-turn conversations
   // Phase 2: preserve host microservice label (optional; no enum/enforcement)
   source_service: Joi.string().trim().max(100).optional(),
+  // Explicit guest response-handling marker (default false; does not grant access)
+  guest_mode: Joi.boolean().default(false),
   context: Joi.object({
     user_id: schemas.userId, // Now default('anonymous') instead of required
     session_id: schemas.sessionId,
@@ -55,7 +62,7 @@ export async function submitQuery(req, res, next) {
   try {
     // CRITICAL: Set CORS headers for CHAT MODE (same as SUPPORT MODE)
     const origin = req.headers.origin;
-    
+
     // Log request details for debugging
     logger.info('Query request received', {
       method: req.method,
@@ -64,7 +71,7 @@ export async function submitQuery(req, res, next) {
       hasBody: !!req.body,
       bodyKeys: req.body ? Object.keys(req.body) : [],
     });
-    
+
     if (origin && typeof origin === 'string') {
       // Allow all Vercel origins (same as SUPPORT MODE)
       if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
@@ -80,7 +87,7 @@ export async function submitQuery(req, res, next) {
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean);
-        
+
         if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
           // If no whitelist or origin is in whitelist, allow it
           res.setHeader('Access-Control-Allow-Origin', origin);
@@ -91,7 +98,7 @@ export async function submitQuery(req, res, next) {
         }
       }
     }
-    
+
     // Header/metadata based support-mode routing (no keyword detection)
     const headerSource = (req.headers['x-source'] || req.headers['x-microservice-source'] || '').toString().toLowerCase();
     const metaSource = (req.body?.metadata?.source || '').toString().toLowerCase();
@@ -156,7 +163,7 @@ export async function submitQuery(req, res, next) {
       });
     }
 
-    const { query, tenant_id, conversation_id, context = {}, options = {}, source_service } = validation.value;
+    const { query, tenant_id, conversation_id, context = {}, options = {}, source_service, guest_mode } = validation.value;
 
     // CRITICAL: Validate and fix tenant_id at entry point
     // Priority: req.tenantId (from auth middleware) > tenant_id from body > default
@@ -169,14 +176,14 @@ export async function submitQuery(req, res, next) {
       // Validate and auto-correct any wrong tenant IDs
       validatedTenantId = validateAndFixTenantId(validatedTenantId);
     }
-    
+
     // Log tenant information at entry point for debugging
     logTenantAtEntryPoint(req, validatedTenantId);
-    
+
     // Extract user_id from token if not provided
     const user_id = context.user_id || req.user?.id || 'anonymous';
     const session_id = context.session_id || req.session?.id;
-    
+
     // Extract user role from headers or context
     const user_role = context.role || req.headers['x-user-role'] || req.user?.role || null;
 
@@ -192,6 +199,7 @@ export async function submitQuery(req, res, next) {
       authPrimaryRole: req.auth?.primaryRole || undefined,
       authIsSystemAdmin: req.auth?.isSystemAdmin,
       authIsTrainer: req.auth?.isTrainer,
+      guest_mode: guest_mode === true,
     })}`);
 
     // Phase 3: evaluate authorization policy in log-only mode (never blocks)
@@ -207,7 +215,7 @@ export async function submitQuery(req, res, next) {
 
     // Generate conversation_id if not provided
     const finalConversationId = conversation_id || generateConversationId();
-    
+
     if (!conversation_id) {
       logger.info('Generated new conversation_id', {
         conversation_id: finalConversationId,
@@ -239,6 +247,22 @@ export async function submitQuery(req, res, next) {
       isTrainer: hasVerifiedAuth && req.auth.isTrainer === true,
     };
 
+    // Explicit guest final-answer gate selection (never when authenticated)
+    const isExplicitGuestRequestFlag = isExplicitGuestRequest({
+      guestMode: guest_mode === true,
+      sourceService,
+      isAuthenticated: verifiedAuthContext.isAuthenticated === true,
+    });
+
+    if (isExplicitGuestRequestFlag && !isGuestChatEnabled()) {
+      logger.info('[GuestChat] Guest request while GUEST_CHAT_ENABLED=false', {
+        flow: 'guest_chat_disabled',
+        guest: true,
+        source_service: GUEST_SOURCE_SERVICE,
+      });
+      return res.json(buildGuestDisabledResponse(query));
+    }
+
     const result = await processQuery({
       query,
       tenant_id: validatedTenantId, // Use validated tenant ID
@@ -255,6 +279,29 @@ export async function submitQuery(req, res, next) {
       verifiedAuthContext,
     });
 
+    if (isExplicitGuestRequestFlag) {
+      const candidateAnswer =
+        typeof result?.answer === 'string'
+          ? result.answer
+          : typeof result?.response === 'string'
+            ? result.response
+            : '';
+
+      logger.info('[GuestChat] Applying final guest answer gate', {
+        flow: 'guest_final_answer_gate',
+        guest: true,
+        source_service: GUEST_SOURCE_SERVICE,
+        candidate_answer_length: candidateAnswer.length,
+      });
+
+      const guestResponse = await applyGuestAnswerGate({
+        query,
+        candidateAnswer,
+      });
+
+      return res.json(guestResponse);
+    }
+
     // Return response - ensure it's JSON serializable
     try {
       // Validate that result can be serialized to JSON
@@ -266,7 +313,7 @@ export async function submitQuery(req, res, next) {
         result_keys: Object.keys(result || {}),
         result_answer_preview: result?.answer?.substring(0, 100),
       });
-      
+
       // Return a safe error response
       res.status(500).json({
         error: 'Response serialization error',
@@ -288,7 +335,7 @@ export async function submitQuery(req, res, next) {
     console.error('🚨 Request body:', JSON.stringify(req.body, null, 2));
     console.error('🚨 Request headers:', JSON.stringify(req.headers, null, 2));
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     logger.error('Query controller error', {
       error: error.message,
       stack: error.stack,
@@ -302,8 +349,8 @@ export async function submitQuery(req, res, next) {
     // Set CORS headers even on error
     const errorOrigin = req.headers.origin;
     if (errorOrigin && typeof errorOrigin === 'string') {
-      if (/^https:\/\/.*\.vercel\.app$/.test(errorOrigin) || 
-          errorOrigin.includes('localhost') || 
+      if (/^https:\/\/.*\.vercel\.app$/.test(errorOrigin) ||
+          errorOrigin.includes('localhost') ||
           errorOrigin.includes('127.0.0.1')) {
         res.setHeader('Access-Control-Allow-Origin', errorOrigin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');

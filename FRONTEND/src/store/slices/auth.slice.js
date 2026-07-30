@@ -1,6 +1,6 @@
 /**
  * Auth slice - Redux Toolkit
- * 
+ *
  * Stores user context for widget user-awareness:
  * - userId, token, tenantId (required)
  * - name, email (optional profile fields)
@@ -14,18 +14,19 @@ const initialState = {
   userId: null,
   token: null,
   tenantId: null,
-  
+
   // Optional profile fields
   profile: {
     name: null,
     email: null,
   },
-  
+
   // State flags
   isAuthenticated: false,
+  isGuest: false,
   isLoading: false,
-  source: null, // 'window' | 'props' | 'localStorage' | 'endpoint' | null
-  
+  source: null, // 'window' | 'props' | 'localStorage' | 'endpoint' | 'guest' | null
+
   // Legacy field (kept for backward compatibility)
   user: null,
 };
@@ -40,7 +41,7 @@ const authSlice = createSlice({
      */
     setUserContext: (state, action) => {
       const { userId, token, tenantId, name = null, email = null, source = null } = action.payload;
-      
+
       if (userId && token && tenantId) {
         state.userId = userId;
         state.token = token;
@@ -48,13 +49,29 @@ const authSlice = createSlice({
         state.profile.name = name;
         state.profile.email = email;
         state.isAuthenticated = true;
+        state.isGuest = false;
         state.source = source;
-        
+
         // Legacy: keep user object for backward compatibility
         state.user = { id: userId, name, email };
       }
     },
-    
+
+    /**
+     * Explicit unauthenticated guest embed mode (no identity).
+     */
+    setGuestMode: (state) => {
+      state.userId = null;
+      state.token = null;
+      state.tenantId = null;
+      state.profile.name = null;
+      state.profile.email = null;
+      state.isAuthenticated = false;
+      state.isGuest = true;
+      state.source = 'guest';
+      state.user = null;
+    },
+
     /**
      * Update optional profile fields only
      * @param {Object} action.payload - { name?, email? }
@@ -70,7 +87,7 @@ const authSlice = createSlice({
         if (state.user) state.user.email = email;
       }
     },
-    
+
     /**
      * Clear all user context (anonymous mode)
      */
@@ -81,10 +98,11 @@ const authSlice = createSlice({
       state.profile.name = null;
       state.profile.email = null;
       state.isAuthenticated = false;
+      state.isGuest = false;
       state.source = null;
       state.user = null;
     },
-    
+
     /**
      * Set loading state during context loading
      * @param {boolean} action.payload - Loading state
@@ -92,7 +110,7 @@ const authSlice = createSlice({
     setLoading: (state, action) => {
       state.isLoading = action.payload;
     },
-    
+
     // Legacy actions (kept for backward compatibility)
     setUser: (state, action) => {
       state.user = action.payload;
@@ -113,6 +131,7 @@ const authSlice = createSlice({
       state.profile.name = null;
       state.profile.email = null;
       state.isAuthenticated = false;
+      state.isGuest = false;
       state.source = null;
       state.user = null;
     },
@@ -121,6 +140,7 @@ const authSlice = createSlice({
 
 export const {
   setUserContext,
+  setGuestMode,
   updateUserProfile,
   clearUserContext,
   setLoading,

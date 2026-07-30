@@ -1,6 +1,6 @@
 /**
  * Bot Embedding Entry Point
- * 
+ *
  * This file is used when the bot is embedded via script tag
  * in external microservices (Assessment, DevLab, etc.)
  */
@@ -37,20 +37,21 @@ window.EDUCORE_BOT_INIT_REACT = function(options) {
 
   // Create React root and render
   const root = ReactDOM.createRoot(mountPoint);
-  
+
   root.render(
     <React.StrictMode>
       <Provider store={store}>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <FloatingChatWidget 
+          <FloatingChatWidget
             embedded={true}
             initialMode={widgetMode || 'GENERAL'}
             mode={mode || 'chat'}
             microservice={config.microservice}
-            userId={config.userId}
-            token={config.token}
-            tenantId={config.tenantId}
+            userId={config.guestMode ? null : config.userId}
+            token={config.guestMode ? null : config.token}
+            tenantId={config.guestMode ? null : config.tenantId}
+            guestMode={config.guestMode === true}
           />
         </ThemeProvider>
       </Provider>

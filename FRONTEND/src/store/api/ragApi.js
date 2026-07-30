@@ -11,33 +11,33 @@ const getBaseUrl = () => {
   // 1. VITE_API_BASE_URL env var (explicit configuration)
   // 2. window.EDUCORE_BACKEND_URL (set by bot.js automatically)
   // 3. Default Railway backend URL (fallback)
-  
+
   // Priority 1: VITE_API_BASE_URL environment variable
   if (import.meta.env.VITE_API_BASE_URL) {
     const baseUrl = import.meta.env.VITE_API_BASE_URL;
     // Remove trailing /api if present to avoid double /api
     return baseUrl.replace(/\/api\/?$/, '');
   }
-  
+
   // Priority 2: VITE_API_URL (alternative env var name)
   if (import.meta.env.VITE_API_URL) {
     const baseUrl = import.meta.env.VITE_API_URL;
     return baseUrl.replace(/\/api\/?$/, '');
   }
-  
+
   // Priority 3: window.EDUCORE_BACKEND_URL (set automatically by bot.js)
   // This means microservices DON'T need to set VITE_API_BASE_URL if they load bot.js!
   if (typeof window !== 'undefined' && window.EDUCORE_BACKEND_URL) {
     return window.EDUCORE_BACKEND_URL;
   }
-  
+
   // Priority 4: Production default backend URL (Railway)
   // This ensures requests go to backend even if env vars not set and bot.js not loaded
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     // Use default Railway backend URL instead of frontend URL
     return 'https://devlab-backend-production-59bb.up.railway.app';
   }
-  
+
   // Development default
   return 'http://localhost:8080';
 };
@@ -64,14 +64,20 @@ export const ragApi = createApi({
     console.log('🚀 Request args:', JSON.stringify(args, null, 2));
     console.log('🚀 Full URL will be:', `${baseUrl}${args.url}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     // Use fetchBaseQuery with custom error handling
     const result = await fetchBaseQuery({
       baseUrl,
       prepareHeaders: (headers, { getState }) => {
         const state = getState();
-        const { token, userId, tenantId } = state.auth;
-        
+        const { token, userId, tenantId, isGuest } = state.auth;
+
+        // Explicit guest mode: never send Authorization / identity headers
+        if (isGuest === true) {
+          console.log('🔐 [RTK Query] Guest mode — omitting auth identity headers');
+          return headers;
+        }
+
         console.log('🔐 [RTK Query] Preparing headers...');
         console.log('🔐 Auth state:', {
           hasToken: !!token,
@@ -79,7 +85,7 @@ export const ragApi = createApi({
           hasUserId: !!userId,
           hasTenantId: !!tenantId,
         });
-        
+
         // CRITICAL FIX: Validate token before adding Authorization header (same as api.js)
         // Prevent sending "Bearer undefined" or invalid tokens
         if (token && typeof token === 'string' && token.trim().length > 0 && token !== 'undefined' && token !== 'null') {
@@ -93,18 +99,18 @@ export const ragApi = createApi({
             tokenValue: token ? (typeof token === 'string' ? token.substring(0, 20) + '...' : String(token)) : 'null/undefined',
           });
         }
-        
+
         // Add user identity headers
         if (userId && userId !== 'undefined' && userId !== 'null') {
           headers.set('X-User-Id', String(userId));
           console.log('✅ [RTK Query] X-User-Id header added:', userId);
         }
-        
+
         if (tenantId && tenantId !== 'undefined' && tenantId !== 'null') {
           headers.set('X-Tenant-Id', String(tenantId));
           console.log('✅ [RTK Query] X-Tenant-Id header added:', tenantId);
         }
-        
+
         // Log headers for debugging
         console.log('🔐 [RTK Query] Final headers:', {
           hasAuth: !!headers.get('authorization'),
@@ -113,11 +119,11 @@ export const ragApi = createApi({
           userId: headers.get('X-User-Id'),
           tenantId: headers.get('X-Tenant-Id'),
         });
-        
+
         return headers;
       },
     })(args, api, extraOptions);
-    
+
     // CRITICAL: Log response or error
     if (result.error) {
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -133,7 +139,7 @@ export const ragApi = createApi({
       console.log('✅ Response data keys:', result.data ? Object.keys(result.data) : 'no data');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
-    
+
     return result;
   },
   tagTypes: ['Query', 'Recommendation'],
