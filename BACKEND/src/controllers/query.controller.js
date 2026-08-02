@@ -17,6 +17,15 @@ import {
   applyGuestAnswerGate,
   buildGuestDisabledResponse,
 } from '../services/guestAnswerGate.service.js';
+import {
+  createCrossHostTraceContext,
+  emitCrossHostTrace,
+  setCrossHostTraceHeader,
+  fingerprintSha256,
+  classifyTenantSource,
+  safeCandidateMetadataKeys,
+  inferCandidateOrigin,
+} from '../utils/crossHostTrace.util.js';
 import Joi from 'joi';
 
 /**
@@ -165,6 +174,10 @@ export async function submitQuery(req, res, next) {
 
     const { query, tenant_id, conversation_id, context = {}, options = {}, source_service, guest_mode } = validation.value;
 
+    // Diagnostic only: optional cross-host trace (no-op when flag disabled)
+    const crossHostTrace = createCrossHostTraceContext(query);
+    setCrossHostTraceHeader(res, crossHostTrace);
+
     // CRITICAL: Validate and fix tenant_id at entry point
     // Priority: req.tenantId (from auth middleware) > tenant_id from body > default
     // This ensures we use the tenant_id from authentication (e.g., dummy token) if available
@@ -254,13 +267,55 @@ export async function submitQuery(req, res, next) {
       isAuthenticated: verifiedAuthContext.isAuthenticated === true,
     });
 
+    const optionMaxResults =
+      typeof options?.max_results === 'number' ? options.max_results : null;
+    const optionMinConfidence =
+      typeof options?.min_confidence === 'number' ? options.min_confidence : null;
+    const optionIncludeMetadata =
+      typeof options?.include_metadata === 'boolean' ? options.include_metadata : null;
+
+    emitCrossHostTrace(crossHostTrace, {
+      stage: 'request_classified',
+      query_sha256: crossHostTrace?.queryHash || fingerprintSha256(query),
+      source_service: sourceService || null,
+      guest_mode_requested: guest_mode === true,
+      explicit_guest: isExplicitGuestRequestFlag,
+      authenticated: verifiedAuthContext.isAuthenticated === true,
+      user_scope: verifiedAuthContext.isAuthenticated === true ? 'authenticated' : 'anonymous',
+      tenant_source: classifyTenantSource({
+        bodyTenantId: req.body?.tenant_id,
+        hasAuthTenant: Boolean(req.tenantId),
+        hasHeaderTenant: Boolean(req.headers?.['x-tenant-id']),
+      }),
+      tenant_fingerprint: fingerprintSha256(validatedTenantId),
+      max_results: optionMaxResults,
+      min_confidence: optionMinConfidence,
+      include_metadata: optionIncludeMetadata,
+    });
+
     if (isExplicitGuestRequestFlag && !isGuestChatEnabled()) {
       logger.info('[GuestChat] Guest request while GUEST_CHAT_ENABLED=false', {
         flow: 'guest_chat_disabled',
         guest: true,
         source_service: GUEST_SOURCE_SERVICE,
       });
-      return res.json(buildGuestDisabledResponse(query));
+      const disabledResponse = buildGuestDisabledResponse(query);
+      const disabledAnswer =
+        typeof disabledResponse?.answer === 'string' ? disabledResponse.answer : '';
+      emitCrossHostTrace(crossHostTrace, {
+        stage: 'final_response',
+        final_answer_owner: 'guest_disabled',
+        final_answer_length: disabledAnswer.length,
+        final_answer_sha256: fingerprintSha256(disabledAnswer),
+        final_sources_count: Array.isArray(disabledResponse?.sources)
+          ? disabledResponse.sources.length
+          : null,
+        final_confidence:
+          typeof disabledResponse?.confidence === 'number' ? disabledResponse.confidence : null,
+        candidate_sha256: null,
+        final_differs_from_candidate: false,
+      });
+      return res.json(disabledResponse);
     }
 
     const result = await processQuery({
@@ -277,16 +332,29 @@ export async function submitQuery(req, res, next) {
       options,
       conversation_id: finalConversationId, // Pass conversation_id to processQuery
       verifiedAuthContext,
+      ...(crossHostTrace ? { crossHostTrace } : {}),
+    });
+
+    const candidateAnswer =
+      typeof result?.answer === 'string'
+        ? result.answer
+        : typeof result?.response === 'string'
+          ? result.response
+          : '';
+    const candidateSha = fingerprintSha256(candidateAnswer);
+
+    emitCrossHostTrace(crossHostTrace, {
+      stage: 'candidate_ready',
+      candidate_length: candidateAnswer.length,
+      candidate_sha256: candidateSha,
+      candidate_empty: candidateAnswer.length === 0,
+      candidate_origin: inferCandidateOrigin(result),
+      candidate_sources_count: Array.isArray(result?.sources) ? result.sources.length : null,
+      candidate_confidence: typeof result?.confidence === 'number' ? result.confidence : null,
+      candidate_metadata_keys: safeCandidateMetadataKeys(result?.metadata),
     });
 
     if (isExplicitGuestRequestFlag) {
-      const candidateAnswer =
-        typeof result?.answer === 'string'
-          ? result.answer
-          : typeof result?.response === 'string'
-            ? result.response
-            : '';
-
       logger.info('[GuestChat] Applying final guest answer gate', {
         flow: 'guest_final_answer_gate',
         guest: true,
@@ -297,6 +365,38 @@ export async function submitQuery(req, res, next) {
       const guestResponse = await applyGuestAnswerGate({
         query,
         candidateAnswer,
+        ...(crossHostTrace ? { crossHostTrace } : {}),
+      });
+
+      const finalAnswer =
+        typeof guestResponse?.answer === 'string' ? guestResponse.answer : '';
+      const finalSha = fingerprintSha256(finalAnswer);
+      const gateMeta = crossHostTrace?._gateResult || null;
+      let finalOwner = 'unknown';
+      if (gateMeta?.decision === 'allow') {
+        finalOwner = 'guest_gate_allow';
+      } else if (gateMeta?.decision === 'deny') {
+        finalOwner = 'guest_static_deny';
+      } else if (gateMeta?.decision === 'fail_closed') {
+        finalOwner = 'guest_fail_closed';
+      } else if (guestResponse?.metadata?.flow === 'guest_permission_denied') {
+        finalOwner = 'guest_static_deny';
+      } else if (guestResponse?.metadata?.flow === 'guest_chat_disabled') {
+        finalOwner = 'guest_disabled';
+      }
+
+      emitCrossHostTrace(crossHostTrace, {
+        stage: 'final_response',
+        final_answer_owner: finalOwner,
+        final_answer_length: finalAnswer.length,
+        final_answer_sha256: finalSha,
+        final_sources_count: Array.isArray(guestResponse?.sources)
+          ? guestResponse.sources.length
+          : null,
+        final_confidence:
+          typeof guestResponse?.confidence === 'number' ? guestResponse.confidence : null,
+        candidate_sha256: candidateSha,
+        final_differs_from_candidate: finalSha !== candidateSha,
       });
 
       return res.json(guestResponse);
@@ -306,12 +406,40 @@ export async function submitQuery(req, res, next) {
     try {
       // Validate that result can be serialized to JSON
       JSON.stringify(result);
+      const finalAnswer =
+        typeof result?.answer === 'string'
+          ? result.answer
+          : typeof result?.response === 'string'
+            ? result.response
+            : '';
+      const finalSha = fingerprintSha256(finalAnswer);
+      emitCrossHostTrace(crossHostTrace, {
+        stage: 'final_response',
+        final_answer_owner: 'process_query',
+        final_answer_length: finalAnswer.length,
+        final_answer_sha256: finalSha,
+        final_sources_count: Array.isArray(result?.sources) ? result.sources.length : null,
+        final_confidence: typeof result?.confidence === 'number' ? result.confidence : null,
+        candidate_sha256: candidateSha,
+        final_differs_from_candidate: finalSha !== candidateSha,
+      });
       res.json(result);
     } catch (jsonError) {
       logger.error('JSON serialization error', {
         error: jsonError.message,
         result_keys: Object.keys(result || {}),
         result_answer_preview: result?.answer?.substring(0, 100),
+      });
+
+      emitCrossHostTrace(crossHostTrace, {
+        stage: 'final_response',
+        final_answer_owner: 'error',
+        final_answer_length: 0,
+        final_answer_sha256: fingerprintSha256(''),
+        final_sources_count: null,
+        final_confidence: null,
+        candidate_sha256: candidateSha,
+        final_differs_from_candidate: true,
       });
 
       // Return a safe error response

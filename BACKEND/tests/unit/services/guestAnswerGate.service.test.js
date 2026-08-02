@@ -426,3 +426,81 @@ describe('isExplicitGuestRequest', () => {
     ).toBe(false);
   });
 });
+
+describe('applyGuestAnswerGate diagnostic trace non-regression', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.RAG_CROSS_HOST_TRACE_ENABLED;
+  });
+
+  it('Guest deny behavior unchanged when tracing enabled', async () => {
+    process.env.RAG_CROSS_HOST_TRACE_ENABLED = 'true';
+    mockJsonResult({
+      decision: 'deny',
+      answer: '',
+      language: 'en',
+    });
+
+    const { createCrossHostTraceContext, CROSS_HOST_TRACE_PREFIX } = await import(
+      '../../../src/utils/crossHostTrace.util.js'
+    );
+    const { logger } = await import('../../../src/utils/logger.util.js');
+    const trace = createCrossHostTraceContext('Show the management report');
+
+    const response = await applyGuestAnswerGate({
+      query: 'Show the management report',
+      candidateAnswer: 'Revenue is $1.2M',
+      crossHostTrace: trace,
+    });
+
+    expect(response.answer).toBe(GUEST_PERMISSION_DENIED_MESSAGES.en);
+    expect(response.metadata.flow).toBe('guest_permission_denied');
+    expect(response.sources).toEqual([]);
+
+    const traceMsgs = logger.info.mock.calls
+      .map((c) => c[0])
+      .filter((m) => typeof m === 'string' && m.startsWith(CROSS_HOST_TRACE_PREFIX));
+    expect(traceMsgs.length).toBeGreaterThanOrEqual(1);
+    const gateLog = JSON.parse(traceMsgs[0].slice(CROSS_HOST_TRACE_PREFIX.length + 1));
+    expect(gateLog.gate_decision).toBe('deny');
+    expect(gateLog.deterministic_denial_used).toBe(true);
+    expect(JSON.stringify(gateLog)).not.toContain('Revenue');
+    expect(JSON.stringify(gateLog)).not.toContain('$1.2M');
+  });
+
+  it('Guest allow returns exact model answer when tracing enabled', async () => {
+    process.env.RAG_CROSS_HOST_TRACE_ENABLED = 'true';
+    const modelAnswer = 'EDUCORE provides learning and development tools for organizations.';
+    mockJsonResult({
+      decision: 'allow',
+      answer: modelAnswer,
+      language: 'en',
+    });
+
+    const { createCrossHostTraceContext, CROSS_HOST_TRACE_PREFIX, fingerprintSha256 } = await import(
+      '../../../src/utils/crossHostTrace.util.js'
+    );
+    const { logger } = await import('../../../src/utils/logger.util.js');
+    const trace = createCrossHostTraceContext('What does the EDUCORE platform do?');
+
+    const response = await applyGuestAnswerGate({
+      query: 'What does the EDUCORE platform do?',
+      candidateAnswer: 'There is not enough matching information.',
+      crossHostTrace: trace,
+    });
+
+    expect(response.answer).toBe(modelAnswer);
+    expect(response.sources).toEqual([]);
+    expect(response.confidence).toBe(0);
+
+    const traceMsgs = logger.info.mock.calls
+      .map((c) => c[0])
+      .filter((m) => typeof m === 'string' && m.startsWith(CROSS_HOST_TRACE_PREFIX));
+    const gateLog = JSON.parse(traceMsgs[0].slice(CROSS_HOST_TRACE_PREFIX.length + 1));
+    expect(gateLog.gate_decision).toBe('allow');
+    expect(gateLog.answer_changed_from_candidate).toBe(true);
+    expect(gateLog.gate_answer_sha256).toBe(fingerprintSha256(modelAnswer));
+    expect(JSON.stringify(gateLog)).not.toContain(modelAnswer);
+    expect(JSON.stringify(gateLog)).not.toContain('not enough matching');
+  });
+});

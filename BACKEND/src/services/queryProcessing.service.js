@@ -31,6 +31,10 @@ import realtimeHandler from '../handlers/realtimeHandler.js';
 import schemaLoader from '../core/schemaLoader.js';
 import responseBuilder from '../core/responseBuilder.js';
 import { buildAnswerDisclosureBlock } from '../utils/answerDisclosure.util.js';
+import {
+  emitCrossHostTrace,
+  roundTraceScore,
+} from '../utils/crossHostTrace.util.js';
 
 /**
  * Generate a context-aware "no data" message based on filtering context
@@ -125,9 +129,10 @@ function generateNoResultsMessage(userQuery, filteringContext) {
  * @param {Object} params.context - Query context (user_id, session_id)
  * @param {Object} params.options - Query options (max_results, min_confidence, include_metadata)
  * @param {string} params.conversation_id - Optional conversation identifier for multi-turn conversations
+ * @param {Object|null} [params.crossHostTrace] - Optional diagnostic trace (observe-only; ignored when absent)
  * @returns {Promise<Object>} Query response with answer, sources, confidence, metadata, conversation_id
  */
-export async function processQuery({ query, tenant_id, context = {}, options = {}, conversation_id = null, verifiedAuthContext = null }) {
+export async function processQuery({ query, tenant_id, context = {}, options = {}, conversation_id = null, verifiedAuthContext = null, crossHostTrace = null }) {
   const startTime = Date.now();
   const { user_id, session_id } = context;
   const {
@@ -136,6 +141,28 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
   } = options;
 
   let queryRecord = null;
+
+  const emitTraceCache = (fields) => {
+    if (!crossHostTrace?.enabled || crossHostTrace._cacheEmitted) {
+      return;
+    }
+    crossHostTrace._cacheEmitted = true;
+    emitCrossHostTrace(crossHostTrace, {
+      stage: 'cache_result',
+      ...fields,
+    });
+  };
+
+  const emitTraceRetrieval = (fields) => {
+    if (!crossHostTrace?.enabled || crossHostTrace._retrievalEmitted) {
+      return;
+    }
+    crossHostTrace._retrievalEmitted = true;
+    emitCrossHostTrace(crossHostTrace, {
+      stage: 'retrieval_completed',
+      ...fields,
+    });
+  };
 
   // CRITICAL: Log entry point for debugging
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -289,6 +316,27 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
           });
           
           // Return cached response - NO GRPC CALL!
+          emitTraceCache({
+            cache_checked: true,
+            cache_hit: true,
+            cache_type: 'semantic',
+            cache_key_scope: {
+              tenant_included: true,
+              user_included: false,
+              source_service_included: false,
+              guest_mode_included: false,
+            },
+          });
+          emitTraceRetrieval({
+            retrieval_attempted: true,
+            retrieved_count: semanticResult.results.length,
+            usable_context_count: semanticResult.results.length,
+            context_character_count: null,
+            top_score: roundTraceScore(semanticResult.bestSimilarity),
+            minimum_score: null,
+            sources_count_before_response: semanticResult.results.length,
+            retrieval_status: 'sources_found',
+          });
           return {
             success: true,
             answer: cachedResponse.answer,
@@ -391,6 +439,30 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             recommendations: [],
           });
 
+          emitTraceCache({
+            cache_checked: true,
+            cache_hit: true,
+            cache_type: 'exact',
+            cache_key_scope: {
+              tenant_included: true,
+              user_included: true,
+              source_service_included: false,
+              guest_mode_included: false,
+            },
+          });
+          emitTraceRetrieval({
+            retrieval_attempted: false,
+            retrieved_count: null,
+            usable_context_count: null,
+            context_character_count: null,
+            top_score: null,
+            minimum_score: null,
+            sources_count_before_response: Array.isArray(cachedResponse.sources)
+              ? cachedResponse.sources.length
+              : null,
+            retrieval_status: 'not_attempted',
+          });
+
           return {
             ...cachedResponse,
             metadata: {
@@ -399,10 +471,45 @@ export async function processQuery({ query, tenant_id, context = {}, options = {
             },
           };
         }
+
+        emitTraceCache({
+          cache_checked: true,
+          cache_hit: false,
+          cache_type: 'none',
+          cache_key_scope: {
+            tenant_included: true,
+            user_included: true,
+            source_service_included: false,
+            guest_mode_included: false,
+          },
+        });
       } catch (cacheError) {
         // Redis error - continue without cache
         logger.debug('Redis cache check failed, continuing without cache:', cacheError.message);
+        emitTraceCache({
+          cache_checked: true,
+          cache_hit: false,
+          cache_type: 'unknown',
+          cache_key_scope: {
+            tenant_included: true,
+            user_included: true,
+            source_service_included: false,
+            guest_mode_included: false,
+          },
+        });
       }
+    } else {
+      emitTraceCache({
+        cache_checked: false,
+        cache_hit: false,
+        cache_type: 'none',
+        cache_key_scope: {
+          tenant_included: true,
+          user_included: true,
+          source_service_included: false,
+          guest_mode_included: false,
+        },
+      });
     }
 
     // 1) QUERY CLASSIFICATION
@@ -490,6 +597,17 @@ ${buildAnswerDisclosureBlock(verifiedAuthContext)}` },
           });
         }
       }
+
+      emitTraceRetrieval({
+        retrieval_attempted: false,
+        retrieved_count: null,
+        usable_context_count: null,
+        context_character_count: null,
+        top_score: null,
+        minimum_score: null,
+        sources_count_before_response: 0,
+        retrieval_status: 'not_attempted',
+      });
 
       return {
         answer,
@@ -757,6 +875,23 @@ ${buildAnswerDisclosureBlock(verifiedAuthContext)}` },
         embedding_dimensions: queryEmbedding?.length || 0,
         filtering_reason: filteringContext.reason,
       });
+
+      if (crossHostTrace?.enabled) {
+        const scores = similarVectors
+          .map((v) => v.similarity)
+          .filter((s) => typeof s === 'number' && Number.isFinite(s));
+        crossHostTrace._vectorStats = {
+          retrieved_count: similarVectors.length,
+          top_score: scores.length ? roundTraceScore(Math.max(...scores)) : null,
+          minimum_score: scores.length ? roundTraceScore(Math.min(...scores)) : null,
+          retrieval_status:
+            similarVectors.length === 0
+              ? 'zero_sources'
+              : filteringContext.reason === 'LOW_SIMILARITY'
+                ? 'below_threshold'
+                : 'sources_found',
+        };
+      }
 
       // ========================================
       // KNOWLEDGE GRAPH ENHANCEMENT
@@ -1983,6 +2118,20 @@ Please provide a helpful answer based on the context above.`;
       } catch (_) {
         // ignore persistence errors
       }
+
+      emitTraceRetrieval({
+        retrieval_attempted: true,
+        retrieved_count:
+          crossHostTrace?._vectorStats?.retrieved_count ??
+          Number(filteringContext.vectorResultsFound) ??
+          null,
+        usable_context_count: 0,
+        context_character_count: 0,
+        top_score: crossHostTrace?._vectorStats?.top_score ?? null,
+        minimum_score: crossHostTrace?._vectorStats?.minimum_score ?? null,
+        sources_count_before_response: 0,
+        retrieval_status: crossHostTrace?._vectorStats?.retrieval_status || 'zero_sources',
+      });
       
       return response;
     }
@@ -2111,6 +2260,23 @@ Please provide a helpful answer based on the context above.`;
         // ignore audit errors
       }
 
+      emitTraceRetrieval({
+        retrieval_attempted: true,
+        retrieved_count:
+          crossHostTrace?._vectorStats?.retrieved_count ??
+          Number(filteringContext.vectorResultsFound) ??
+          null,
+        usable_context_count: 0,
+        context_character_count: 0,
+        top_score: crossHostTrace?._vectorStats?.top_score ?? null,
+        minimum_score: crossHostTrace?._vectorStats?.minimum_score ?? null,
+        sources_count_before_response: 0,
+        retrieval_status:
+          reasonCode === 'below_threshold'
+            ? 'below_threshold'
+            : crossHostTrace?._vectorStats?.retrieval_status || 'zero_sources',
+      });
+
       return response;
     }
 
@@ -2145,6 +2311,23 @@ Please provide a helpful answer based on the context above.`;
     }
 
     // Generate answer using OpenAI with retrieved context (STRICT RAG)
+    emitTraceRetrieval({
+      retrieval_attempted: true,
+      retrieved_count:
+        crossHostTrace?._vectorStats?.retrieved_count ??
+        (Array.isArray(sources) ? sources.length : null),
+      usable_context_count: Array.isArray(sources) ? sources.length : null,
+      context_character_count:
+        typeof retrievedContext === 'string' ? retrievedContext.length : null,
+      top_score: crossHostTrace?._vectorStats?.top_score ?? null,
+      minimum_score: crossHostTrace?._vectorStats?.minimum_score ?? null,
+      sources_count_before_response: Array.isArray(sources) ? sources.length : null,
+      retrieval_status:
+        Array.isArray(sources) && sources.length > 0
+          ? 'sources_found'
+          : crossHostTrace?._vectorStats?.retrieval_status || 'zero_sources',
+    });
+
     const systemPrompt = `You are a helpful AI assistant for the EDUCORE learning platform.
 Strict RAG rules you MUST follow:
 - Use ONLY the content under "Context from knowledge base".

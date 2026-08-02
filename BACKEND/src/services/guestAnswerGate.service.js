@@ -9,6 +9,10 @@
 import { openai } from '../config/openai.config.js';
 import { buildAnswerDisclosureBlock } from '../utils/answerDisclosure.util.js';
 import { logger } from '../utils/logger.util.js';
+import {
+  emitCrossHostTrace,
+  fingerprintSha256,
+} from '../utils/crossHostTrace.util.js';
 
 /** Fixed verified context for the unauthenticated disclosure branch. */
 export const GUEST_VERIFIED_AUTH_CONTEXT = {
@@ -188,13 +192,44 @@ export function validateGuestGateStructuredResult(parsed, expectedLanguage) {
  * @param {Object} params
  * @param {string} params.query
  * @param {string} params.candidateAnswer
+ * @param {{ enabled?: boolean, traceId?: string } | null} [params.crossHostTrace] diagnostic only
  * @returns {Promise<Object>}
  */
-export async function applyGuestAnswerGate({ query, candidateAnswer }) {
+export async function applyGuestAnswerGate({ query, candidateAnswer, crossHostTrace = null }) {
   const safeQuery = typeof query === 'string' ? query : '';
   const safeCandidate =
     typeof candidateAnswer === 'string' ? candidateAnswer : '';
   const expectedLanguage = detectGuestResponseLanguage(safeQuery);
+  const candidateSha = fingerprintSha256(safeCandidate);
+
+  const finishGateTrace = ({
+    gateParseStatus,
+    gateDecision,
+    gateAnswer,
+    deterministicDenialUsed,
+  }) => {
+    const answerText = typeof gateAnswer === 'string' ? gateAnswer : '';
+    const gateAnswerSha = fingerprintSha256(answerText);
+    if (crossHostTrace?.enabled) {
+      crossHostTrace._gateResult = {
+        decision: gateDecision,
+        parseStatus: gateParseStatus,
+        answerSha: gateAnswerSha,
+      };
+    }
+    emitCrossHostTrace(crossHostTrace, {
+      stage: 'guest_gate_completed',
+      gate_called: true,
+      gate_parse_status: gateParseStatus,
+      gate_decision: gateDecision,
+      expected_language: expectedLanguage,
+      candidate_sha256: candidateSha,
+      gate_answer_length: answerText.length,
+      gate_answer_sha256: gateAnswerSha,
+      answer_changed_from_candidate: gateAnswerSha !== candidateSha,
+      deterministic_denial_used: deterministicDenialUsed === true,
+    });
+  };
 
   try {
     const disclosureBlock = buildAnswerDisclosureBlock(GUEST_VERIFIED_AUTH_CONTEXT);
@@ -278,15 +313,47 @@ Return JSON only.`;
     const parsed = parseGuestGateStructuredOutput(
       typeof rawContent === 'string' ? rawContent : ''
     );
-    const validated = validateGuestGateStructuredResult(parsed, expectedLanguage);
 
-    if (!validated.ok) {
+    if (!parsed) {
       logger.warn('[GuestAnswerGate] Invalid structured result; fail-closed', {
         flow: 'guest_final_answer_gate',
         guest: true,
         expected_language: expectedLanguage,
       });
-      return buildGuestFailClosedResponse(safeQuery);
+      const failClosed = buildGuestFailClosedResponse(safeQuery);
+      finishGateTrace({
+        gateParseStatus: 'invalid_json',
+        gateDecision: 'fail_closed',
+        gateAnswer: failClosed.answer,
+        deterministicDenialUsed: false,
+      });
+      return failClosed;
+    }
+
+    const validated = validateGuestGateStructuredResult(parsed, expectedLanguage);
+
+    if (!validated.ok) {
+      let parseStatus = 'invalid_schema';
+      if (
+        typeof parsed.language === 'string' &&
+        SUPPORTED_LANGUAGES.has(parsed.language) &&
+        parsed.language !== expectedLanguage
+      ) {
+        parseStatus = 'language_mismatch';
+      }
+      logger.warn('[GuestAnswerGate] Invalid structured result; fail-closed', {
+        flow: 'guest_final_answer_gate',
+        guest: true,
+        expected_language: expectedLanguage,
+      });
+      const failClosed = buildGuestFailClosedResponse(safeQuery);
+      finishGateTrace({
+        gateParseStatus: parseStatus,
+        gateDecision: 'fail_closed',
+        gateAnswer: failClosed.answer,
+        deterministicDenialUsed: false,
+      });
+      return failClosed;
     }
 
     if (validated.decision === 'deny') {
@@ -295,10 +362,17 @@ Return JSON only.`;
         guest: true,
         expected_language: expectedLanguage,
       });
-      return buildSanitizedGuestResponse(
+      const denial = buildSanitizedGuestResponse(
         getGuestPermissionDeniedMessage(expectedLanguage),
         'guest_permission_denied'
       );
+      finishGateTrace({
+        gateParseStatus: 'valid',
+        gateDecision: 'deny',
+        gateAnswer: denial.answer,
+        deterministicDenialUsed: true,
+      });
+      return denial;
     }
 
     logger.info('[GuestAnswerGate] Allow decision', {
@@ -308,13 +382,27 @@ Return JSON only.`;
       answer_length: validated.answer.length,
     });
 
-    return buildSanitizedGuestResponse(validated.answer, 'guest_final_answer_gate');
+    const allowed = buildSanitizedGuestResponse(validated.answer, 'guest_final_answer_gate');
+    finishGateTrace({
+      gateParseStatus: 'valid',
+      gateDecision: 'allow',
+      gateAnswer: allowed.answer,
+      deterministicDenialUsed: false,
+    });
+    return allowed;
   } catch (error) {
     logger.warn('[GuestAnswerGate] Gate failed; fail-closed', {
       flow: 'guest_final_answer_gate',
       guest: true,
       error: error?.message || 'unknown_error',
     });
-    return buildGuestFailClosedResponse(safeQuery);
+    const failClosed = buildGuestFailClosedResponse(safeQuery);
+    finishGateTrace({
+      gateParseStatus: 'error',
+      gateDecision: 'fail_closed',
+      gateAnswer: failClosed.answer,
+      deterministicDenialUsed: false,
+    });
+    return failClosed;
   }
 }
